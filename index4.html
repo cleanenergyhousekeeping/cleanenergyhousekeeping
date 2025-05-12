@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clean Energy Housekeeping</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; color: #333; }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1em 2em; background: #f8f8f8; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    header img { height: 40px; }
+    nav a { margin-left: 2em; text-decoration: none; color: #333; font-weight: bold; }
+
+    .hero {
+      position: relative;
+      background: url('your-banner-image.jpg') center/cover no-repeat;
+      height: 60vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    .hero-text {
+      background: rgba(0,0,0,0.6);
+      padding: 2em;
+      max-width: 600px;
+      text-align: center;
+      border-radius: 8px;
+    }
+
+    .section { padding: 3em 2em; max-width: 960px; margin: 0 auto; }
+
+    .service-block {
+      background: #f0f0f0;
+      padding: 1.5em;
+      margin-bottom: 1.5em;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2em;
+    }
+    .gallery-item {
+      background: #f0f0f0;
+      padding: 1em;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .gallery-item img {
+      width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+
+    .testimonials-contact {
+      display: flex;
+      gap: 2em;
+      flex-wrap: wrap;
+    }
+    .testimonial, .contact {
+      flex: 1 1 45%;
+      background: #f0f0f0;
+      padding: 1.5em;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    footer {
+      text-align: center;
+      padding: 2em;
+      background: #f8f8f8;
+      font-size: 0.9em;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="logo.png" alt="Clean Energy Logo">
+    <nav>
+      <a href="#about">About</a>
+      <a href="#services">Services</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="hero-text">
+      <h1>Luxury Home Cleaning, Elevated with Eco-Smart Precision.</h1>
+      <p>Trusted in Martis Camp, Lahontan, Schaffer's Mill.</p>
+    </div>
+  </section>
+
+  <section class="section" id="about">
+    <h2>About Me</h2>
+    <p>I'm Kyle, founder of Clean Energy Housekeeping. I built this company to offer unmatched care and deep cleaning precision for some of the most beautiful homes in California and Nevada.</p>
+  </section>
+
+  <section class="section" id="services">
+    <h2>Services Offered</h2>
+    <div class="service-block">
+      <h3>Deep Cleaning</h3>
+      <p>From top to bottom, we leave no detail untouched in your luxury estate.</p>
+    </div>
+    <div class="service-block">
+      <h3>Surface Sealing</h3>
+      <p>Premium protection for marble, quartzite, and more using safe, tested products.</p>
+    </div>
+    <div class="service-block">
+      <h3>Eco-Smart Product Use</h3>
+      <p>Only intelligent, surface-safe solutions chosen with care.</p>
+    </div>
+  </section>
+
+  <section class="section" id="gallery">
+    <h2>Before / After Gallery</h2>
+    <div class="gallery">
+      <div class="gallery-item">
+        <img src="before1.jpg" alt="Before 1">
+        <p>Before: Stained Marble Sink</p>
+      </div>
+      <div class="gallery-item">
+        <img src="after1.jpg" alt="After 1">
+        <p>After: Restored Shine & Clarity</p>
+      </div>
+      <div class="gallery-item">
+        <img src="before2.jpg" alt="Before 2">
+        <p>Before: Dirty Oven Glass</p>
+      </div>
+      <div class="gallery-item">
+        <img src="after2.jpg" alt="After 2">
+        <p>After: Crystal-Clear Finish</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section testimonials-contact" id="contact">
+    <div class="testimonial">
+      <h3>Testimonials</h3>
+      <p>“The best cleaner we’ve ever worked with — by far.”</p>
+    </div>
+    <div class="contact">
+      <h3>Contact</h3>
+      <p>Email: kyle@cleanenergyhousekeeping.com</p>
+      <p>Phone: 407-227-1241</p>
+    </div>
+  </section>
+
+  <footer>
+    Clean Energy Housekeeping™
+  </footer>
+
+</body>
+</html>
