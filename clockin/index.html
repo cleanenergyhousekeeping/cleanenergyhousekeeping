@@ -4,11 +4,14 @@
   <meta charset="UTF-8" />
   <title>Clean Energy Clock In</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
- <link rel="apple-touch-icon" href="/clockin/icon.png">
-<link rel="icon" href="/clockin/icon.png">
+
+  <link rel="apple-touch-icon" href="/clockin/icon.png">
+  <link rel="icon" type="image/png" href="/clockin/icon.png">
+
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Clock In">
   <meta name="theme-color" content="#23343b">
+
   <style>
     body {
       margin: 0;
@@ -20,12 +23,46 @@
       min-height: 100vh;
       color: #23343b;
     }
+
+    .wrap {
+      text-align: center;
+      padding: 24px;
+      max-width: 520px;
+    }
+
+    .btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 16px 22px;
+      border-radius: 14px;
+      background: #23343b;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 20px;
+    }
+
+    .sub {
+      margin-top: 12px;
+      color: #5f6f82;
+      font-size: 15px;
+      line-height: 1.4;
+    }
   </style>
-  <script>
-    window.location.replace("https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec");
-  </script>
 </head>
 <body>
-  Opening Clean Energy Clock In...
+  <div class="wrap">
+    <h1>Clean Energy Clock In</h1>
+    
+
+    <a
+      class="btn"
+      href="https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec"
+    >
+      Open Clock In App
+    </a>
+
+    <p class="sub">After adding this page to your home screen, the icon should come from this site instead of the Google app page.</p>
+  </div>
 </body>
 </html>
