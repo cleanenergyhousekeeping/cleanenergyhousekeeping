@@ -4,11 +4,17 @@
   <meta charset="UTF-8" />
   <title>Clean Energy Clock In</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
- <link rel="apple-touch-icon" href="/clockin/icon.png">
-<link rel="icon" href="/clockin/icon.png">
+
+  <!-- Icon Assets -->
+  <link rel="apple-touch-icon" href="/clockin/icon.png">
+  <link rel="icon" type="image/png" href="/clockin/icon.png">
+
+  <!-- Mobile Web App Metadata -->
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Clock In">
   <meta name="theme-color" content="#23343b">
+
   <style>
     body {
       margin: 0;
@@ -20,17 +26,61 @@
       min-height: 100vh;
       color: #23343b;
     }
+    .wrap {
+      text-align: center;
+      padding: 24px;
+      max-width: 520px;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 16px 22px;
+      border-radius: 14px;
+      background: #23343b;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 20px;
+    }
+    .sub {
+      margin-top: 12px;
+      color: #5f6f82;
+      font-size: 15px;
+      line-height: 1.4;
+    }
+    /* Hide the UI initially to prevent a "flash" before the redirect check */
+    #content { display: none; }
   </style>
 
   <script>
-  window.onload = function() {
-    setTimeout(function() {
-      window.location.href = "https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec";
-    }, 1500); // 3-second delay
-  };
-</script>
+    window.onload = function() {
+      const targetUrl = "https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec"; // Replace with your full Google Web App URL
+      
+      const isStandalone = window.navigator.standalone === true || 
+                           window.matchMedia('(display-mode: standalone)').matches;
+
+      if (isStandalone) {
+        // INSTANT REDIRECT (Home Screen users never see this page)
+        window.location.replace(targetUrl);
+      } else {
+        // SHOW CONTENT (Safari users stay here to see instructions/save icon)
+        document.getElementById('content').style.display = 'block';
+      }
+    };
+  </script>
 </head>
 <body>
-  Opening Clean Energy Clock In...
+  <div id="content" class="wrap">
+    <h1>Clean Energy Clock In</h1>
+    
+    <p>To install the app icon:</p>
+    <p>Tap the <strong>Share</strong> button (square with arrow) and select <strong>'Add to Home Screen'</strong>.</p>
+
+    <a class="btn" href="https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec">
+      Open App Without Installing
+    </a>
+
+    <p class="sub">Installing the icon lets you use the app full-screen.</p>
+  </div>
 </body>
 </html>
