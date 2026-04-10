@@ -1,3 +1,4 @@
+/* begin[clockin_shell_base] */
 html {
   -webkit-text-size-adjust: 100%;
 }
@@ -19,11 +20,14 @@ body {
   align-items: center;
   justify-content: center;
 }
+/* end[clockin_shell_base] */
 
+
+/* begin[clockin_shell_layout] */
 .wrap {
   width: min(92vw, 560px);
   text-align: center;
-  padding: 24px;
+  padding: 28px 22px 30px;
   box-sizing: border-box;
 }
 
@@ -31,6 +35,7 @@ h1 {
   margin: 0 0 16px;
   font-size: 36px;
   line-height: 1.15;
+  color: #23343b;
 }
 
 .statusText {
@@ -39,7 +44,10 @@ h1 {
   line-height: 1.4;
   color: #4d6474;
 }
+/* end[clockin_shell_layout] */
 
+
+/* begin[clockin_shell_button] */
 .btn {
   display: inline-block;
   width: 100%;
@@ -51,23 +59,65 @@ h1 {
   font-size: 22px;
   font-weight: 700;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .btn:disabled {
   opacity: 0.6;
   cursor: default;
 }
+/* end[clockin_shell_button] */
+
+
+/* begin[clockin_shell_text_blocks] */
+.installHelp {
+  margin-top: 22px;
+}
+
+.installHelp p {
+  margin: 0 0 12px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #23343b;
+}
 
 .sub {
-  margin-top: 18px;
+  margin-top: 10px;
   font-size: 15px;
   line-height: 1.4;
   color: #5f6f82;
 }
 
 .sub2 {
-  margin-top: 30px;
+  margin-top: 28px;
   font-size: 12px;
   line-height: 1.4;
   color: #9aa8b3;
 }
+/* end[clockin_shell_text_blocks] */
+
+
+/* begin[clockin_shell_mobile_tuning] */
+@media (max-width: 480px) {
+  .wrap {
+    width: 100%;
+    padding: 24px 18px 28px;
+  }
+
+  h1 {
+    font-size: 32px;
+  }
+
+  .statusText {
+    font-size: 17px;
+  }
+
+  .btn {
+    font-size: 20px;
+  }
+
+  .installHelp p {
+    font-size: 15px;
+  }
+}
+/* end[clockin_shell_mobile_tuning] */
