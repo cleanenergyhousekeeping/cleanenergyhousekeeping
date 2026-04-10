@@ -22,15 +22,11 @@
 
     <p id="statusText" class="statusText">Checking app status...</p>
 
-    <button id="primaryBtn" class="btn" type="button">
-      Open Live App
-    </button>
-
-    <button id="secondaryBtn" class="btn btnSecondary hidden" type="button">
+    <button id="offlineBtn" class="btn hidden" type="button">
       Enter Offline Mode
     </button>
 
-    <div id="installHelp" class="installHelp">
+    <div id="installHelp" class="installHelp hidden">
       <p>To install the app icon:</p>
       <p>
         Tap the <strong>triple dots</strong> on the bottom right corner of your iPhone screen,
@@ -41,7 +37,9 @@
     </div>
 
     <p class="sub2">
-      This shell will also be used for future offline support.
+      <a id="openWithoutInstallingLink" href="#">
+        Open App Without Installing
+      </a>
     </p>
   </div>
 
