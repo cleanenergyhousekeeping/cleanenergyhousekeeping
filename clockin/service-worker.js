@@ -1,13 +1,12 @@
-const CACHE_NAME = "ce-clockin-shell-v2";
+const CACHE_NAME = "ce-clockin-shell-v3";
 
 const APP_SHELL_FILES = [
   "/clockin/",
   "/clockin/index.html",
-  "/clockin/styles.css",
+  "/clockin/style.css",
   "/clockin/app.js",
   "/clockin/manifest.webmanifest",
-  "/clockin/icon-192.png",
-  "/clockin/icon-512.png"
+  "/clockin/icon.png"
 ];
 
 self.addEventListener("install", function (event) {
