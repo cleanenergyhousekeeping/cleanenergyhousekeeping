@@ -22,20 +22,17 @@ body {
   box-sizing: border-box;
 }
 
-/* Title */
 h1 {
   margin: 0 0 16px;
   font-size: 34px;
 }
 
-/* Status text */
 .statusText {
   margin-bottom: 16px;
   font-size: 17px;
   color: #4d6474;
 }
 
-/* Buttons */
 .btn {
   display: inline-block;
   margin-top: 20px;
@@ -55,12 +52,6 @@ h1 {
   opacity: 0.5;
 }
 
-.btnSecondary {
-  background: #d9e2e8;
-  color: #23343b;
-}
-
-/* Install help block */
 .installHelp {
   margin-top: 20px;
 }
@@ -71,7 +62,6 @@ h1 {
   line-height: 1.4;
 }
 
-/* Sub text */
 .sub {
   margin-top: 12px;
   color: #5f6f82;
@@ -83,7 +73,11 @@ h1 {
   margin-top: 40px;
   font-size: 12px;
   line-height: 1.4;
-  color: #9aa8b3;
+}
+
+.sub2 a {
+  color: #d3d3d3;
+  text-decoration: none;
 }
 
 .hidden {
