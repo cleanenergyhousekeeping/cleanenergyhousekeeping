@@ -6,9 +6,9 @@ const LIVE_APP_URL =
 
 /* begin[clockin_shell_dom_refs] */
 const statusText = document.getElementById("statusText");
-const primaryBtn = document.getElementById("primaryBtn");
-const secondaryBtn = document.getElementById("secondaryBtn");
+const offlineBtn = document.getElementById("offlineBtn");
 const installHelp = document.getElementById("installHelp");
+const openWithoutInstallingLink = document.getElementById("openWithoutInstallingLink");
 /* end[clockin_shell_dom_refs] */
 
 
@@ -25,16 +25,6 @@ function setStatusText_(text) {
   statusText.textContent = text || "";
 }
 
-function setButtonText_(button, text) {
-  if (!button) return;
-  button.textContent = text || "";
-}
-
-function setButtonEnabled_(button, isEnabled) {
-  if (!button) return;
-  button.disabled = !isEnabled;
-}
-
 function showElement_(el) {
   if (!el) return;
   el.classList.remove("hidden");
@@ -45,46 +35,54 @@ function hideElement_(el) {
   el.classList.add("hidden");
 }
 
+function openLiveApp_() {
+  window.location.href = LIVE_APP_URL;
+}
+
+function enterOfflineMode_() {
+  setStatusText_(
+    "No signal. Please use offline mode. Your info will be stored and transmitted when service returns."
+  );
+}
+
 function updateShellUi_() {
   const standalone = isStandaloneMode_();
   const online = navigator.onLine;
 
+  if (openWithoutInstallingLink) {
+    openWithoutInstallingLink.href = LIVE_APP_URL;
+  }
+
   if (!standalone) {
     showElement_(installHelp);
-    showElement_(primaryBtn);
-    hideElement_(secondaryBtn);
-
-    setButtonText_(primaryBtn, "Open Live App");
-    setButtonEnabled_(primaryBtn, online);
+    hideElement_(offlineBtn);
 
     if (online) {
-      setStatusText_("Online. Install this page to your home screen for the app icon.");
+      setStatusText_("Install this page to your home screen for the app icon.");
     } else {
-      setStatusText_("Offline. Connect to the internet to open the live app.");
+      setStatusText_("No signal right now. Install the icon when online for the best experience.");
     }
 
     return;
   }
 
   hideElement_(installHelp);
-  showElement_(primaryBtn);
-  showElement_(secondaryBtn);
 
   if (online) {
-    setStatusText_("Online. Choose how you want to continue.");
-    setButtonText_(primaryBtn, "Open Live App");
-    setButtonEnabled_(primaryBtn, true);
-
-    setButtonText_(secondaryBtn, "Enter Offline Mode");
-    setButtonEnabled_(secondaryBtn, true);
-  } else {
-    setStatusText_("Offline. The shell is available. Full offline clock-in is the next build step.");
-    setButtonText_(primaryBtn, "Open Live App");
-    setButtonEnabled_(primaryBtn, false);
-
-    setButtonText_(secondaryBtn, "Enter Offline Mode");
-    setButtonEnabled_(secondaryBtn, true);
+    hideElement_(offlineBtn);
+    setStatusText_("Opening app...");
+    setTimeout(function () {
+      if (navigator.onLine) {
+        openLiveApp_();
+      }
+    }, 200);
+    return;
   }
+
+  showElement_(offlineBtn);
+  setStatusText_(
+    "No signal. Please use offline mode. Your info will be stored and transmitted when service returns."
+  );
 }
 
 async function registerServiceWorker_() {
@@ -104,24 +102,6 @@ async function registerServiceWorker_() {
     return false;
   }
 }
-
-function openLiveApp_() {
-  if (!navigator.onLine) {
-    updateShellUi_();
-    return;
-  }
-
-  window.location.href = LIVE_APP_URL;
-}
-
-function enterOfflineMode_() {
-  if (navigator.onLine) {
-    setStatusText_("Offline mode shell is not wired to the live app yet. Use Open Live App for now.");
-    return;
-  }
-
-  setStatusText_("Offline shell opened. Full offline clock-in is the next build step.");
-}
 /* end[clockin_shell_helpers] */
 
 
@@ -129,12 +109,8 @@ function enterOfflineMode_() {
 window.addEventListener("online", updateShellUi_);
 window.addEventListener("offline", updateShellUi_);
 
-if (primaryBtn) {
-  primaryBtn.addEventListener("click", openLiveApp_);
-}
-
-if (secondaryBtn) {
-  secondaryBtn.addEventListener("click", enterOfflineMode_);
+if (offlineBtn) {
+  offlineBtn.addEventListener("click", enterOfflineMode_);
 }
 /* end[clockin_shell_event_wiring] */
 
@@ -142,9 +118,6 @@ if (secondaryBtn) {
 /* begin[clockin_shell_init] */
 document.addEventListener("DOMContentLoaded", async function () {
   setStatusText_("Preparing app shell...");
-  setButtonEnabled_(primaryBtn, false);
-  setButtonEnabled_(secondaryBtn, false);
-
   await registerServiceWorker_();
   updateShellUi_();
 });
