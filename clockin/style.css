@@ -52,6 +52,21 @@ h1 {
   opacity: 0.5;
 }
 
+.btnOnline {
+  background: #649fca;
+  color: #ffffff;
+}
+
+.btnOffline {
+  background: #23343b;
+  color: #ffffff;
+}
+
+.btnLoading {
+  background: #8ea3b3;
+  color: #ffffff;
+}
+
 .installHelp {
   margin-top: 20px;
 }
