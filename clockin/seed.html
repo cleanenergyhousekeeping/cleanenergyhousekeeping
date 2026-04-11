@@ -125,6 +125,11 @@
           }
 
           localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(res.payload));
+          try {
+  if (window.opener) {
+    window.opener.postMessage({ type: "shell-seed-saved" }, "*");
+  }
+} catch (_) {}
 
           const cleanerName = res.payload.cleanerName || "this cleaner";
           const currentShiftText =
