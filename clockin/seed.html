@@ -2,48 +2,128 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Clock In Shell Seed</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prepare Offline Mode</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <style>
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      min-height: 100dvh;
+      color: #23343b;
+    }
+
+    .wrap {
+      text-align: center;
+      padding: 24px;
+      max-width: 520px;
+      width: 92vw;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 34px;
+    }
+
+    .statusText {
+      margin-bottom: 16px;
+      font-size: 17px;
+      color: #4d6474;
+      line-height: 1.45;
+    }
+
+    .btn {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 16px 22px;
+      border-radius: 14px;
+      background: #649fca;
+      color: #fff;
+      border: none;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 20px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .btnSecondary {
+      background: #23343b;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
+  <div class="wrap">
+    <h1>Prepare Offline Mode</h1>
+    <p id="statusText" class="statusText">Preparing this phone for offline mode...</p>
+
+    <a id="returnBtn" class="btn hidden" href="#">Return to Live App</a>
+    <a id="openShellBtn" class="btn btnSecondary hidden" href="/clockin/">Open Clock In Shell</a>
+  </div>
+
   <script>
     (function () {
       const SHELL_AUTH_KEY = "ce_shell_auth_v1";
 
+      const statusText = document.getElementById("statusText");
+      const returnBtn = document.getElementById("returnBtn");
+      const openShellBtn = document.getElementById("openShellBtn");
+
       function parseHashParams_() {
         const raw = window.location.hash.replace(/^#/, "");
-        const params = new URLSearchParams(raw);
-        return params;
-      }
-
-      function postResult_(payload) {
-        try {
-          if (window.parent && window.parent !== window) {
-            window.parent.postMessage(payload, "*");
-          }
-        } catch (_) {}
+        return new URLSearchParams(raw);
       }
 
       const params = parseHashParams_();
+      const returnUrl = params.get("returnUrl") || "";
+
+      if (returnUrl) {
+        returnBtn.href = decodeURIComponent(returnUrl);
+        returnBtn.classList.remove("hidden");
+      }
+
+      openShellBtn.classList.remove("hidden");
 
       if (params.get("clear") === "1") {
         localStorage.removeItem(SHELL_AUTH_KEY);
-        postResult_({ type: "shell-seed-cleared" });
+        statusText.textContent = "Offline mode was cleared on this phone.";
         return;
       }
 
       const rawSeed = params.get("seed");
       if (!rawSeed) {
-        postResult_({ type: "shell-seed-missing" });
+        statusText.textContent = "No offline prep data was received.";
         return;
       }
 
       try {
         const parsed = JSON.parse(decodeURIComponent(rawSeed));
         localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(parsed));
-        postResult_({ type: "shell-seed-saved", cleanerName: parsed.cleanerName || "" });
+
+        const cleanerName = parsed.cleanerName || "this cleaner";
+        const currentShiftText =
+          parsed.currentShift && parsed.currentShift.property
+            ? ` Current shift: ${parsed.currentShift.property}.`
+            : "";
+
+        statusText.textContent =
+          `Offline mode is ready for ${cleanerName} on this phone.` + currentShiftText;
       } catch (error) {
-        postResult_({ type: "shell-seed-error", message: String(error || "") });
+        statusText.textContent =
+          "Offline prep failed. Please go back and try again while online.";
       }
     })();
   </script>
