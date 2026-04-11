@@ -69,17 +69,14 @@ function updateShellUi_() {
   hideElement_(installHelp);
 
   if (online) {
-    hideElement_(offlineBtn);
-    setStatusText_("Opening app...");
-    setTimeout(function () {
-      if (navigator.onLine) {
-        openLiveApp_();
-      }
-    }, 200);
+    showElement_(offlineBtn);
+    setStatusText_("Shell ready. Tap below to open the live app.");
+    offlineBtn.textContent = "Open Live App";
     return;
   }
 
   showElement_(offlineBtn);
+  offlineBtn.textContent = "Enter Offline Mode";
   setStatusText_(
     "No signal. Please use offline mode. Your info will be stored and transmitted when service returns."
   );
@@ -110,7 +107,14 @@ window.addEventListener("online", updateShellUi_);
 window.addEventListener("offline", updateShellUi_);
 
 if (offlineBtn) {
-  offlineBtn.addEventListener("click", enterOfflineMode_);
+  offlineBtn.addEventListener("click", function () {
+    if (navigator.onLine) {
+      openLiveApp_();
+      return;
+    }
+
+    enterOfflineMode_();
+  });
 }
 /* end[clockin_shell_event_wiring] */
 
