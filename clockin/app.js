@@ -50,8 +50,20 @@ function updateShellUi_() {
   const online = navigator.onLine;
 
   if (openWithoutInstallingLink) {
-    openWithoutInstallingLink.href = LIVE_APP_URL;
+  openWithoutInstallingLink.href = LIVE_APP_URL;
+
+  const standalone = isStandaloneMode_();
+  const online = navigator.onLine;
+
+  // Hide link if:
+  // - user is in standalone (they should never use link again)
+  // - OR user is offline (link won't work anyway)
+  if (standalone || !online) {
+    openWithoutInstallingLink.classList.add("hidden");
+  } else {
+    openWithoutInstallingLink.classList.remove("hidden");
   }
+}
 
   if (!standalone) {
     showElement_(installHelp);
