@@ -110,7 +110,19 @@ function updateShellUi_() {
   showElement_(offlineBtn);
 
   if (online) {
-    setStatusText_("Online. Tap below to open the live app.");
+    if (shellAuth && shellAuth.cleanerName) {
+      const currentShiftText =
+        shellAuth.currentShift && shellAuth.currentShift.property
+          ? ` Current shift: ${shellAuth.currentShift.property}.`
+          : "";
+
+      setStatusText_(
+        `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}`
+      );
+    } else {
+      setStatusText_("Online. Tap below to open the live app.");
+    }
+
     setButtonState_("Open Live App", "online");
     return;
   }
