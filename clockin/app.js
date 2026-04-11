@@ -124,13 +124,9 @@ function updateShellUi_() {
     setStatusText_(
       `No signal detected. Offline mode is ready for ${shellAuth.cleanerName}.${currentShiftText}`
     );
-  } else {
-    setStatusText_(
-      setStatusText_(
-  "No connection. Please use Offline Mode.");
-    );
+   } else {
+    setStatusText_("No connection. Please use Offline Mode.");
   }
-
   setButtonState_("Enter Offline Mode", "offline");
 }
 
