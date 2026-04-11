@@ -8,7 +8,6 @@ const LIVE_APP_URL =
 const statusText = document.getElementById("statusText");
 const offlineBtn = document.getElementById("offlineBtn");
 const installHelp = document.getElementById("installHelp");
-const openWithoutInstallingLink = document.getElementById("openWithoutInstallingLink");
 /* end[clockin_shell_dom_refs] */
 
 
