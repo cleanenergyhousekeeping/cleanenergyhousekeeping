@@ -1,6 +1,8 @@
 /* begin[clockin_shell_constants] */
 const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec";
+
+const SHELL_AUTH_KEY = "ce_shell_auth_v1";
 /* end[clockin_shell_constants] */
 
 
@@ -17,6 +19,16 @@ function isStandaloneMode_() {
     window.navigator.standalone === true ||
     window.matchMedia("(display-mode: standalone)").matches
   );
+}
+
+function getShellAuth_() {
+  try {
+    const raw = localStorage.getItem(SHELL_AUTH_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (_) {
+    return null;
+  }
 }
 
 function setStatusText_(text) {
@@ -55,7 +67,22 @@ function openLiveApp_() {
 }
 
 function enterOfflineMode_() {
+  const shellAuth = getShellAuth_();
+
   setButtonState_("Loading...", "loading");
+
+  if (shellAuth && shellAuth.cleanerName) {
+    const currentShiftText =
+      shellAuth.currentShift && shellAuth.currentShift.property
+        ? ` Current shift: ${shellAuth.currentShift.property}.`
+        : "";
+
+    setStatusText_(
+      `Offline mode ready for ${shellAuth.cleanerName}.${currentShiftText} Full offline entry is the next build step.`
+    );
+    return;
+  }
+
   setStatusText_(
     "Offline mode loading. If the live app is still open, quit and reopen the icon to use offline mode."
   );
@@ -64,6 +91,7 @@ function enterOfflineMode_() {
 function updateShellUi_() {
   const standalone = isStandaloneMode_();
   const online = navigator.onLine;
+  const shellAuth = getShellAuth_();
 
   if (!standalone) {
     showElement_(installHelp);
@@ -87,9 +115,21 @@ function updateShellUi_() {
     return;
   }
 
-  setStatusText_(
-    "No signal detected. If the live app is still open, quit and reopen the icon to use offline mode."
-  );
+  if (shellAuth && shellAuth.cleanerName) {
+    const currentShiftText =
+      shellAuth.currentShift && shellAuth.currentShift.property
+        ? ` Current shift: ${shellAuth.currentShift.property}.`
+        : "";
+
+    setStatusText_(
+      `No signal detected. Offline mode is ready for ${shellAuth.cleanerName}.${currentShiftText}`
+    );
+  } else {
+    setStatusText_(
+      "No signal detected. If the live app is still open, quit and reopen the icon to use offline mode."
+    );
+  }
+
   setButtonState_("Enter Offline Mode", "offline");
 }
 
@@ -116,6 +156,18 @@ async function registerServiceWorker_() {
 /* begin[clockin_shell_event_wiring] */
 window.addEventListener("online", updateShellUi_);
 window.addEventListener("offline", updateShellUi_);
+
+window.addEventListener("message", function (event) {
+  if (!event || !event.data || !event.data.type) return;
+
+  if (event.data.type === "shell-seed-saved") {
+    updateShellUi_();
+  }
+
+  if (event.data.type === "shell-seed-cleared") {
+    updateShellUi_();
+  }
+});
 
 if (offlineBtn) {
   offlineBtn.addEventListener("click", function () {
