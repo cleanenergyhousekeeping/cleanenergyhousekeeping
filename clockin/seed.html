@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Clock In Shell Seed</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <script>
+    (function () {
+      const SHELL_AUTH_KEY = "ce_shell_auth_v1";
+
+      function parseHashParams_() {
+        const raw = window.location.hash.replace(/^#/, "");
+        const params = new URLSearchParams(raw);
+        return params;
+      }
+
+      function postResult_(payload) {
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage(payload, "*");
+          }
+        } catch (_) {}
+      }
+
+      const params = parseHashParams_();
+
+      if (params.get("clear") === "1") {
+        localStorage.removeItem(SHELL_AUTH_KEY);
+        postResult_({ type: "shell-seed-cleared" });
+        return;
+      }
+
+      const rawSeed = params.get("seed");
+      if (!rawSeed) {
+        postResult_({ type: "shell-seed-missing" });
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(decodeURIComponent(rawSeed));
+        localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(parsed));
+        postResult_({ type: "shell-seed-saved", cleanerName: parsed.cleanerName || "" });
+      } catch (error) {
+        postResult_({ type: "shell-seed-error", message: String(error || "") });
+      }
+    })();
+  </script>
+</body>
+</html>
