@@ -70,7 +70,7 @@
     <h1>Prepare Offline Mode</h1>
     <p id="statusText" class="statusText">Preparing this phone for offline mode...</p>
 
-    <a id="returnBtn" class="btn hidden" href="#">Return to Live App</a>
+    <button id="returnBtn" class="btn hidden" type="button">Return to Live App</button>
     <a id="openShellBtn" class="btn btnSecondary hidden" href="/clockin/">Open Clock In Shell</a>
   </div>
 
@@ -79,23 +79,35 @@
       const SHELL_AUTH_KEY = "ce_shell_auth_v1";
 
       const statusText = document.getElementById("statusText");
-      const returnBtn = document.getElementById("returnBtn");
-      const openShellBtn = document.getElementById("openShellBtn");
+const returnBtn = document.getElementById("returnBtn");
+const openShellBtn = document.getElementById("openShellBtn");
 
-      function parseHashParams_() {
-        const raw = window.location.hash.replace(/^#/, "");
-        return new URLSearchParams(raw);
-      }
+function parseHashParams_() {
+  const raw = window.location.hash.replace(/^#/, "");
+  return new URLSearchParams(raw);
+}
 
-      const params = parseHashParams_();
-      const returnUrl = params.get("returnUrl") || "";
+const params = parseHashParams_();
+const returnUrl = params.get("returnUrl") || "";
 
-      if (returnUrl) {
-        returnBtn.href = decodeURIComponent(returnUrl);
-        returnBtn.classList.remove("hidden");
-      }
+if (returnBtn) {
+  if (returnUrl || window.history.length > 1) {
+    returnBtn.classList.remove("hidden");
+  }
 
-      openShellBtn.classList.remove("hidden");
+  returnBtn.addEventListener("click", function () {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    if (returnUrl) {
+      window.location.href = decodeURIComponent(returnUrl);
+    }
+  });
+}
+
+openShellBtn.classList.remove("hidden");
 
       if (params.get("clear") === "1") {
         localStorage.removeItem(SHELL_AUTH_KEY);
