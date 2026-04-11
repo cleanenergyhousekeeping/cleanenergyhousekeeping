@@ -126,7 +126,8 @@ function updateShellUi_() {
     );
   } else {
     setStatusText_(
-      "No signal detected. If the live app is still open, quit and reopen the icon to use offline mode."
+      setStatusText_(
+  "No connection. Please use Offline Mode.");
     );
   }
 
