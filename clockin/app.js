@@ -35,13 +35,30 @@ function hideElement_(el) {
   el.classList.add("hidden");
 }
 
+function setButtonState_(text, mode) {
+  if (!offlineBtn) return;
+
+  offlineBtn.textContent = text || "";
+  offlineBtn.classList.remove("btnOnline", "btnOffline", "btnLoading");
+
+  if (mode === "online") {
+    offlineBtn.classList.add("btnOnline");
+  } else if (mode === "offline") {
+    offlineBtn.classList.add("btnOffline");
+  } else if (mode === "loading") {
+    offlineBtn.classList.add("btnLoading");
+  }
+}
+
 function openLiveApp_() {
+  setButtonState_("Loading...", "loading");
   window.location.href = LIVE_APP_URL;
 }
 
 function enterOfflineMode_() {
+  setButtonState_("Loading...", "loading");
   setStatusText_(
-    "No signal. Please use offline mode. Your info will be stored and transmitted when service returns."
+    "Offline mode loading. If the live app is still open, quit and reopen the icon to use offline mode."
   );
 }
 
@@ -50,20 +67,14 @@ function updateShellUi_() {
   const online = navigator.onLine;
 
   if (openWithoutInstallingLink) {
-  openWithoutInstallingLink.href = LIVE_APP_URL;
+    openWithoutInstallingLink.href = LIVE_APP_URL;
 
-  const standalone = isStandaloneMode_();
-  const online = navigator.onLine;
-
-  // Hide link if:
-  // - user is in standalone (they should never use link again)
-  // - OR user is offline (link won't work anyway)
-  if (standalone || !online) {
-    openWithoutInstallingLink.classList.add("hidden");
-  } else {
-    openWithoutInstallingLink.classList.remove("hidden");
+    if (standalone || !online) {
+      openWithoutInstallingLink.classList.add("hidden");
+    } else {
+      openWithoutInstallingLink.classList.remove("hidden");
+    }
   }
-}
 
   if (!standalone) {
     showElement_(installHelp);
@@ -79,19 +90,18 @@ function updateShellUi_() {
   }
 
   hideElement_(installHelp);
+  showElement_(offlineBtn);
 
   if (online) {
-    showElement_(offlineBtn);
-    setStatusText_("Shell ready. Tap below to open the live app.");
-    offlineBtn.textContent = "Open Live App";
+    setStatusText_("Online. Tap below to open the live app.");
+    setButtonState_("Open Live App", "online");
     return;
   }
 
-  showElement_(offlineBtn);
-  offlineBtn.textContent = "Enter Offline Mode";
   setStatusText_(
-    "No signal. Please use offline mode. Your info will be stored and transmitted when service returns."
+    "No signal detected. If the live app is still open, quit and reopen the icon to use offline mode."
   );
+  setButtonState_("Enter Offline Mode", "offline");
 }
 
 async function registerServiceWorker_() {
