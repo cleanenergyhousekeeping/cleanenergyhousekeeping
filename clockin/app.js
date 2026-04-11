@@ -31,6 +31,28 @@ function getShellAuth_() {
   }
 }
 
+function writeShellTestMarker_() {
+  try {
+    localStorage.setItem(
+      "ce_shell_test_marker_v1",
+      JSON.stringify({
+        savedAtMs: Date.now(),
+        label: "shell wrote this"
+      })
+    );
+  } catch (_) {}
+}
+
+function getShellTestMarker_() {
+  try {
+    const raw = localStorage.getItem("ce_shell_test_marker_v1");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (_) {
+    return null;
+  }
+}
+
 function setStatusText_(text) {
   if (!statusText) return;
   statusText.textContent = text || "";
@@ -110,22 +132,28 @@ function updateShellUi_() {
   showElement_(offlineBtn);
 
   if (online) {
-    if (shellAuth && shellAuth.cleanerName) {
-      const currentShiftText =
-        shellAuth.currentShift && shellAuth.currentShift.property
-          ? ` Current shift: ${shellAuth.currentShift.property}.`
-          : "";
+  writeShellTestMarker_();
 
-      setStatusText_(
-        `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}`
-      );
-    } else {
-      setStatusText_("Online. Tap below to open the live app.");
-    }
+  const testMarker = getShellTestMarker_();
 
-    setButtonState_("Open Live App", "online");
-    return;
+  if (shellAuth && shellAuth.cleanerName) {
+    const currentShiftText =
+      shellAuth.currentShift && shellAuth.currentShift.property
+        ? ` Current shift: ${shellAuth.currentShift.property}.`
+        : "";
+
+    setStatusText_(
+      `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}`
+    );
+  } else if (testMarker) {
+    setStatusText_("Online. Shell test marker is saved on this phone.");
+  } else {
+    setStatusText_("Online. Tap below to open the live app.");
   }
+
+  setButtonState_("Open Live App", "online");
+  return;
+}
 
   if (shellAuth && shellAuth.cleanerName) {
     const currentShiftText =
