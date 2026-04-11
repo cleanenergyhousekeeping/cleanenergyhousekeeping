@@ -69,22 +69,22 @@ function openLiveApp_() {
 function enterOfflineMode_() {
   const shellAuth = getShellAuth_();
 
-  setButtonState_("Loading...", "loading");
-
   if (shellAuth && shellAuth.cleanerName) {
     const currentShiftText =
       shellAuth.currentShift && shellAuth.currentShift.property
         ? ` Current shift: ${shellAuth.currentShift.property}.`
         : "";
 
+    setButtonState_("Enter Offline Mode", "offline");
     setStatusText_(
-      `Offline mode ready for ${shellAuth.cleanerName}.${currentShiftText} Full offline entry is the next build step.`
+      `Offline mode is ready for ${shellAuth.cleanerName}.${currentShiftText} Full offline entry is the next build step.`
     );
     return;
   }
 
+  setButtonState_("Enter Offline Mode", "offline");
   setStatusText_(
-    "Offline mode loading. If the live app is still open, quit and reopen the icon to use offline mode."
+    "Offline mode is not ready yet on this phone. Please go online and prepare offline mode first."
   );
 }
 
