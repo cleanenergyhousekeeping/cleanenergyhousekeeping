@@ -79,7 +79,6 @@
       const SHELL_AUTH_KEY = "ce_shell_auth_v1";
 
       const statusText = document.getElementById("statusText");
-const returnBtn = document.getElementById("returnBtn");
 const openShellBtn = document.getElementById("openShellBtn");
 
 function parseHashParams_() {
@@ -90,22 +89,6 @@ function parseHashParams_() {
 const params = parseHashParams_();
 const returnUrl = params.get("returnUrl") || "";
 
-if (returnBtn) {
-  if (returnUrl || window.history.length > 1) {
-    returnBtn.classList.remove("hidden");
-  }
-
-  returnBtn.addEventListener("click", function () {
-    if (window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-
-    if (returnUrl) {
-      window.location.href = decodeURIComponent(returnUrl);
-    }
-  });
-}
 
 openShellBtn.classList.remove("hidden");
 
