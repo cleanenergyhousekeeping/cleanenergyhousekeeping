@@ -98,3 +98,20 @@ h1 {
 .hidden {
   display: none !important;
 }
+
+.prepSection {
+  margin-top: 18px;
+}
+
+.prepInput {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid #cfd8dc;
+  background: #ffffff;
+  color: #23343b;
+  font-size: 20px;
+  box-sizing: border-box;
+  text-align: center;
+  letter-spacing: 2px;
+}
