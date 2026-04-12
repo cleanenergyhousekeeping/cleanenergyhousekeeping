@@ -22,11 +22,24 @@ const offlineEntrySection = document.getElementById("offlineEntrySection");
 const offlineReadyText = document.getElementById("offlineReadyText");
 const offlineQueueCount = document.getElementById("offlineQueueCount");
 const offlineActionSelect = document.getElementById("offlineActionSelect");
-const offlinePropertyInput = document.getElementById("offlinePropertyInput");
+const offlinePropertySearch = document.getElementById("offlinePropertySearch");
+const offlinePropertyResults = document.getElementById("offlinePropertyResults");
+const offlinePropertyInfoPanel = document.getElementById("offlinePropertyInfoPanel");
+const offlinePropertyInfoEntrance = document.getElementById("offlinePropertyInfoEntrance");
+const offlinePropertyInfoAlarm = document.getElementById("offlinePropertyInfoAlarm");
+const offlinePropertyInfoWifi = document.getElementById("offlinePropertyInfoWifi");
+const offlinePropertyInfoWifiPassword = document.getElementById("offlinePropertyInfoWifiPassword");
+const offlinePropertyInfoOwners = document.getElementById("offlinePropertyInfoOwners");
+const offlinePropertyInfoNotes = document.getElementById("offlinePropertyInfoNotes");
 const offlineNoteWrap = document.getElementById("offlineNoteWrap");
 const offlineNoteInput = document.getElementById("offlineNoteInput");
 const saveOfflineEntryBtn = document.getElementById("saveOfflineEntryBtn");
 /* end[clockin_shell_dom_refs] */
+
+
+/* begin[clockin_shell_state] */
+let selectedOfflineProperty = null;
+/* end[clockin_shell_state] */
 
 
 /* begin[clockin_shell_helpers] */
@@ -96,6 +109,10 @@ function setButtonState_(text, mode) {
   }
 }
 
+function getShellProperties_(shellAuth) {
+  return Array.isArray(shellAuth && shellAuth.properties) ? shellAuth.properties : [];
+}
+
 function getCurrentPropertyText_(shellAuth) {
   if (
     shellAuth &&
@@ -112,24 +129,6 @@ function updateOfflineQueueCount_() {
   if (!offlineQueueCount) return;
   const queue = getShellQueue_();
   offlineQueueCount.textContent = "Queued entries: " + queue.length;
-}
-
-function resetOfflineEntryForm_(shellAuth) {
-  if (offlineActionSelect) {
-    offlineActionSelect.value = "";
-  }
-
-  if (offlinePropertyInput) {
-    offlinePropertyInput.value = getCurrentPropertyText_(shellAuth);
-  }
-
-  if (offlineNoteInput) {
-    offlineNoteInput.value = "";
-  }
-
-  if (offlineNoteWrap) {
-    offlineNoteWrap.classList.add("hidden");
-  }
 }
 
 function updateOfflineReadyText_(shellAuth) {
@@ -150,10 +149,141 @@ function updateOfflineReadyText_(shellAuth) {
     "Offline mode is not ready yet on this phone. Please go online and load offline prep first.";
 }
 
+function clearOfflinePropertyResults_() {
+  if (!offlinePropertyResults) return;
+  offlinePropertyResults.innerHTML = "";
+  hideElement_(offlinePropertyResults);
+}
+
+function fillOfflinePropertyInfo_(prop) {
+  if (!prop || !offlinePropertyInfoPanel) return;
+
+  offlinePropertyInfoEntrance.textContent = prop.entranceInfo || "—";
+  offlinePropertyInfoAlarm.textContent = prop.alarmInfo || "—";
+  offlinePropertyInfoWifi.textContent = prop.wifiNetwork || "—";
+  offlinePropertyInfoWifiPassword.textContent = prop.wifiPassword || "—";
+  offlinePropertyInfoOwners.textContent = prop.ownerNames || "—";
+  offlinePropertyInfoNotes.textContent = prop.houseNotes || "—";
+
+  showElement_(offlinePropertyInfoPanel);
+}
+
+function hideOfflinePropertyInfo_() {
+  if (!offlinePropertyInfoPanel) return;
+
+  offlinePropertyInfoEntrance.textContent = "";
+  offlinePropertyInfoAlarm.textContent = "";
+  offlinePropertyInfoWifi.textContent = "";
+  offlinePropertyInfoWifiPassword.textContent = "";
+  offlinePropertyInfoOwners.textContent = "";
+  offlinePropertyInfoNotes.textContent = "";
+
+  hideElement_(offlinePropertyInfoPanel);
+}
+
+function selectOfflineProperty_(prop) {
+  selectedOfflineProperty = prop || null;
+
+  if (offlinePropertySearch) {
+    offlinePropertySearch.value = prop && prop.name ? prop.name : "";
+  }
+
+  clearOfflinePropertyResults_();
+
+  if (prop) {
+    fillOfflinePropertyInfo_(prop);
+  } else {
+    hideOfflinePropertyInfo_();
+  }
+}
+
+function findOfflinePropertyByName_(name, shellAuth) {
+  const target = String(name || "").trim();
+  if (!target) return null;
+
+  return getShellProperties_(shellAuth).find(function (prop) {
+    return String((prop && prop.name) || "") === target;
+  }) || null;
+}
+
+function handleOfflinePropertySearch_() {
+  const shellAuth = getShellAuth_();
+  const query = (offlinePropertySearch && offlinePropertySearch.value || "").trim().toLowerCase();
+
+  if (!query) {
+    selectedOfflineProperty = null;
+    clearOfflinePropertyResults_();
+    hideOfflinePropertyInfo_();
+    return;
+  }
+
+  if (
+    !selectedOfflineProperty ||
+    String((selectedOfflineProperty && selectedOfflineProperty.name) || "") !==
+      String((offlinePropertySearch && offlinePropertySearch.value) || "").trim()
+  ) {
+    selectedOfflineProperty = null;
+    hideOfflinePropertyInfo_();
+  }
+
+  const matches = getShellProperties_(shellAuth)
+    .filter(function (prop) {
+      return String((prop && prop.name) || "").toLowerCase().includes(query);
+    })
+    .slice(0, 12);
+
+  clearOfflinePropertyResults_();
+
+  if (!matches.length) {
+    return;
+  }
+
+  matches.forEach(function (prop) {
+    const div = document.createElement("div");
+    div.className = "offlineResultItem";
+    div.textContent = prop.name || "—";
+
+    div.addEventListener("click", function () {
+      selectOfflineProperty_(prop);
+    });
+
+    offlinePropertyResults.appendChild(div);
+  });
+
+  showElement_(offlinePropertyResults);
+}
+
+function resetOfflineEntryForm_(shellAuth) {
+  if (offlineActionSelect) {
+    offlineActionSelect.value = "";
+  }
+
+  if (offlinePropertySearch) {
+    const currentPropertyName = getCurrentPropertyText_(shellAuth);
+    offlinePropertySearch.value = currentPropertyName;
+    selectedOfflineProperty = findOfflinePropertyByName_(currentPropertyName, shellAuth);
+
+    if (selectedOfflineProperty) {
+      fillOfflinePropertyInfo_(selectedOfflineProperty);
+    } else {
+      hideOfflinePropertyInfo_();
+    }
+  }
+
+  if (offlineNoteInput) {
+    offlineNoteInput.value = "";
+  }
+
+  if (offlineNoteWrap) {
+    hideElement_(offlineNoteWrap);
+  }
+
+  clearOfflinePropertyResults_();
+}
+
 function saveOfflineEntry_() {
   const shellAuth = getShellAuth_();
   const action = (offlineActionSelect && offlineActionSelect.value || "").trim();
-  const property = (offlinePropertyInput && offlinePropertyInput.value || "").trim();
   const note = (offlineNoteInput && offlineNoteInput.value || "").trim();
 
   if (!shellAuth || !shellAuth.cleanerName) {
@@ -166,8 +296,8 @@ function saveOfflineEntry_() {
     return;
   }
 
-  if (!property) {
-    setStatusText_("Please enter the property name.");
+  if (!selectedOfflineProperty || !selectedOfflineProperty.name) {
+    setStatusText_("Please select a property from the list.");
     return;
   }
 
@@ -182,7 +312,7 @@ function saveOfflineEntry_() {
     cleanerName: shellAuth.cleanerName,
     accessLevel: shellAuth.accessLevel || "LIMITED",
     eventType: action,
-    property: property,
+    property: selectedOfflineProperty.name,
     note: note,
     submittedAtMs: Date.now(),
     source: "shell_offline",
@@ -192,7 +322,7 @@ function saveOfflineEntry_() {
 
   if (action === "clock_in") {
     shellAuth.currentShift = {
-      property: property,
+      property: selectedOfflineProperty.name,
       clockInMs: Date.now(),
       clockInDisplay: "",
     };
@@ -407,6 +537,22 @@ if (offlineBtn) {
 if (loadPrepBtn) {
   loadPrepBtn.addEventListener("click", loadOfflinePrep_);
 }
+
+if (offlinePropertySearch) {
+  offlinePropertySearch.addEventListener("input", handleOfflinePropertySearch_);
+  offlinePropertySearch.addEventListener("focus", handleOfflinePropertySearch_);
+}
+
+document.addEventListener("click", function (event) {
+  if (
+    offlinePropertySearch &&
+    offlinePropertyResults &&
+    !offlinePropertySearch.contains(event.target) &&
+    !offlinePropertyResults.contains(event.target)
+  ) {
+    clearOfflinePropertyResults_();
+  }
+});
 
 if (offlineActionSelect) {
   offlineActionSelect.addEventListener("change", function () {
