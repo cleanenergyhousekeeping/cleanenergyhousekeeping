@@ -2,6 +2,9 @@
 const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec";
 
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec";
+
 const SHELL_AUTH_KEY = "ce_shell_auth_v1";
 /* end[clockin_shell_constants] */
 
@@ -10,6 +13,9 @@ const SHELL_AUTH_KEY = "ce_shell_auth_v1";
 const statusText = document.getElementById("statusText");
 const offlineBtn = document.getElementById("offlineBtn");
 const installHelp = document.getElementById("installHelp");
+const prepSection = document.getElementById("prepSection");
+const prepCodeInput = document.getElementById("prepCodeInput");
+const loadPrepBtn = document.getElementById("loadPrepBtn");
 /* end[clockin_shell_dom_refs] */
 
 
@@ -29,6 +35,10 @@ function getShellAuth_() {
   } catch (_) {
     return null;
   }
+}
+
+function saveShellAuth_(payload) {
+  localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(payload));
 }
 
 function setStatusText_(text) {
@@ -61,6 +71,68 @@ function setButtonState_(text, mode) {
   }
 }
 
+async function fetchPrepPayloadByCode_(code) {
+  const url =
+    APPS_SCRIPT_URL +
+    "?mode=getOfflineShellPrepByCode&code=" +
+    encodeURIComponent(code);
+
+  const response = await fetch(url, { method: "GET", cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Prep request failed.");
+  }
+
+  return response.json();
+}
+
+async function loadOfflinePrep_() {
+  const code = (prepCodeInput && prepCodeInput.value || "").trim();
+
+  if (!code) {
+    setStatusText_("Please enter the offline prep code.");
+    return;
+  }
+
+  setStatusText_("Loading offline prep...");
+  if (loadPrepBtn) {
+    loadPrepBtn.textContent = "Loading...";
+    loadPrepBtn.disabled = true;
+  }
+
+  try {
+    const res = await fetchPrepPayloadByCode_(code);
+
+    if (!res || !res.ok || !res.payload) {
+      setStatusText_((res && res.message) || "Offline prep failed.");
+      return;
+    }
+
+    saveShellAuth_(res.payload);
+
+    const cleanerName = res.payload.cleanerName || "this cleaner";
+    const currentShiftText =
+      res.payload.currentShift && res.payload.currentShift.property
+        ? ` Current shift: ${res.payload.currentShift.property}.`
+        : "";
+
+    setStatusText_(
+      `Online. Offline mode is prepared for ${cleanerName}.${currentShiftText}`
+    );
+
+    if (prepCodeInput) {
+      prepCodeInput.value = "";
+    }
+  } catch (_) {
+    setStatusText_("Offline prep failed. Please try again while online.");
+  } finally {
+    if (loadPrepBtn) {
+      loadPrepBtn.textContent = "Load Offline Prep";
+      loadPrepBtn.disabled = false;
+    }
+    updateShellUi_();
+  }
+}
+
 function openLiveApp_() {
   setButtonState_("Loading...", "loading");
   window.location.href = LIVE_APP_URL;
@@ -83,9 +155,7 @@ function enterOfflineMode_() {
   }
 
   setButtonState_("Enter Offline Mode", "offline");
-  setStatusText_(
-    "Offline mode is not ready yet on this phone. Please go online and prepare offline mode first."
-  );
+  setStatusText_("Offline mode is not ready yet on this phone. Please go online and load offline prep first.");
 }
 
 function updateShellUi_() {
@@ -96,6 +166,7 @@ function updateShellUi_() {
   if (!standalone) {
     showElement_(installHelp);
     hideElement_(offlineBtn);
+    hideElement_(prepSection);
 
     if (online) {
       setStatusText_("Install this page to your home screen for the app icon.");
@@ -110,10 +181,26 @@ function updateShellUi_() {
   showElement_(offlineBtn);
 
   if (online) {
-    setStatusText_("Online. Tap below to open the live app.");
+    showElement_(prepSection);
+
+    if (shellAuth && shellAuth.cleanerName) {
+      const currentShiftText =
+        shellAuth.currentShift && shellAuth.currentShift.property
+          ? ` Current shift: ${shellAuth.currentShift.property}.`
+          : "";
+
+      setStatusText_(
+        `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}`
+      );
+    } else {
+      setStatusText_("Online. Tap below to open the live app or load offline prep.");
+    }
+
     setButtonState_("Open Live App", "online");
     return;
   }
+
+  hideElement_(prepSection);
 
   if (shellAuth && shellAuth.cleanerName) {
     const currentShiftText =
@@ -124,9 +211,10 @@ function updateShellUi_() {
     setStatusText_(
       `No signal detected. Offline mode is ready for ${shellAuth.cleanerName}.${currentShiftText}`
     );
-   } else {
+  } else {
     setStatusText_("No connection. Please use Offline Mode.");
   }
+
   setButtonState_("Enter Offline Mode", "offline");
 }
 
@@ -154,18 +242,6 @@ async function registerServiceWorker_() {
 window.addEventListener("online", updateShellUi_);
 window.addEventListener("offline", updateShellUi_);
 
-window.addEventListener("message", function (event) {
-  if (!event || !event.data || !event.data.type) return;
-
-  if (event.data.type === "shell-seed-saved") {
-    updateShellUi_();
-  }
-
-  if (event.data.type === "shell-seed-cleared") {
-    updateShellUi_();
-  }
-});
-
 if (offlineBtn) {
   offlineBtn.addEventListener("click", function () {
     if (navigator.onLine) {
@@ -175,6 +251,10 @@ if (offlineBtn) {
 
     enterOfflineMode_();
   });
+}
+
+if (loadPrepBtn) {
+  loadPrepBtn.addEventListener("click", loadOfflinePrep_);
 }
 /* end[clockin_shell_event_wiring] */
 
