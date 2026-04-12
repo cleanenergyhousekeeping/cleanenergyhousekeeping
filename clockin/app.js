@@ -40,7 +40,7 @@ const saveOfflineEntryBtn = document.getElementById("saveOfflineEntryBtn");
 /* begin[clockin_shell_state] */
 let selectedOfflineProperty = null;
 /* end[clockin_shell_state] */
-
+let shellSyncInProgress = false;
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -311,6 +311,8 @@ function saveOfflineEntry_() {
     queuedId: "shell_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
     cleanerName: shellAuth.cleanerName,
     accessLevel: shellAuth.accessLevel || "LIMITED",
+    sessionToken: shellAuth.sessionToken || "",
+    clientId: shellAuth.clientId || "",
     eventType: action,
     property: selectedOfflineProperty.name,
     note: note,
@@ -340,7 +342,83 @@ function saveOfflineEntry_() {
 
   setStatusText_("Offline entry saved on this phone.");
 }
+async function postShellQueueEntry_(queuedEntry) {
+  const response = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify({
+      mode: "submitShellQueueEntry",
+      payload: {
+        sessionToken: queuedEntry.sessionToken || "",
+        clientId: queuedEntry.clientId || "",
+        property: queuedEntry.property || "",
+        eventType: queuedEntry.eventType || "",
+        note: queuedEntry.note || "",
+        submittedAtMs: queuedEntry.submittedAtMs || Date.now(),
+      },
+    }),
+    cache: "no-store",
+  });
 
+  if (!response.ok) {
+    throw new Error("Shell sync request failed.");
+  }
+
+  return response.json();
+}
+
+async function syncShellQueue_() {
+  if (shellSyncInProgress) return;
+  if (!navigator.onLine) return;
+
+  const initialQueue = getShellQueue_();
+  if (!initialQueue.length) return;
+
+  shellSyncInProgress = true;
+
+  try {
+    while (true) {
+      const queue = getShellQueue_();
+      if (!queue.length) {
+        break;
+      }
+
+      const nextEntry = queue[0];
+      const response = await postShellQueueEntry_(nextEntry);
+
+      if (!response || !response.ok) {
+        const message = (response && response.message) || "Could not sync a queued shell entry yet.";
+        setStatusText_(message);
+        break;
+      }
+
+      const trimmedQueue = queue.slice(1);
+      saveShellQueue_(trimmedQueue);
+
+      const shellAuth = getShellAuth_();
+      if (shellAuth) {
+        shellAuth.currentShift = response.currentShift || null;
+        saveShellAuth_(shellAuth);
+      }
+
+      updateOfflineQueueCount_();
+    }
+
+    const remainingQueue = getShellQueue_();
+    if (!remainingQueue.length) {
+      setStatusText_("Offline entries synced.");
+    }
+
+  } catch (_) {
+    setStatusText_("Could not sync offline entries yet. They will stay queued.");
+  } finally {
+    shellSyncInProgress = false;
+    updateShellUi_();
+    updateOfflineQueueCount_();
+  }
+}
 async function fetchPrepPayloadByCode_(code) {
   const url =
     APPS_SCRIPT_URL +
@@ -400,6 +478,7 @@ async function loadOfflinePrep_() {
       loadPrepBtn.disabled = false;
     }
     updateShellUi_();
+    syncShellQueue_();
   }
 }
 
@@ -520,7 +599,11 @@ async function registerServiceWorker_() {
 
 
 /* begin[clockin_shell_event_wiring] */
-window.addEventListener("online", updateShellUi_);
+window.addEventListener("online", function () {
+  updateShellUi_();
+  syncShellQueue_();
+});
+
 window.addEventListener("offline", updateShellUi_);
 
 if (offlineBtn) {
@@ -578,5 +661,6 @@ document.addEventListener("DOMContentLoaded", async function () {
   await registerServiceWorker_();
   updateShellUi_();
   updateOfflineQueueCount_();
+  syncShellQueue_();
 });
 /* end[clockin_shell_init] */
