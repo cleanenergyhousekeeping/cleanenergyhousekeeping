@@ -718,6 +718,9 @@ document.addEventListener("DOMContentLoaded", async function () {
   await registerServiceWorker_();
   updateShellUi_();
   updateOfflineQueueCount_();
+
+  clearShellQueueDebug_();
+
   syncShellQueue_();
 });
 /* end[clockin_shell_init] */
