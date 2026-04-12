@@ -44,14 +44,50 @@
     <option value="clock_out">Clock Out</option>
   </select>
 
-  <label for="offlinePropertyInput" class="offlineLabel">Property</label>
+  <label for="offlinePropertySearch" class="offlineLabel">Property</label>
   <input
-    id="offlinePropertyInput"
+    id="offlinePropertySearch"
     class="offlineInput"
     type="text"
-    placeholder="Enter property name"
+    placeholder="Search property..."
     autocomplete="off"
   />
+
+  <div id="offlinePropertyResults" class="offlineResultsBox hidden"></div>
+
+  <div id="offlinePropertyInfoPanel" class="offlinePropertyInfoPanel hidden">
+    <div class="offlinePropertyInfoHeader">Current Property Info</div>
+
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">Entrance</div>
+      <div id="offlinePropertyInfoEntrance" class="offlinePropertyInfoValue"></div>
+    </div>
+
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">Alarm</div>
+      <div id="offlinePropertyInfoAlarm" class="offlinePropertyInfoValue"></div>
+    </div>
+
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">Wi-Fi</div>
+      <div id="offlinePropertyInfoWifi" class="offlinePropertyInfoValue"></div>
+    </div>
+
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">Wi-Fi Password</div>
+      <div id="offlinePropertyInfoWifiPassword" class="offlinePropertyInfoValue"></div>
+    </div>
+
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">Owner Names</div>
+      <div id="offlinePropertyInfoOwners" class="offlinePropertyInfoValue"></div>
+    </div>
+
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">House Notes</div>
+      <div id="offlinePropertyInfoNotes" class="offlinePropertyInfoValue"></div>
+    </div>
+  </div>
 
   <div id="offlineNoteWrap" class="hidden">
     <label for="offlineNoteInput" class="offlineLabel">Cleaning Note</label>
