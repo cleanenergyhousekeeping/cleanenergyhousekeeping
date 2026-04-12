@@ -343,30 +343,54 @@ function saveOfflineEntry_() {
   setStatusText_("Offline entry saved on this phone.");
 }
 async function postShellQueueEntry_(queuedEntry) {
-  const response = await fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8",
-    },
-    body: JSON.stringify({
-      mode: "submitShellQueueEntry",
-      payload: {
-        sessionToken: queuedEntry.sessionToken || "",
-        clientId: queuedEntry.clientId || "",
-        property: queuedEntry.property || "",
-        eventType: queuedEntry.eventType || "",
-        note: queuedEntry.note || "",
-        submittedAtMs: queuedEntry.submittedAtMs || Date.now(),
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
       },
-    }),
-    cache: "no-store",
-  });
+      body: JSON.stringify({
+        mode: "submitShellQueueEntry",
+        payload: {
+          sessionToken: queuedEntry.sessionToken || "",
+          clientId: queuedEntry.clientId || "",
+          property: queuedEntry.property || "",
+          eventType: queuedEntry.eventType || "",
+          note: queuedEntry.note || "",
+          submittedAtMs: queuedEntry.submittedAtMs || Date.now(),
+        },
+      }),
+      cache: "no-store",
+    });
 
-  if (!response.ok) {
-    throw new Error("Shell sync request failed.");
+    const rawText = await response.text();
+    let parsed = null;
+
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch (_) {
+      parsed = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        "Shell sync HTTP " +
+          response.status +
+          (rawText ? " — " + rawText.slice(0, 200) : "")
+      );
+    }
+
+    if (!parsed) {
+      throw new Error("Shell sync returned a non-JSON response.");
+    }
+
+    return parsed;
+  } catch (error) {
+    throw new Error(
+      "Shell sync fetch failed: " +
+        ((error && error.message) || String(error) || "Unknown error")
+    );
   }
-
-  return response.json();
 }
 
 async function syncShellQueue_() {
@@ -378,6 +402,8 @@ async function syncShellQueue_() {
 
   shellSyncInProgress = true;
 
+  let finalStatusMessage = "";
+
   try {
     while (true) {
       const queue = getShellQueue_();
@@ -386,11 +412,20 @@ async function syncShellQueue_() {
       }
 
       const nextEntry = queue[0];
+      finalStatusMessage =
+        "Syncing queued entry: " +
+        (nextEntry.eventType || "?") +
+        " at " +
+        (nextEntry.property || "?");
+      setStatusText_(finalStatusMessage);
+
       const response = await postShellQueueEntry_(nextEntry);
 
       if (!response || !response.ok) {
-        const message = (response && response.message) || "Could not sync a queued shell entry yet.";
-        setStatusText_(message);
+        finalStatusMessage =
+          (response && response.message) ||
+          "Could not sync a queued shell entry yet.";
+        setStatusText_(finalStatusMessage);
         break;
       }
 
@@ -408,15 +443,31 @@ async function syncShellQueue_() {
 
     const remainingQueue = getShellQueue_();
     if (!remainingQueue.length) {
-      setStatusText_("Offline entries synced.");
+      finalStatusMessage = "Offline entries synced.";
+      setStatusText_(finalStatusMessage);
+    } else if (!finalStatusMessage) {
+      finalStatusMessage =
+        "Some offline entries are still queued: " + remainingQueue.length;
+      setStatusText_(finalStatusMessage);
     }
 
-  } catch (_) {
-    setStatusText_("Could not sync offline entries yet. They will stay queued.");
+  } catch (error) {
+    finalStatusMessage =
+      (error && error.message) ||
+      "Could not sync offline entries yet. They will stay queued.";
+    setStatusText_(finalStatusMessage);
   } finally {
     shellSyncInProgress = false;
-    updateShellUi_();
     updateOfflineQueueCount_();
+
+    const queueRemaining = getShellQueue_().length;
+    updateShellUi_();
+
+    if (finalStatusMessage) {
+      const suffix =
+        queueRemaining > 0 ? " Queue remaining: " + queueRemaining : " Queue remaining: 0";
+      setStatusText_(finalStatusMessage + suffix);
+    }
   }
 }
 async function fetchPrepPayloadByCode_(code) {
@@ -540,6 +591,10 @@ function updateShellUi_() {
     showElement_(prepSection);
     hideElement_(offlineEntrySection);
 
+    const queueCount = getShellQueue_().length;
+    const queueSuffix =
+      queueCount > 0 ? ` Queued entries: ${queueCount}.` : "";
+
     if (shellAuth && shellAuth.cleanerName) {
       const currentShiftText =
         shellAuth.currentShift && shellAuth.currentShift.property
@@ -547,10 +602,12 @@ function updateShellUi_() {
           : "";
 
       setStatusText_(
-        `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}`
+        `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}${queueSuffix}`
       );
     } else {
-      setStatusText_("Online. Tap below to open the live app or load offline prep.");
+      setStatusText_(
+        `Online. Tap below to open the live app or load offline prep.${queueSuffix}`
+      );
     }
 
     setButtonState_("Open Live App", "online");
