@@ -23,11 +23,49 @@
     <p id="statusText" class="statusText">Checking app status...</p>
 
     <button id="offlineBtn" class="btn hidden" type="button">
-      Enter Offline Mode
-    </button>
-    <div id="prepSection" class="prepSection hidden">
+  Enter Offline Mode
+</button>
+
+<div id="prepSection" class="prepSection hidden">
   <input id="prepCodeInput" class="prepInput" type="text" inputmode="numeric" maxlength="6" placeholder="Enter offline prep code" />
   <button id="loadPrepBtn" class="btn btnOnline" type="button">Load Offline Prep</button>
+</div>
+
+<div id="offlineEntrySection" class="offlineEntrySection hidden">
+  <div id="offlineReadyText" class="offlineReadyText"></div>
+
+  <div id="offlineQueueCount" class="offlineQueueCount">Queued entries: 0</div>
+
+  <label for="offlineActionSelect" class="offlineLabel">Action</label>
+  <select id="offlineActionSelect" class="offlineSelect">
+    <option value="">Select...</option>
+    <option value="clock_in">Clock In</option>
+    <option value="add_note">Add Cleaning Note</option>
+    <option value="clock_out">Clock Out</option>
+  </select>
+
+  <label for="offlinePropertyInput" class="offlineLabel">Property</label>
+  <input
+    id="offlinePropertyInput"
+    class="offlineInput"
+    type="text"
+    placeholder="Enter property name"
+    autocomplete="off"
+  />
+
+  <div id="offlineNoteWrap" class="hidden">
+    <label for="offlineNoteInput" class="offlineLabel">Cleaning Note</label>
+    <textarea
+      id="offlineNoteInput"
+      class="offlineTextarea"
+      rows="4"
+      placeholder="Enter cleaning note"
+    ></textarea>
+  </div>
+
+  <button id="saveOfflineEntryBtn" class="btn btnOffline" type="button">
+    Save Offline Entry
+  </button>
 </div>
 
     <div id="installHelp" class="installHelp hidden">
