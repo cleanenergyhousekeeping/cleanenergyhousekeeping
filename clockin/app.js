@@ -721,3 +721,15 @@ document.addEventListener("DOMContentLoaded", async function () {
   syncShellQueue_();
 });
 /* end[clockin_shell_init] */
+
+/* begin[debug_clear_shell_queue] */
+function clearShellQueueDebug_() {
+  try {
+    localStorage.removeItem("ce_shell_queue_v1");
+    setStatusText_("Shell queue cleared.");
+    updateOfflineQueueCount_();
+  } catch (e) {
+    setStatusText_("Failed to clear queue.");
+  }
+}
+/* end[debug_clear_shell_queue] */
