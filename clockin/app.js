@@ -342,7 +342,20 @@ function saveOfflineEntry_() {
 
   setStatusText_("Offline entry saved on this phone.");
 }
+/* begin[shell_sync_auth_fallback] */
 async function postShellQueueEntry_(queuedEntry) {
+  const shellAuth = getShellAuth_() || {};
+
+  const sessionToken =
+    (queuedEntry && queuedEntry.sessionToken) ||
+    shellAuth.sessionToken ||
+    "";
+
+  const clientId =
+    (queuedEntry && queuedEntry.clientId) ||
+    shellAuth.clientId ||
+    "";
+
   try {
     const response = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
@@ -352,8 +365,8 @@ async function postShellQueueEntry_(queuedEntry) {
       body: JSON.stringify({
         mode: "submitShellQueueEntry",
         payload: {
-          sessionToken: queuedEntry.sessionToken || "",
-          clientId: queuedEntry.clientId || "",
+          sessionToken: sessionToken,
+          clientId: clientId,
           property: queuedEntry.property || "",
           eventType: queuedEntry.eventType || "",
           note: queuedEntry.note || "",
@@ -392,6 +405,7 @@ async function postShellQueueEntry_(queuedEntry) {
     );
   }
 }
+/* end[shell_sync_auth_fallback] */
 
 async function syncShellQueue_() {
   if (shellSyncInProgress) return;
@@ -722,14 +736,3 @@ document.addEventListener("DOMContentLoaded", async function () {
 });
 /* end[clockin_shell_init] */
 
-/* begin[debug_clear_shell_queue] */
-function clearShellQueueDebug_() {
-  try {
-    localStorage.removeItem("ce_shell_queue_v1");
-    setStatusText_("Shell queue cleared.");
-    updateOfflineQueueCount_();
-  } catch (e) {
-    setStatusText_("Failed to clear queue.");
-  }
-}
-/* end[debug_clear_shell_queue] */
