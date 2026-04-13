@@ -657,29 +657,7 @@ function openLiveApp_() {
 }
 
 function enterOfflineMode_() {
-  const shellAuth = getShellAuth_();
-
-  if (shellAuth && shellAuth.cleanerName) {
-    const currentShiftText =
-      shellAuth.currentShift && shellAuth.currentShift.property
-        ? ` Current shift: ${shellAuth.currentShift.property}.`
-        : "";
-
-    setButtonState_("Enter Offline Mode", "offline");
-    setStatusText_(
-      `Offline mode is ready for ${shellAuth.cleanerName}.${currentShiftText}`
-    );
-
-    showElement_(offlineEntrySection);
-    updateOfflineReadyText_(shellAuth);
-    updateOfflineQueueCount_();
-    resetOfflineEntryForm_(shellAuth);
-    return;
-  }
-
-  setButtonState_("Enter Offline Mode", "offline");
-  setStatusText_("Offline mode is not ready yet on this phone. Please go online and load offline prep first.");
-  hideElement_(offlineEntrySection);
+  updateShellUi_();
 }
 
 function updateShellUi_() {
@@ -743,14 +721,20 @@ function updateShellUi_() {
     setStatusText_(
       `No signal detected. Offline mode is ready for ${shellAuth.cleanerName}.${currentShiftText}`
     );
-  } else {
-    setStatusText_("No connection. Please use Offline Mode.");
+
+    hideElement_(offlineBtn);
+    showElement_(offlineEntrySection);
+    updateOfflineReadyText_(shellAuth);
+    updateOfflineQueueCount_();
+    resetOfflineEntryForm_(shellAuth);
+    return;
   }
 
+  hideElement_(offlineEntrySection);
+  setStatusText_("No connection. Please use Offline Mode.");
   setButtonState_("Enter Offline Mode", "offline");
 }
 /* end[clockin_shell_helpers] */
-
 
 /* begin[clockin_shell_service_worker] */
 async function registerServiceWorker_() {
