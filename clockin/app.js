@@ -342,18 +342,94 @@ function saveOfflineEntry_() {
 
   setStatusText_("Offline entry saved on this phone.");
 }
-/* begin[shell_sync_auth_fallback] */
+/* begin[shell_refresh_and_sync_helpers] */
+async function refreshShellAuth_() {
+  const shellAuth = getShellAuth_() || {};
+
+  const sessionToken = shellAuth.sessionToken || "";
+  const clientId = shellAuth.clientId || "";
+
+  if (!sessionToken) {
+    return {
+      ok: false,
+      message: "Missing session token.",
+      requiresLogin: true,
+    };
+  }
+
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        mode: "refreshShellAuth",
+        payload: {
+          sessionToken: sessionToken,
+          clientId: clientId,
+        },
+      }),
+      cache: "no-store",
+    });
+
+    const rawText = await response.text();
+    let parsed = null;
+
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch (_) {
+      parsed = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        "Shell auth refresh HTTP " +
+          response.status +
+          (rawText ? " — " + rawText.slice(0, 200) : "")
+      );
+    }
+
+    if (!parsed) {
+      throw new Error("Shell auth refresh returned a non-JSON response.");
+    }
+
+    if (parsed.ok && parsed.payload) {
+      saveShellAuth_(parsed.payload);
+      return {
+        ok: true,
+        payload: parsed.payload,
+      };
+    }
+
+    const message = (parsed && parsed.message) || "Could not refresh shell auth.";
+    return {
+      ok: false,
+      message: message,
+      requiresLogin: /session expired|log in again/i.test(message),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        "Shell auth refresh failed: " +
+        ((error && error.message) || String(error) || "Unknown error"),
+      requiresLogin: false,
+    };
+  }
+}
+
 async function postShellQueueEntry_(queuedEntry) {
   const shellAuth = getShellAuth_() || {};
 
   const sessionToken =
+    (shellAuth && shellAuth.sessionToken) ||
     (queuedEntry && queuedEntry.sessionToken) ||
-    shellAuth.sessionToken ||
     "";
 
   const clientId =
+    (shellAuth && shellAuth.clientId) ||
     (queuedEntry && queuedEntry.clientId) ||
-    shellAuth.clientId ||
     "";
 
   try {
@@ -405,7 +481,6 @@ async function postShellQueueEntry_(queuedEntry) {
     );
   }
 }
-/* end[shell_sync_auth_fallback] */
 
 async function syncShellQueue_() {
   if (shellSyncInProgress) return;
@@ -419,6 +494,24 @@ async function syncShellQueue_() {
   let finalStatusMessage = "";
 
   try {
+    setStatusText_("Refreshing offline authorization...");
+
+    const refreshResult = await refreshShellAuth_();
+
+    if (!refreshResult || !refreshResult.ok) {
+      finalStatusMessage =
+        (refreshResult && refreshResult.message) ||
+        "Could not refresh offline authorization.";
+
+      if (refreshResult && refreshResult.requiresLogin) {
+        finalStatusMessage =
+          "Offline entries are waiting. Open the live app and log in online.";
+      }
+
+      setStatusText_(finalStatusMessage);
+      return;
+    }
+
     while (true) {
       const queue = getShellQueue_();
       if (!queue.length) {
@@ -439,6 +532,12 @@ async function syncShellQueue_() {
         finalStatusMessage =
           (response && response.message) ||
           "Could not sync a queued shell entry yet.";
+
+        if (/session expired|log in again/i.test(finalStatusMessage)) {
+          finalStatusMessage =
+            "Offline entries are waiting. Open the live app and log in online.";
+        }
+
         setStatusText_(finalStatusMessage);
         break;
       }
@@ -479,11 +578,16 @@ async function syncShellQueue_() {
 
     if (finalStatusMessage) {
       const suffix =
-        queueRemaining > 0 ? " Queue remaining: " + queueRemaining : " Queue remaining: 0";
+        queueRemaining > 0
+          ? " Queue remaining: " + queueRemaining
+          : " Queue remaining: 0";
       setStatusText_(finalStatusMessage + suffix);
     }
   }
 }
+/* end[shell_refresh_and_sync_helpers] */
+
+
 async function fetchPrepPayloadByCode_(code) {
   const url =
     APPS_SCRIPT_URL +
