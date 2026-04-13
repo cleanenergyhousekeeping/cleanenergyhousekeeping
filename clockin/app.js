@@ -818,6 +818,12 @@ if (saveOfflineEntryBtn) {
 document.addEventListener("DOMContentLoaded", async function () {
   setStatusText_("Preparing app shell...");
   await registerServiceWorker_();
+
+  if (navigator.onLine) {
+    setStatusText_("Refreshing session...");
+    await refreshShellAuth_();
+  }
+
   updateShellUi_();
   updateOfflineQueueCount_();
   syncShellQueue_();
