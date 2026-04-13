@@ -21,6 +21,7 @@ const loadPrepBtn = document.getElementById("loadPrepBtn");
 const offlineEntrySection = document.getElementById("offlineEntrySection");
 const offlineReadyText = document.getElementById("offlineReadyText");
 const offlineQueueCount = document.getElementById("offlineQueueCount");
+const offlineQueueDetails = document.getElementById("offlineQueueDetails");
 const offlineActionSelect = document.getElementById("offlineActionSelect");
 const offlinePropertySearch = document.getElementById("offlinePropertySearch");
 const offlinePropertyResults = document.getElementById("offlinePropertyResults");
@@ -129,10 +130,67 @@ function getCurrentPropertyText_(shellAuth) {
   return "";
 }
 
+function formatShellQueueTime_(submittedAtMs) {
+  const d = new Date(Number(submittedAtMs || 0));
+  if (Number.isNaN(d.getTime())) {
+    return "—";
+  }
+
+  return d.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatShellQueueActionLabel_(eventType) {
+  if (eventType === "clock_in") return "Clock In";
+  if (eventType === "clock_out") return "Clock Out";
+  if (eventType === "add_note") return "Add Cleaning Note";
+  return eventType || "Unknown";
+}
+
+function renderOfflineQueueDetails_() {
+  if (!offlineQueueDetails) return;
+
+  const queue = getShellQueue_();
+
+  if (!queue.length) {
+    offlineQueueDetails.innerHTML = "";
+    hideElement_(offlineQueueDetails);
+    return;
+  }
+
+  offlineQueueDetails.innerHTML = queue
+    .map(function (item) {
+      const actionText = formatShellQueueActionLabel_(item.eventType);
+      const propertyText = item.property || "—";
+      const timeText = formatShellQueueTime_(item.submittedAtMs);
+      const noteText =
+        item.eventType === "add_note" && item.note
+          ? '<div class="offlineQueueDetailsItemNote">Note: ' + item.note + "</div>"
+          : "";
+
+      return (
+        '<div class="offlineQueueDetailsItem">• ' +
+        actionText +
+        " — " +
+        propertyText +
+        " — " +
+        timeText +
+        noteText +
+        "</div>"
+      );
+    })
+    .join("");
+
+  showElement_(offlineQueueDetails);
+}
+
 function updateOfflineQueueCount_() {
   if (!offlineQueueCount) return;
   const queue = getShellQueue_();
   offlineQueueCount.textContent = "Queued entries: " + queue.length;
+  renderOfflineQueueDetails_();
 }
 
 function updateOfflineReadyText_(shellAuth) {
@@ -257,6 +315,49 @@ function handleOfflinePropertySearch_() {
   showElement_(offlinePropertyResults);
 }
 
+function updateOfflineActionOptions_(shellAuth) {
+  if (!offlineActionSelect) return;
+
+  const isClockedIn = !!(shellAuth && shellAuth.currentShift);
+
+  const clockInOption = Array.from(offlineActionSelect.options).find(function (opt) {
+    return opt.value === "clock_in";
+  });
+
+  const noteOption = Array.from(offlineActionSelect.options).find(function (opt) {
+    return opt.value === "add_note";
+  });
+
+  const clockOutOption = Array.from(offlineActionSelect.options).find(function (opt) {
+    return opt.value === "clock_out";
+  });
+
+  function setOptionVisible_(option, isVisible) {
+    if (!option) return;
+    option.hidden = !isVisible;
+    option.disabled = !isVisible;
+  }
+
+  setOptionVisible_(clockInOption, !isClockedIn);
+  setOptionVisible_(noteOption, isClockedIn);
+  setOptionVisible_(clockOutOption, isClockedIn);
+
+  const selectedAction = offlineActionSelect.value || "";
+  const selectedStillAllowed =
+    (selectedAction === "clock_in" && !isClockedIn) ||
+    ((selectedAction === "add_note" || selectedAction === "clock_out") && isClockedIn);
+
+  if (!selectedStillAllowed) {
+    offlineActionSelect.value = isClockedIn ? "clock_out" : "clock_in";
+  }
+
+  if (offlineActionSelect.value === "add_note") {
+    showElement_(offlineNoteWrap);
+  } else {
+    hideElement_(offlineNoteWrap);
+  }
+}
+
 function resetOfflineEntryForm_(shellAuth) {
   if (offlineActionSelect) {
     offlineActionSelect.value = "";
@@ -282,6 +383,7 @@ function resetOfflineEntryForm_(shellAuth) {
     hideElement_(offlineNoteWrap);
   }
 
+  updateOfflineActionOptions_(shellAuth);
   clearOfflinePropertyResults_();
 }
 
@@ -846,13 +948,8 @@ document.addEventListener("click", function (event) {
 
 if (offlineActionSelect) {
   offlineActionSelect.addEventListener("change", function () {
-    const action = offlineActionSelect.value || "";
-
-    if (action === "add_note") {
-      showElement_(offlineNoteWrap);
-    } else {
-      hideElement_(offlineNoteWrap);
-    }
+    const shellAuth = getShellAuth_();
+    updateOfflineActionOptions_(shellAuth);
   });
 }
 
