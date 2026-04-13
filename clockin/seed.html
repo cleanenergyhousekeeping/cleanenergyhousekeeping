@@ -105,10 +105,11 @@
       openShellBtn.classList.remove("hidden");
 
       if (params.get("clear") === "1") {
-        localStorage.removeItem(SHELL_AUTH_KEY);
-        statusText.textContent = "Offline mode was cleared on this phone.";
-        return;
-      }
+  localStorage.removeItem(SHELL_AUTH_KEY);
+  localStorage.removeItem("ce_shell_queue_v1");
+  statusText.textContent = "Offline mode and queued entries were cleared on this phone.";
+  return;
+}
 
       const token = params.get("token");
       if (!token) {
