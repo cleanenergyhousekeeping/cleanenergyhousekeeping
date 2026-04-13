@@ -130,11 +130,32 @@ h1 {
 }
 
 .offlineQueueCount {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   font-size: 15px;
   line-height: 1.4;
   color: #5f6f82;
   text-align: center;
+}
+
+.offlineQueueDetails {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid #d8e2e8;
+  border-radius: 12px;
+  background: #f7fafc;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #23343b;
+  text-align: left;
+  white-space: normal;
+}
+
+.offlineQueueDetailsItem {
+  margin-bottom: 8px;
+}
+
+.offlineQueueDetailsItem:last-child {
+  margin-bottom: 0;
 }
 
 .offlineLabel {
