@@ -39,8 +39,10 @@ const saveOfflineEntryBtn = document.getElementById("saveOfflineEntryBtn");
 
 /* begin[clockin_shell_state] */
 let selectedOfflineProperty = null;
-/* end[clockin_shell_state] */
 let shellSyncInProgress = false;
+let shellSyncFailureCount = 0;
+let shellSyncPausedAfterFailures = false;
+/* end[clockin_shell_state] */
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -94,7 +96,7 @@ function hideElement_(el) {
   el.classList.add("hidden");
 }
 
-function setButtonState_(text, mode) {
+function setButtonState_(text, mode, disabled) {
   if (!offlineBtn) return;
 
   offlineBtn.textContent = text || "";
@@ -107,6 +109,8 @@ function setButtonState_(text, mode) {
   } else if (mode === "loading") {
     offlineBtn.classList.add("btnLoading");
   }
+
+  offlineBtn.disabled = !!disabled;
 }
 
 function getShellProperties_(shellAuth) {
@@ -485,11 +489,13 @@ async function postShellQueueEntry_(queuedEntry) {
 async function syncShellQueue_() {
   if (shellSyncInProgress) return;
   if (!navigator.onLine) return;
+  if (shellSyncPausedAfterFailures) return;
 
   const initialQueue = getShellQueue_();
   if (!initialQueue.length) return;
 
   shellSyncInProgress = true;
+  updateShellUi_();
 
   let finalStatusMessage = "";
 
@@ -499,6 +505,8 @@ async function syncShellQueue_() {
     const refreshResult = await refreshShellAuth_();
 
     if (!refreshResult || !refreshResult.ok) {
+      shellSyncFailureCount += 1;
+
       finalStatusMessage =
         (refreshResult && refreshResult.message) ||
         "Could not refresh offline authorization.";
@@ -506,6 +514,11 @@ async function syncShellQueue_() {
       if (refreshResult && refreshResult.requiresLogin) {
         finalStatusMessage =
           "Offline entries are waiting. Open the live app and log in online.";
+      }
+
+      if (shellSyncFailureCount >= 3) {
+        shellSyncPausedAfterFailures = true;
+        finalStatusMessage += " Auto-sync paused after 3 failed attempts.";
       }
 
       setStatusText_(finalStatusMessage);
@@ -529,6 +542,8 @@ async function syncShellQueue_() {
       const response = await postShellQueueEntry_(nextEntry);
 
       if (!response || !response.ok) {
+        shellSyncFailureCount += 1;
+
         finalStatusMessage =
           (response && response.message) ||
           "Could not sync a queued shell entry yet.";
@@ -538,9 +553,17 @@ async function syncShellQueue_() {
             "Offline entries are waiting. Open the live app and log in online.";
         }
 
+        if (shellSyncFailureCount >= 3) {
+          shellSyncPausedAfterFailures = true;
+          finalStatusMessage += " Auto-sync paused after 3 failed attempts.";
+        }
+
         setStatusText_(finalStatusMessage);
         break;
       }
+
+      shellSyncFailureCount = 0;
+      shellSyncPausedAfterFailures = false;
 
       const trimmedQueue = queue.slice(1);
       saveShellQueue_(trimmedQueue);
@@ -556,6 +579,8 @@ async function syncShellQueue_() {
 
     const remainingQueue = getShellQueue_();
     if (!remainingQueue.length) {
+      shellSyncFailureCount = 0;
+      shellSyncPausedAfterFailures = false;
       finalStatusMessage = "Offline entries synced.";
       setStatusText_(finalStatusMessage);
     } else if (!finalStatusMessage) {
@@ -565,9 +590,17 @@ async function syncShellQueue_() {
     }
 
   } catch (error) {
+    shellSyncFailureCount += 1;
+
     finalStatusMessage =
       (error && error.message) ||
       "Could not sync offline entries yet. They will stay queued.";
+
+    if (shellSyncFailureCount >= 3) {
+      shellSyncPausedAfterFailures = true;
+      finalStatusMessage += " Auto-sync paused after 3 failed attempts.";
+    }
+
     setStatusText_(finalStatusMessage);
   } finally {
     shellSyncInProgress = false;
@@ -652,7 +685,9 @@ async function loadOfflinePrep_() {
 }
 
 function openLiveApp_() {
-  setButtonState_("Loading...", "loading");
+  shellSyncPausedAfterFailures = false;
+  shellSyncFailureCount = 0;
+  setButtonState_("Loading...", "loading", true);
   window.location.href = LIVE_APP_URL;
 }
 
@@ -691,6 +726,19 @@ function updateShellUi_() {
     const queueSuffix =
       queueCount > 0 ? ` Queued entries: ${queueCount}.` : "";
 
+    if (shellSyncInProgress) {
+      setButtonState_("Syncing...", "loading", true);
+      return;
+    }
+
+    if (shellSyncPausedAfterFailures && queueCount > 0) {
+      setStatusText_(
+        `Online, but sync is paused after repeated failures. Please try Open Live App.${queueSuffix}`
+      );
+      setButtonState_("Open Live App", "online", false);
+      return;
+    }
+
     if (shellAuth && shellAuth.cleanerName) {
       const currentShiftText =
         shellAuth.currentShift && shellAuth.currentShift.property
@@ -702,11 +750,11 @@ function updateShellUi_() {
       );
     } else {
       setStatusText_(
-        `Online. Tap below to open the live app or load offline prep.${queueSuffix}`
+        `Online. Tap below to open the live app.${queueSuffix}`
       );
     }
 
-    setButtonState_("Open Live App", "online");
+    setButtonState_("Open Live App", "online", false);
     return;
   }
 
@@ -732,7 +780,7 @@ function updateShellUi_() {
 
   hideElement_(offlineEntrySection);
   setStatusText_("No connection. Please use Offline Mode.");
-  setButtonState_("Enter Offline Mode", "offline");
+  setButtonState_("Enter Offline Mode", "offline", false);
 }
 /* end[clockin_shell_helpers] */
 
