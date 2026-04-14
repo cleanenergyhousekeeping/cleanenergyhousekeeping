@@ -786,12 +786,25 @@ async function loadOfflinePrep_() {
   }
 }
 
-function openLiveApp_() {
+/* begin[open_live_app_with_optional_auto_shell_prep] */
+function openLiveApp_(options) {
+  const opts = options || {};
+  const autoShellPrep = !!opts.autoShellPrep;
+
   shellSyncPausedAfterFailures = false;
   shellSyncFailureCount = 0;
   setButtonState_("Loading...", "loading", true);
-  window.location.href = LIVE_APP_URL;
+
+  let targetUrl = LIVE_APP_URL;
+
+  if (autoShellPrep) {
+    const separator = LIVE_APP_URL.indexOf("?") === -1 ? "?" : "&";
+    targetUrl += separator + "autoShellPrep=1";
+  }
+
+  window.location.href = targetUrl;
 }
+/* end[open_live_app_with_optional_auto_shell_prep] */
 
 function enterOfflineMode_() {
   updateShellUi_();
@@ -841,6 +854,7 @@ function updateShellUi_() {
       return;
     }
 
+/* begin[online_shell_auth_or_auto_prep_handoff] */
     if (shellAuth && shellAuth.cleanerName) {
       const currentShiftText =
         shellAuth.currentShift && shellAuth.currentShift.property
@@ -850,14 +864,24 @@ function updateShellUi_() {
       setStatusText_(
         `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}${queueSuffix}`
       );
-    } else {
-      setStatusText_(
-        `Online. Tap below to open the live app.${queueSuffix}`
-      );
+
+      setButtonState_("Open Live App", "online", false);
+      return;
     }
 
-    setButtonState_("Open Live App", "online", false);
+    setStatusText_(
+      `Online. Preparing this phone for offline mode...${queueSuffix}`
+    );
+    setButtonState_("Preparing...", "loading", true);
+
+    setTimeout(function () {
+      if (navigator.onLine && !getShellAuth_()) {
+        openLiveApp_({ autoShellPrep: true });
+      }
+    }, 300);
+
     return;
+/* end[online_shell_auth_or_auto_prep_handoff] */
   }
 
   hideElement_(prepSection);
@@ -880,9 +904,13 @@ function updateShellUi_() {
     return;
   }
 
+/* begin[clear_missing_prep_offline_message] */
   hideElement_(offlineEntrySection);
-  setStatusText_("No connection. Please use Offline Mode.");
-  setButtonState_("Enter Offline Mode", "offline", false);
+  setStatusText_(
+    "No connection, and this phone has not been prepared for offline mode yet. Go online once from this home screen icon so the phone can prepare itself."
+  );
+  setButtonState_("Offline Prep Needed", "offline", true);
+/* end[clear_missing_prep_offline_message] */
 }
 /* end[clockin_shell_helpers] */
 
