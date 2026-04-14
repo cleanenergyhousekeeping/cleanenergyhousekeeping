@@ -471,7 +471,6 @@ function saveOfflineEntry_() {
   scrollToBottom_();
 }
 /* end[offline_save_status_then_scroll] */
-}
 
 /* begin[shell_refresh_and_sync_helpers] */
 async function refreshShellAuth_() {
