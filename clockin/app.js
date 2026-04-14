@@ -14,13 +14,11 @@ const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
 const statusText = document.getElementById("statusText");
 const offlineBtn = document.getElementById("offlineBtn");
 const installHelp = document.getElementById("installHelp");
-const prepSection = document.getElementById("prepSection");
-const prepCodeInput = document.getElementById("prepCodeInput");
-const loadPrepBtn = document.getElementById("loadPrepBtn");
 
 const offlineEntrySection = document.getElementById("offlineEntrySection");
 const offlineReadyText = document.getElementById("offlineReadyText");
 const offlineQueueCount = document.getElementById("offlineQueueCount");
+const offlineQueueDetails = document.getElementById("offlineQueueDetails");
 const offlineActionSelect = document.getElementById("offlineActionSelect");
 const offlinePropertySearch = document.getElementById("offlinePropertySearch");
 const offlinePropertyResults = document.getElementById("offlinePropertyResults");
@@ -109,6 +107,15 @@ function setButtonState_(text, mode) {
   }
 }
 
+function scrollToBottom_() {
+  window.setTimeout(function () {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth",
+    });
+  }, 60);
+}
+
 function getShellProperties_(shellAuth) {
   return Array.isArray(shellAuth && shellAuth.properties) ? shellAuth.properties : [];
 }
@@ -126,9 +133,51 @@ function getCurrentPropertyText_(shellAuth) {
 }
 
 function updateOfflineQueueCount_() {
-  if (!offlineQueueCount) return;
   const queue = getShellQueue_();
-  offlineQueueCount.textContent = "Queued entries: " + queue.length;
+
+  if (offlineQueueCount) {
+    offlineQueueCount.textContent = "Queued entries: " + queue.length;
+  }
+
+  if (!offlineQueueDetails) return;
+
+  if (!queue.length) {
+    offlineQueueDetails.innerHTML = "";
+    hideElement_(offlineQueueDetails);
+    return;
+  }
+
+  offlineQueueDetails.innerHTML = queue
+    .map(function (item) {
+      const actionMap = {
+        clock_in: "Clock In",
+        add_note: "Add Cleaning Note",
+        clock_out: "Clock Out",
+      };
+
+      const actionText = actionMap[item.eventType] || (item.eventType || "—");
+      const timeText = new Date(item.submittedAtMs || Date.now()).toLocaleString([], {
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+
+      const noteHtml = item.note
+        ? '<div class="offlineQueueMeta">Note: ' + item.note + "</div>"
+        : "";
+
+      return (
+        '<div class="offlineQueueItem">' +
+          "<div><strong>" + actionText + "</strong> — " + (item.property || "—") + "</div>" +
+          '<div class="offlineQueueMeta">Saved: ' + timeText + "</div>" +
+          noteHtml +
+        "</div>"
+      );
+    })
+    .join("");
+
+  showElement_(offlineQueueDetails);
 }
 
 function updateOfflineReadyText_(shellAuth) {
@@ -253,8 +302,56 @@ function handleOfflinePropertySearch_() {
   showElement_(offlinePropertyResults);
 }
 
+/* begin[offline_action_options_keep_select_default] */
+function updateOfflineActionOptions_(shellAuth) {
+  if (!offlineActionSelect) return;
+
+  const isClockedIn = !!(shellAuth && shellAuth.currentShift);
+
+  const clockInOption = Array.from(offlineActionSelect.options).find(function (opt) {
+    return opt.value === "clock_in";
+  });
+
+  const noteOption = Array.from(offlineActionSelect.options).find(function (opt) {
+    return opt.value === "add_note";
+  });
+
+  const clockOutOption = Array.from(offlineActionSelect.options).find(function (opt) {
+    return opt.value === "clock_out";
+  });
+
+  function setOptionVisible_(option, isVisible) {
+    if (!option) return;
+    option.hidden = !isVisible;
+    option.disabled = !isVisible;
+  }
+
+  setOptionVisible_(clockInOption, !isClockedIn);
+  setOptionVisible_(noteOption, isClockedIn);
+  setOptionVisible_(clockOutOption, isClockedIn);
+
+  const selectedAction = (offlineActionSelect.value || "").trim();
+  const selectedStillAllowed =
+    selectedAction === "" ||
+    (selectedAction === "clock_in" && !isClockedIn) ||
+    ((selectedAction === "add_note" || selectedAction === "clock_out") && isClockedIn);
+
+  if (!selectedStillAllowed) {
+    offlineActionSelect.value = "";
+  }
+
+  if (offlineActionSelect.value === "add_note") {
+    showElement_(offlineNoteWrap);
+  } else {
+    hideElement_(offlineNoteWrap);
+  }
+}
+/* end[offline_action_options_keep_select_default] */
+
+/* begin[reset_offline_entry_form_force_select_default] */
 function resetOfflineEntryForm_(shellAuth) {
   if (offlineActionSelect) {
+    offlineActionSelect.selectedIndex = 0;
     offlineActionSelect.value = "";
   }
 
@@ -274,12 +371,17 @@ function resetOfflineEntryForm_(shellAuth) {
     offlineNoteInput.value = "";
   }
 
-  if (offlineNoteWrap) {
-    hideElement_(offlineNoteWrap);
+  hideElement_(offlineNoteWrap);
+  updateOfflineActionOptions_(shellAuth);
+
+  if (offlineActionSelect) {
+    offlineActionSelect.selectedIndex = 0;
+    offlineActionSelect.value = "";
   }
 
   clearOfflinePropertyResults_();
 }
+/* end[reset_offline_entry_form_force_select_default] */
 
 function saveOfflineEntry_() {
   const shellAuth = getShellAuth_();
@@ -341,6 +443,7 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   setStatusText_("Offline entry saved on this phone.");
+  scrollToBottom_();
 }
 /* begin[shell_refresh_and_sync_helpers] */
 async function refreshShellAuth_() {
@@ -668,7 +771,6 @@ function updateShellUi_() {
   if (!standalone) {
     showElement_(installHelp);
     hideElement_(offlineBtn);
-    hideElement_(prepSection);
     hideElement_(offlineEntrySection);
 
     if (online) {
@@ -684,7 +786,6 @@ function updateShellUi_() {
   showElement_(offlineBtn);
 
   if (online) {
-    showElement_(prepSection);
     hideElement_(offlineEntrySection);
 
     const queueCount = getShellQueue_().length;
@@ -702,15 +803,13 @@ function updateShellUi_() {
       );
     } else {
       setStatusText_(
-        `Online. Tap below to open the live app or load offline prep.${queueSuffix}`
+        `Online. Tap below to open the live app.${queueSuffix}`
       );
     }
 
     setButtonState_("Open Live App", "online");
     return;
   }
-
-  hideElement_(prepSection);
 
   if (shellAuth && shellAuth.cleanerName) {
     const currentShiftText =
@@ -731,8 +830,10 @@ function updateShellUi_() {
   }
 
   hideElement_(offlineEntrySection);
-  setStatusText_("No connection. Please use Offline Mode.");
-  setButtonState_("Enter Offline Mode", "offline");
+  setStatusText_(
+    "No connection, and this phone has not been prepared for offline mode yet. Go online once, open the live app, and press Prepare Offline Mode."
+  );
+  setButtonState_("Offline Prep Needed", "offline");
 }
 /* end[clockin_shell_helpers] */
 
@@ -776,9 +877,7 @@ if (offlineBtn) {
   });
 }
 
-if (loadPrepBtn) {
-  loadPrepBtn.addEventListener("click", loadOfflinePrep_);
-}
+
 
 if (offlinePropertySearch) {
   offlinePropertySearch.addEventListener("input", handleOfflinePropertySearch_);
@@ -798,13 +897,8 @@ document.addEventListener("click", function (event) {
 
 if (offlineActionSelect) {
   offlineActionSelect.addEventListener("change", function () {
-    const action = offlineActionSelect.value || "";
-
-    if (action === "add_note") {
-      showElement_(offlineNoteWrap);
-    } else {
-      hideElement_(offlineNoteWrap);
-    }
+    const shellAuth = getShellAuth_();
+    updateOfflineActionOptions_(shellAuth);
   });
 }
 
