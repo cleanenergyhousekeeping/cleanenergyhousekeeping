@@ -1,106 +1,120 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <!-- Favicon -->
-<link rel="icon" href="/icon.png" type="image/png">
+  <meta charset="UTF-8" />
+  <title>Clean Energy Clock In</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
-<!-- Mobile App Icon -->
-<link rel="apple-touch-icon" href="/icon.png">
- <title>Clean Energy Housekeeping - Eco-Friendly Luxury Home Cleaning</title>
-<meta name="description" content="Clean Energy Housekeeping provides luxury, detailed, and eco-smart home cleaning services in Truckee and North Lake Tahoe from Incline Village to Tahoe City. Experience detailed, earth-conscious cleaning for your high-end home.">
-<meta name="keywords" content="Clean Energy Housekeeping, eco-friendly cleaning, luxury home cleaning, high-end cleaning services, Truckee cleaning services, Martis Camp cleaning, Lahontan cleaning, Schaffer's Mill cleaning">
-  <style>
-    body {
-      margin: 0;
-      font-family: 'Open Sans', sans-serif;
-      background: linear-gradient(135deg, #02286E, #0378C2);
-      color: white;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-    header {
-      padding: 20px;
-    }
-    header img {
-      max-width: 300px;
-      height: auto;
-    }
-    main {
-      flex: 1;
-      padding: 20px;
-    }
-    h1 {
-      font-size: 2em;
-      margin-top: 20px;
-    }
-   
-    ul {
-      list-style: none;
-      padding: 0;
-      margin: 30px 0;
-    }
-    ul li {
-      margin: 15px 0;
-      font-size: 1.2em;
-    }
-    .sparkle::before {
-      content: "\2728 ";
-    }
-    .contact-links a {
-      display: block;
-      margin: 15px 0;
-      color: #7ED6F8;
-      text-decoration: none;
-      font-size: 1.3em;
-      font-weight: bold;
-    }
-    footer {
-      font-size: 0.9em;
-      padding: 20px;
-    }
-    @media (max-width: 600px) {
-      h1 {
-        font-size: 1.6em;
-      }
-      ul li {
-        font-size: 1em;
-      }
-      .contact-links a {
-        font-size: 1.1em;
-      }
-    }
-  </style>
+  <link rel="apple-touch-icon" href="/clockin/icon.png">
+  <link rel="icon" type="image/png" href="/clockin/icon.png">
+  <link rel="manifest" href="/clockin/manifest.webmanifest">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Clock In">
+  <meta name="theme-color" content="#23343b">
+
+  <link rel="stylesheet" href="/clockin/style.css">
 </head>
 <body>
+  <div class="wrap">
+    <h1>Clean Energy<br/>Clock In</h1>
 
-  <header>
-    <img src="logo.png" alt="Clean Energy Housekeeping Logo">
-  </header>
+    <p id="statusText" class="statusText">Checking app status...</p>
 
-  <main>
-<h1>Elite House Cleaning Service</h1>
-<p><em></p>Specializing in Luxury Properties</em></p>
-    <ul>
-      <li class="sparkle">Detail-Driven</li>
-      <li class="sparkle">Eco-Smart Products</li>
-      <li class="sparkle">Experienced and Trusted</li>
-    </ul>
+    <button id="offlineBtn" class="btn hidden" type="button">
+  Enter Offline Mode
+</button>
 
-<p>Proudly serving Truckee and North Lake.</p>
+<div id="prepSection" class="prepSection hidden">
+  <input id="prepCodeInput" class="prepInput" type="text" inputmode="numeric" maxlength="6" placeholder="Enter offline prep code" />
+  <button id="loadPrepBtn" class="btn btnOnline" type="button">Load Offline Prep</button>
+</div>
 
-    <div class="contact-links">
-      <a href="tel:+15302648039">Call/Text: (530) 264-8039</a>
-      <a href="mailto:kyle@cleanenergyhousekeeping.com">Email: kyle@cleanenergyhousekeeping.com</a>
+<div id="offlineEntrySection" class="offlineEntrySection hidden">
+  <div id="offlineReadyText" class="offlineReadyText"></div>
+
+  <div id="offlineQueueCount" class="offlineQueueCount">Queued entries: 0</div>
+
+  <label for="offlineActionSelect" class="offlineLabel">Action</label>
+  <select id="offlineActionSelect" class="offlineSelect">
+    <option value="">Select...</option>
+    <option value="clock_in">Clock In</option>
+    <option value="add_note">Add Cleaning Note</option>
+    <option value="clock_out">Clock Out</option>
+  </select>
+
+  <label for="offlinePropertySearch" class="offlineLabel">Property</label>
+  <input
+    id="offlinePropertySearch"
+    class="offlineInput"
+    type="text"
+    placeholder="Search property..."
+    autocomplete="off"
+  />
+
+  <div id="offlinePropertyResults" class="offlineResultsBox hidden"></div>
+
+  <div id="offlinePropertyInfoPanel" class="offlinePropertyInfoPanel hidden">
+    <div class="offlinePropertyInfoHeader">Current Property Info</div>
+
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">Entrance</div>
+      <div id="offlinePropertyInfoEntrance" class="offlinePropertyInfoValue"></div>
     </div>
-  </main>
 
-  <footer>
-    &copy; 2025 Clean Energy Housekeeping. All rights reserved.
-  </footer>
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">Alarm</div>
+      <div id="offlinePropertyInfoAlarm" class="offlinePropertyInfoValue"></div>
+    </div>
 
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">Wi-Fi</div>
+      <div id="offlinePropertyInfoWifi" class="offlinePropertyInfoValue"></div>
+    </div>
+
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">Wi-Fi Password</div>
+      <div id="offlinePropertyInfoWifiPassword" class="offlinePropertyInfoValue"></div>
+    </div>
+
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">Owner Names</div>
+      <div id="offlinePropertyInfoOwners" class="offlinePropertyInfoValue"></div>
+    </div>
+
+    <div class="offlinePropertyInfoRow">
+      <div class="offlinePropertyInfoLabel">House Notes</div>
+      <div id="offlinePropertyInfoNotes" class="offlinePropertyInfoValue"></div>
+    </div>
+  </div>
+
+  <div id="offlineNoteWrap" class="hidden">
+    <label for="offlineNoteInput" class="offlineLabel">Cleaning Note</label>
+    <textarea
+      id="offlineNoteInput"
+      class="offlineTextarea"
+      rows="4"
+      placeholder="Enter cleaning note"
+    ></textarea>
+  </div>
+
+  <button id="saveOfflineEntryBtn" class="btn btnOffline" type="button">
+    Save Offline Entry
+  </button>
+</div>
+
+    <div id="installHelp" class="installHelp hidden">
+      <p>To install the app icon:</p>
+      <p>
+        Tap the <strong>triple dots</strong> on the bottom right corner of your iPhone screen,
+        then tap <strong>Share</strong> (square with arrow), then <strong>View More</strong>,
+        scroll down and select <strong>Add to Home Screen</strong>.
+      </p>
+      <p class="sub">Installing the icon lets you use the app full-screen.</p>
+    </div>
+  </div>
+
+  <script src="/clockin/app.js"></script>
 </body>
 </html>
