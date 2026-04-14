@@ -140,10 +140,10 @@
               ? ` Current shift: ${res.payload.currentShift.property}.`
               : "";
 
-          statusText.textContent =
-            `Offline mode is ready for ${cleanerName} on this phone.` +
-            currentShiftText +
-            " Returning to Clock In...";
+         statusText.textContent =
+  `Offline mode is ready for ${cleanerName} on this phone.` +
+  currentShiftText +
+  " Seed saved. Returning to Clock In...";
 
           setTimeout(function () {
             window.location.replace("/clockin/");
