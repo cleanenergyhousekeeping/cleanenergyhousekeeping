@@ -26,15 +26,10 @@
   Enter Offline Mode
 </button>
 
-<div id="prepSection" class="prepSection hidden">
-  <input id="prepCodeInput" class="prepInput" type="text" inputmode="numeric" maxlength="6" placeholder="Enter offline prep code" />
-  <button id="loadPrepBtn" class="btn btnOnline" type="button">Load Offline Prep</button>
-</div>
+
 
 <div id="offlineEntrySection" class="offlineEntrySection hidden">
   <div id="offlineReadyText" class="offlineReadyText"></div>
-
-  <div id="offlineQueueCount" class="offlineQueueCount">Queued entries: 0</div>
 
   <label for="offlineActionSelect" class="offlineLabel">Action</label>
   <select id="offlineActionSelect" class="offlineSelect">
@@ -43,6 +38,16 @@
     <option value="add_note">Add Cleaning Note</option>
     <option value="clock_out">Clock Out</option>
   </select>
+
+  <div id="offlineNoteWrap" class="hidden">
+    <label for="offlineNoteInput" class="offlineLabel">Cleaning Note</label>
+    <textarea
+      id="offlineNoteInput"
+      class="offlineTextarea"
+      rows="4"
+      placeholder="Enter cleaning note"
+    ></textarea>
+  </div>
 
   <label for="offlinePropertySearch" class="offlineLabel">Property</label>
   <input
@@ -89,19 +94,12 @@
     </div>
   </div>
 
-  <div id="offlineNoteWrap" class="hidden">
-    <label for="offlineNoteInput" class="offlineLabel">Cleaning Note</label>
-    <textarea
-      id="offlineNoteInput"
-      class="offlineTextarea"
-      rows="4"
-      placeholder="Enter cleaning note"
-    ></textarea>
-  </div>
-
   <button id="saveOfflineEntryBtn" class="btn btnOffline" type="button">
     Save Offline Entry
   </button>
+
+  <div id="offlineQueueCount" class="offlineQueueCount">Queued entries: 0</div>
+  <div id="offlineQueueDetails" class="offlineQueueDetails hidden"></div>
 </div>
 
     <div id="installHelp" class="installHelp hidden">
