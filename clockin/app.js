@@ -14,9 +14,7 @@ const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
 const statusText = document.getElementById("statusText");
 const offlineBtn = document.getElementById("offlineBtn");
 const installHelp = document.getElementById("installHelp");
-const prepSection = document.getElementById("prepSection");
-const prepCodeInput = document.getElementById("prepCodeInput");
-const loadPrepBtn = document.getElementById("loadPrepBtn");
+
 
 const offlineEntrySection = document.getElementById("offlineEntrySection");
 const offlineReadyText = document.getElementById("offlineReadyText");
@@ -723,68 +721,7 @@ async function syncShellQueue_() {
 /* end[shell_refresh_and_sync_helpers] */
 
 
-async function fetchPrepPayloadByCode_(code) {
-  const url =
-    APPS_SCRIPT_URL +
-    "?mode=getOfflineShellPrepByCode&code=" +
-    encodeURIComponent(code);
 
-  const response = await fetch(url, { method: "GET", cache: "no-store" });
-  if (!response.ok) {
-    throw new Error("Prep request failed.");
-  }
-
-  return response.json();
-}
-
-async function loadOfflinePrep_() {
-  const code = (prepCodeInput && prepCodeInput.value || "").trim();
-
-  if (!code) {
-    setStatusText_("Please enter the offline prep code.");
-    return;
-  }
-
-  setStatusText_("Loading offline prep...");
-  if (loadPrepBtn) {
-    loadPrepBtn.textContent = "Loading...";
-    loadPrepBtn.disabled = true;
-  }
-
-  try {
-    const res = await fetchPrepPayloadByCode_(code);
-
-    if (!res || !res.ok || !res.payload) {
-      setStatusText_((res && res.message) || "Offline prep failed.");
-      return;
-    }
-
-    saveShellAuth_(res.payload);
-
-    const cleanerName = res.payload.cleanerName || "this cleaner";
-    const currentShiftText =
-      res.payload.currentShift && res.payload.currentShift.property
-        ? ` Current shift: ${res.payload.currentShift.property}.`
-        : "";
-
-    setStatusText_(
-      `Online. Offline mode is prepared for ${cleanerName}.${currentShiftText}`
-    );
-
-    if (prepCodeInput) {
-      prepCodeInput.value = "";
-    }
-  } catch (_) {
-    setStatusText_("Offline prep failed. Please try again while online.");
-  } finally {
-    if (loadPrepBtn) {
-      loadPrepBtn.textContent = "Load Offline Prep";
-      loadPrepBtn.disabled = false;
-    }
-    updateShellUi_();
-    syncShellQueue_();
-  }
-}
 
 /* begin[open_live_app_with_optional_auto_shell_prep] */
 function openLiveApp_(options) {
@@ -818,7 +755,6 @@ function updateShellUi_() {
   if (!standalone) {
     showElement_(installHelp);
     hideElement_(offlineBtn);
-    hideElement_(prepSection);
     hideElement_(offlineEntrySection);
 
     if (online) {
@@ -834,7 +770,6 @@ function updateShellUi_() {
   showElement_(offlineBtn);
 
   if (online) {
-    showElement_(prepSection);
     hideElement_(offlineEntrySection);
 
     const queueCount = getShellQueue_().length;
@@ -854,7 +789,7 @@ function updateShellUi_() {
       return;
     }
 
-/* begin[online_shell_auth_or_auto_prep_handoff] */
+
     /* begin[online_shell_auth_or_auto_prep_handoff] */
     if (shellAuth && shellAuth.cleanerName) {
       const currentShiftText =
@@ -883,10 +818,8 @@ function updateShellUi_() {
 
     return;
 /* end[online_shell_auth_or_auto_prep_handoff] */
-/* end[online_shell_auth_or_auto_prep_handoff] */
   }
 
-  hideElement_(prepSection);
 
   if (shellAuth && shellAuth.cleanerName) {
     const currentShiftText =
@@ -956,9 +889,7 @@ if (offlineBtn) {
   });
 }
 
-if (loadPrepBtn) {
-  loadPrepBtn.addEventListener("click", loadOfflinePrep_);
-}
+
 
 if (offlinePropertySearch) {
   offlinePropertySearch.addEventListener("input", handleOfflinePropertySearch_);
