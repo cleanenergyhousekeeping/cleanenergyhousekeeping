@@ -359,8 +359,10 @@ function updateOfflineActionOptions_(shellAuth) {
 }
 /* end[offline_action_options_keep_select_default] */
 
+/* begin[reset_offline_entry_form_force_select_default] */
 function resetOfflineEntryForm_(shellAuth) {
   if (offlineActionSelect) {
+    offlineActionSelect.selectedIndex = 0;
     offlineActionSelect.value = "";
   }
 
@@ -380,13 +382,17 @@ function resetOfflineEntryForm_(shellAuth) {
     offlineNoteInput.value = "";
   }
 
-  if (offlineNoteWrap) {
-    hideElement_(offlineNoteWrap);
+  hideElement_(offlineNoteWrap);
+  updateOfflineActionOptions_(shellAuth);
+
+  if (offlineActionSelect) {
+    offlineActionSelect.selectedIndex = 0;
+    offlineActionSelect.value = "";
   }
 
-  updateOfflineActionOptions_(shellAuth);
   clearOfflinePropertyResults_();
 }
+/* end[reset_offline_entry_form_force_select_default] */
 
 function saveOfflineEntry_() {
   const shellAuth = getShellAuth_();
@@ -413,16 +419,7 @@ function saveOfflineEntry_() {
     return;
   }
   
-  /* begin[scroll_to_bottom_helper] */
-function scrollToBottom_() {
-  window.setTimeout(function () {
-    window.scrollTo({
-      top: document.body.scrollHeight,
-      behavior: "smooth",
-    });
-  }, 60);
-}
-/* end[scroll_to_bottom_helper] */
+  
 
   const queue = getShellQueue_();
   queue.push({
@@ -748,6 +745,17 @@ function openLiveApp_(options) {
   shellSyncPausedAfterFailures = false;
   shellSyncFailureCount = 0;
   setButtonState_("Loading...", "loading", true);
+  
+  /* begin[scroll_to_bottom_helper] */
+function scrollToBottom_() {
+  window.setTimeout(function () {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth",
+    });
+  }, 60);
+}
+/* end[scroll_to_bottom_helper] */
 
   let targetUrl = LIVE_APP_URL;
 
@@ -886,19 +894,7 @@ async function registerServiceWorker_() {
 }
 /* end[clockin_shell_service_worker] */
 
-/* begin[resume_shell_after_return_helper] */
-async function resumeShellAfterReturn_() {
-  updateShellUi_();
-  updateOfflineQueueCount_();
 
-  if (navigator.onLine) {
-    setStatusText_("Refreshing session...");
-    await refreshShellAuth_();
-    updateShellUi_();
-    syncShellQueue_();
-  }
-}
-/* end[resume_shell_after_return_helper] */
 
 /* begin[clockin_shell_event_wiring] */
 window.addEventListener("online", function () {
@@ -907,6 +903,18 @@ window.addEventListener("online", function () {
 });
 
 window.addEventListener("offline", updateShellUi_);
+
+/* begin[return_to_shell_refresh_events] */
+window.addEventListener("pageshow", function () {
+  resumeShellAfterReturn_();
+});
+
+document.addEventListener("visibilitychange", function () {
+  if (!document.hidden) {
+    resumeShellAfterReturn_();
+  }
+});
+/* end[return_to_shell_refresh_events] */
 
 if (offlineBtn) {
   offlineBtn.addEventListener("click", function () {
