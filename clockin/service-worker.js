@@ -1,4 +1,4 @@
-const CACHE_NAME = "ce-clockin-shell-v21";
+const CACHE_NAME = "ce-clockin-shell-v22";
 
 const APP_SHELL_FILES = [
   "/clockin/",
