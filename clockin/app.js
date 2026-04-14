@@ -816,7 +816,7 @@ function updateShellUi_() {
     }
 
 
-    /* begin[online_shell_auth_or_auto_prep_handoff] */
+    /* begin[online_shell_auth_manual_open_only] */
     if (shellAuth && shellAuth.cleanerName) {
       const currentShiftText =
         shellAuth.currentShift && shellAuth.currentShift.property
@@ -832,18 +832,11 @@ function updateShellUi_() {
     }
 
     setStatusText_(
-      `Online. No offline prep found on this phone. Launching live app to prepare offline mode...${queueSuffix}`
+      `Online. No offline prep found on this phone yet. Press Open Live App to log in and prepare offline mode.${queueSuffix}`
     );
-    setButtonState_("Preparing...", "loading", true);
-
-    setTimeout(function () {
-      if (navigator.onLine && !getShellAuth_()) {
-        openLiveApp_({ autoShellPrep: true });
-      }
-    }, 300);
-
+    setButtonState_("Open Live App", "online", false);
     return;
-/* end[online_shell_auth_or_auto_prep_handoff] */
+/* end[online_shell_auth_manual_open_only] */
   }
 
 
