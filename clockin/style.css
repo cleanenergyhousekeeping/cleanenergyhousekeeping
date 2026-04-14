@@ -62,10 +62,35 @@ h1 {
   color: #ffffff;
 }
 
+/* begin[button_loading_spinner] */
 .btnLoading {
   background: #8ea3b3;
   color: #ffffff;
+  position: relative;
 }
+
+.btnLoading::after {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-left: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  vertical-align: -2px;
+  animation: shellButtonSpin 0.8s linear infinite;
+}
+
+@keyframes shellButtonSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* end[button_loading_spinner] */
 
 .installHelp {
   margin-top: 20px;
