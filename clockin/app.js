@@ -313,6 +313,7 @@ function handleOfflinePropertySearch_() {
   showElement_(offlinePropertyResults);
 }
 
+/* begin[offline_action_options_keep_select_default] */
 function updateOfflineActionOptions_(shellAuth) {
   if (!offlineActionSelect) return;
 
@@ -340,13 +341,14 @@ function updateOfflineActionOptions_(shellAuth) {
   setOptionVisible_(noteOption, isClockedIn);
   setOptionVisible_(clockOutOption, isClockedIn);
 
-  const selectedAction = offlineActionSelect.value || "";
+  const selectedAction = (offlineActionSelect.value || "").trim();
   const selectedStillAllowed =
+    selectedAction === "" ||
     (selectedAction === "clock_in" && !isClockedIn) ||
     ((selectedAction === "add_note" || selectedAction === "clock_out") && isClockedIn);
 
   if (!selectedStillAllowed) {
-    offlineActionSelect.value = isClockedIn ? "clock_out" : "clock_in";
+    offlineActionSelect.value = "";
   }
 
   if (offlineActionSelect.value === "add_note") {
@@ -355,6 +357,7 @@ function updateOfflineActionOptions_(shellAuth) {
     hideElement_(offlineNoteWrap);
   }
 }
+/* end[offline_action_options_keep_select_default] */
 
 function resetOfflineEntryForm_(shellAuth) {
   if (offlineActionSelect) {
@@ -409,6 +412,17 @@ function saveOfflineEntry_() {
     setStatusText_("Please enter a cleaning note.");
     return;
   }
+  
+  /* begin[scroll_to_bottom_helper] */
+function scrollToBottom_() {
+  window.setTimeout(function () {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth",
+    });
+  }, 60);
+}
+/* end[scroll_to_bottom_helper] */
 
   const queue = getShellQueue_();
   queue.push({
@@ -440,12 +454,15 @@ function saveOfflineEntry_() {
     saveShellAuth_(shellAuth);
   }
 
+/* begin[offline_save_status_then_scroll] */
   updateOfflineQueueCount_();
   updateOfflineReadyText_(shellAuth);
   resetOfflineEntryForm_(shellAuth);
 
   setStatusText_("Offline entry saved on this phone.");
+  scrollToBottom_();
 }
+/* end[offline_save_status_then_scroll] */
 /* begin[shell_refresh_and_sync_helpers] */
 async function refreshShellAuth_() {
   const shellAuth = getShellAuth_() || {};
@@ -869,6 +886,19 @@ async function registerServiceWorker_() {
 }
 /* end[clockin_shell_service_worker] */
 
+/* begin[resume_shell_after_return_helper] */
+async function resumeShellAfterReturn_() {
+  updateShellUi_();
+  updateOfflineQueueCount_();
+
+  if (navigator.onLine) {
+    setStatusText_("Refreshing session...");
+    await refreshShellAuth_();
+    updateShellUi_();
+    syncShellQueue_();
+  }
+}
+/* end[resume_shell_after_return_helper] */
 
 /* begin[clockin_shell_event_wiring] */
 window.addEventListener("online", function () {
@@ -906,6 +936,31 @@ document.addEventListener("click", function (event) {
     clearOfflinePropertyResults_();
   }
 });
+
+/* begin[resume_shell_after_return_helper] */
+let shellResumeInProgress = false;
+
+async function resumeShellAfterReturn_() {
+  if (shellResumeInProgress) return;
+  shellResumeInProgress = true;
+
+  try {
+    updateShellUi_();
+    updateOfflineQueueCount_();
+
+    if (navigator.onLine) {
+      setStatusText_("Refreshing session...");
+      await refreshShellAuth_();
+      updateShellUi_();
+      syncShellQueue_();
+    }
+  } finally {
+    setTimeout(function () {
+      shellResumeInProgress = false;
+    }, 400);
+  }
+}
+/* end[resume_shell_after_return_helper] */
 
 if (offlineActionSelect) {
   offlineActionSelect.addEventListener("change", function () {
