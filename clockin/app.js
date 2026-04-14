@@ -862,8 +862,8 @@ function updateShellUi_() {
           : "";
 
       setStatusText_(
-        `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}${queueSuffix}`
-      );
+  `Online. No offline prep found on this phone. Launching live app to prepare offline mode...${queueSuffix}`
+);
 
       setButtonState_("Open Live App", "online", false);
       return;
