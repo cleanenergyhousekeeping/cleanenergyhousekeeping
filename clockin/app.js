@@ -611,7 +611,7 @@ async function syncShellQueue_() {
 
       finalStatusMessage =
         (refreshResult && refreshResult.message) ||
-        "Could not refresh offline authorization.";
+        "Could not refresh offline authorization. Will retry automatically.";
 
       if (refreshResult && refreshResult.requiresLogin) {
         finalStatusMessage =
@@ -620,7 +620,7 @@ async function syncShellQueue_() {
 
       if (shellSyncFailureCount >= 3) {
         shellSyncPausedAfterFailures = true;
-        finalStatusMessage += " Auto-sync paused after 3 failed attempts.";
+        finalStatusMessage += " Auto-sync paused after 3 failed attempts. Please close and reopen the app, then try again.";
       }
 
       setStatusText_(finalStatusMessage);
@@ -648,7 +648,7 @@ async function syncShellQueue_() {
 
         finalStatusMessage =
           (response && response.message) ||
-          "Could not sync a queued shell entry yet.";
+          "Could not sync a queued shell entry yet. Will retry automatically.";
 
         if (/session expired|log in again/i.test(finalStatusMessage)) {
           finalStatusMessage =
@@ -657,7 +657,7 @@ async function syncShellQueue_() {
 
         if (shellSyncFailureCount >= 3) {
           shellSyncPausedAfterFailures = true;
-          finalStatusMessage += " Auto-sync paused after 3 failed attempts.";
+          finalStatusMessage += " Auto-sync paused after 3 failed attempts. Please close and reopen the app, then try again.";
         }
 
         setStatusText_(finalStatusMessage);
@@ -696,11 +696,11 @@ async function syncShellQueue_() {
 
     finalStatusMessage =
       (error && error.message) ||
-      "Could not sync offline entries yet. They will stay queued.";
+      "Could not sync offline entries yet. They will stay queued and retry automatically.";
 
     if (shellSyncFailureCount >= 3) {
       shellSyncPausedAfterFailures = true;
-      finalStatusMessage += " Auto-sync paused after 3 failed attempts.";
+      finalStatusMessage += " Auto-sync paused after 3 failed attempts. Please close and reopen the app, then try again.";
     }
 
     setStatusText_(finalStatusMessage);
@@ -972,6 +972,12 @@ document.addEventListener("DOMContentLoaded", async function () {
   updateShellUi_();
   updateOfflineQueueCount_();
   syncShellQueue_();
+
+  setInterval(function () {
+    if (navigator.onLine) {
+      syncShellQueue_();
+    }
+  }, 15000);
 });
 /* end[clockin_shell_init] */
 
