@@ -112,6 +112,17 @@ function setButtonState_(text, mode, disabled) {
   offlineBtn.disabled = !!disabled;
 }
 
+/* begin[scroll_to_bottom_helper] */
+function scrollToBottom_() {
+  window.setTimeout(function () {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth",
+    });
+  }, 60);
+}
+/* end[scroll_to_bottom_helper] */
+
 function getShellProperties_(shellAuth) {
   return Array.isArray(shellAuth && shellAuth.properties) ? shellAuth.properties : [];
 }
@@ -460,6 +471,7 @@ function saveOfflineEntry_() {
   scrollToBottom_();
 }
 /* end[offline_save_status_then_scroll] */
+
 /* begin[shell_refresh_and_sync_helpers] */
 async function refreshShellAuth_() {
   const shellAuth = getShellAuth_() || {};
@@ -745,17 +757,6 @@ function openLiveApp_(options) {
   shellSyncPausedAfterFailures = false;
   shellSyncFailureCount = 0;
   setButtonState_("Loading...", "loading", true);
-  
-  /* begin[scroll_to_bottom_helper] */
-function scrollToBottom_() {
-  window.setTimeout(function () {
-    window.scrollTo({
-      top: document.body.scrollHeight,
-      behavior: "smooth",
-    });
-  }, 60);
-}
-/* end[scroll_to_bottom_helper] */
 
   let targetUrl = LIVE_APP_URL;
 
@@ -894,7 +895,30 @@ async function registerServiceWorker_() {
 }
 /* end[clockin_shell_service_worker] */
 
+/* begin[resume_shell_after_return_helper] */
+let shellResumeInProgress = false;
 
+async function resumeShellAfterReturn_() {
+  if (shellResumeInProgress) return;
+  shellResumeInProgress = true;
+
+  try {
+    updateShellUi_();
+    updateOfflineQueueCount_();
+
+    if (navigator.onLine) {
+      setStatusText_("Refreshing session...");
+      await refreshShellAuth_();
+      updateShellUi_();
+      syncShellQueue_();
+    }
+  } finally {
+    setTimeout(function () {
+      shellResumeInProgress = false;
+    }, 400);
+  }
+}
+/* end[resume_shell_after_return_helper] */
 
 /* begin[clockin_shell_event_wiring] */
 window.addEventListener("online", function () {
@@ -945,30 +969,7 @@ document.addEventListener("click", function (event) {
   }
 });
 
-/* begin[resume_shell_after_return_helper] */
-let shellResumeInProgress = false;
 
-async function resumeShellAfterReturn_() {
-  if (shellResumeInProgress) return;
-  shellResumeInProgress = true;
-
-  try {
-    updateShellUi_();
-    updateOfflineQueueCount_();
-
-    if (navigator.onLine) {
-      setStatusText_("Refreshing session...");
-      await refreshShellAuth_();
-      updateShellUi_();
-      syncShellQueue_();
-    }
-  } finally {
-    setTimeout(function () {
-      shellResumeInProgress = false;
-    }, 400);
-  }
-}
-/* end[resume_shell_after_return_helper] */
 
 if (offlineActionSelect) {
   offlineActionSelect.addEventListener("change", function () {
