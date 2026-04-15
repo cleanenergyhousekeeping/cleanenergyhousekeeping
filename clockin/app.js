@@ -77,10 +77,39 @@ function saveShellQueue_(queue) {
   localStorage.setItem(SHELL_QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
 }
 
+/* begin[set_status_text_with_debug_suffix] */
 function setStatusText_(text) {
   if (!statusText) return;
-  statusText.textContent = text || "";
+
+  const baseText = text || "";
+  const debugText = getShellDebugSummary_();
+
+  statusText.textContent = baseText
+    ? baseText + " " + debugText
+    : debugText;
 }
+/* end[set_status_text_with_debug_suffix] */
+/* begin[shell_debug_status_helper] */
+function getShellDebugSummary_() {
+  const shellAuth = getShellAuth_();
+  const queue = getShellQueue_();
+
+  const hasAuth = !!shellAuth;
+  const cleanerName = shellAuth && shellAuth.cleanerName
+    ? shellAuth.cleanerName
+    : "none";
+  const hasSessionToken = !!(shellAuth && shellAuth.sessionToken);
+  const hasClientId = !!(shellAuth && shellAuth.clientId);
+
+  return (
+    "[DEBUG] auth=" + (hasAuth ? "yes" : "no") +
+    " | cleaner=" + cleanerName +
+    " | sessionToken=" + (hasSessionToken ? "yes" : "no") +
+    " | clientId=" + (hasClientId ? "yes" : "no") +
+    " | queue=" + queue.length
+  );
+}
+/* end[shell_debug_status_helper] */
 
 function showElement_(el) {
   if (!el) return;
@@ -855,6 +884,23 @@ document.addEventListener("DOMContentLoaded", async function () {
   if (navigator.onLine) {
     setStatusText_("Refreshing session...");
     await refreshShellAuth_();
+  }
+
+  updateShellUi_();
+  updateOfflineQueueCount_();
+  syncShellQueue_();
+});
+/* end[clockin_shell_init] */
+/* begin[clockin_shell_init] */
+document.addEventListener("DOMContentLoaded", async function () {
+  setStatusText_("Preparing app shell...");
+  await registerServiceWorker_();
+
+  setStatusText_(getShellDebugSummary_());
+
+  if (navigator.onLine) {
+    await refreshShellAuth_();
+    setStatusText_(getShellDebugSummary_());
   }
 
   updateShellUi_();
