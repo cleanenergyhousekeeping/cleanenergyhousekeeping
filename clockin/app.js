@@ -723,9 +723,32 @@ async function syncShellQueue_() {
 
 
 
-function openLiveApp_() {
-  setButtonState_("Loading...", "loading");
-  window.location.href = LIVE_APP_URL;
+async function prepareOfflineMode_() {
+  setButtonState_("Preparing...", "loading");
+
+  try {
+    const response = await fetch(APPS_SCRIPT_URL + "?mode=getOfflineShellPrep", {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    const res = await response.json();
+
+    if (!res || !res.ok || !res.payload) {
+      setStatusText_("Offline prep failed.");
+      setButtonState_("Prepare Offline Mode", "online");
+      return;
+    }
+
+    localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(res.payload));
+
+    setStatusText_("Offline mode is ready.");
+    updateShellUi_();
+
+  } catch (err) {
+    setStatusText_("Offline prep failed. Check connection.");
+    setButtonState_("Prepare Offline Mode", "online");
+  }
 }
 
 function enterOfflineMode_() {
@@ -776,7 +799,7 @@ function updateShellUi_() {
       );
     }
 
-    setButtonState_("Open Live App", "online");
+    setButtonState_("Prepare Offline Mode", "online");
     return;
   }
 
@@ -837,13 +860,13 @@ window.addEventListener("offline", updateShellUi_);
 
 if (offlineBtn) {
   offlineBtn.addEventListener("click", function () {
-    if (navigator.onLine) {
-      openLiveApp_();
-      return;
-    }
+  if (navigator.onLine) {
+    prepareOfflineMode_();
+    return;
+  }
 
-    enterOfflineMode_();
-  });
+  enterOfflineMode_();
+});
 }
 /* begin[debug_clear_shell_button] */
 if (clearShellBtn) {
