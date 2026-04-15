@@ -723,37 +723,90 @@ async function syncShellQueue_() {
 
 
 
+/* begin[prepare_offline_mode_direct_post] */
 async function prepareOfflineMode_() {
+  const shellAuth = getShellAuth_() || {};
+  const sessionToken = shellAuth.sessionToken || "";
+  const clientId = shellAuth.clientId || "";
+
+  if (!navigator.onLine) {
+    setStatusText_("No connection. Reconnect before preparing offline mode.");
+    setButtonState_("Offline Prep Needed", "offline");
+    return;
+  }
+
+  if (!sessionToken) {
+    setStatusText_("Please open the live app and log in before preparing offline mode.");
+    setButtonState_("Open Live App", "online");
+    return;
+  }
+
   setButtonState_("Preparing...", "loading");
+  setStatusText_("Preparing offline mode on this phone...");
 
   try {
-    const response = await fetch(APPS_SCRIPT_URL + "?mode=getOfflineShellPrep", {
-      method: "GET",
-      cache: "no-store"
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        mode: "getOfflineShellPrepDirect",
+        payload: {
+          sessionToken: sessionToken,
+          clientId: clientId,
+        },
+      }),
+      cache: "no-store",
     });
 
-    const res = await response.json();
+    const rawText = await response.text();
+    let res = null;
+
+    try {
+      res = rawText ? JSON.parse(rawText) : null;
+    } catch (_) {
+      res = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        "Offline prep HTTP " +
+          response.status +
+          (rawText ? " — " + rawText.slice(0, 200) : "")
+      );
+    }
 
     if (!res || !res.ok || !res.payload) {
-      setStatusText_("Offline prep failed.");
+      setStatusText_((res && res.message) || "Offline prep failed.");
       setButtonState_("Prepare Offline Mode", "online");
       return;
     }
 
-    localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(res.payload));
-
-    setStatusText_("Offline mode is ready.");
+    saveShellAuth_(res.payload);
+    updateOfflineQueueCount_();
     updateShellUi_();
-
-  } catch (err) {
-    setStatusText_("Offline prep failed. Check connection.");
+    setStatusText_("Offline mode is ready on this phone.");
+  } catch (error) {
+    setStatusText_(
+      "Offline prep failed: " +
+        ((error && error.message) || "Unknown error")
+    );
     setButtonState_("Prepare Offline Mode", "online");
   }
 }
+/* end[prepare_offline_mode_direct_post] */
 
 function enterOfflineMode_() {
   updateShellUi_();
 }
+
+/* begin[open_live_app_helper] */
+function openLiveApp_() {
+  setButtonState_("Loading...", "loading");
+  window.location.href = LIVE_APP_URL;
+}
+/* end[open_live_app_helper] */
 
 function updateShellUi_() {
   const standalone = isStandaloneMode_();
@@ -793,13 +846,22 @@ function updateShellUi_() {
       setStatusText_(
         `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}${queueSuffix}`
       );
-    } else {
-      setStatusText_(
-        `Online. Tap below to open the live app.${queueSuffix}`
-      );
+      setButtonState_("Open Live App", "online");
+      return;
     }
 
-    setButtonState_("Prepare Offline Mode", "online");
+    if (shellAuth && shellAuth.sessionToken) {
+      setStatusText_(
+        `Online. This phone is not prepared for offline mode yet. Tap below to prepare it now.${queueSuffix}`
+      );
+      setButtonState_("Prepare Offline Mode", "online");
+      return;
+    }
+
+    setStatusText_(
+      `Online. Open the live app and log in first, then come back here to prepare offline mode.${queueSuffix}`
+    );
+    setButtonState_("Open Live App", "online");
     return;
   }
 
@@ -860,13 +922,25 @@ window.addEventListener("offline", updateShellUi_);
 
 if (offlineBtn) {
   offlineBtn.addEventListener("click", function () {
-  if (navigator.onLine) {
-    prepareOfflineMode_();
-    return;
-  }
+    if (navigator.onLine) {
+      const shellAuth = getShellAuth_() || {};
 
-  enterOfflineMode_();
-});
+      if (shellAuth && shellAuth.cleanerName) {
+        openLiveApp_();
+        return;
+      }
+
+      if (shellAuth && shellAuth.sessionToken) {
+        prepareOfflineMode_();
+        return;
+      }
+
+      openLiveApp_();
+      return;
+    }
+
+    enterOfflineMode_();
+  });
 }
 /* begin[debug_clear_shell_button] */
 if (clearShellBtn) {
