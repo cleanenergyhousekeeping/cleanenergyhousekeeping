@@ -12,6 +12,7 @@ const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
 
 /* begin[clockin_shell_dom_refs] */
 const statusText = document.getElementById("statusText");
+const offlineBtn = document.getElementById("offlineBtn");
 const clearShellBtn = document.getElementById("clearShellBtn");
 const installHelp = document.getElementById("installHelp");
 
@@ -850,10 +851,13 @@ if (clearShellBtn) {
     localStorage.removeItem(SHELL_AUTH_KEY);
     localStorage.removeItem(SHELL_QUEUE_KEY);
 
-    setStatusText_("Shell storage cleared. Reloading...");
-    setTimeout(function () {
-      window.location.reload();
-    }, 400);
+    selectedOfflineProperty = null;
+    clearOfflinePropertyResults_();
+    hideOfflinePropertyInfo_();
+    updateOfflineQueueCount_();
+    updateShellUi_();
+
+    setStatusText_("Shell storage cleared from this shell.");
   });
 }
 /* end[debug_clear_shell_button] */
