@@ -125,22 +125,30 @@
             return;
           }
 
-          localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(res.payload));
-          try {
+          /* begin[save_seed_then_auto_return_to_shell] */
+localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(res.payload));
+
+try {
   if (window.opener) {
     window.opener.postMessage({ type: "shell-seed-saved" }, "*");
   }
 } catch (_) {}
 
-          const cleanerName = res.payload.cleanerName || "this cleaner";
-          const currentShiftText =
-            res.payload.currentShift && res.payload.currentShift.property
-              ? ` Current shift: ${res.payload.currentShift.property}.`
-              : "";
+const cleanerName = res.payload.cleanerName || "this cleaner";
+const currentShiftText =
+  res.payload.currentShift && res.payload.currentShift.property
+    ? ` Current shift: ${res.payload.currentShift.property}.`
+    : "";
 
-          statusText.textContent =
-            `Offline mode is ready for ${cleanerName} on this phone.` +
-            currentShiftText;
+statusText.textContent =
+  `Offline mode is ready for ${cleanerName} on this phone.` +
+  currentShiftText +
+  " Returning to Clock In...";
+
+setTimeout(function () {
+  window.location.replace("/clockin/");
+}, 900);
+/* end[save_seed_then_auto_return_to_shell] */
         })
         .catch(function () {
           statusText.textContent =
