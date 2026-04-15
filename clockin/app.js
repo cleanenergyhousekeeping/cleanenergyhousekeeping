@@ -194,8 +194,8 @@ function updateOfflineReadyText_(shellAuth) {
     return;
   }
 
-  offlineReadyText.textContent =
-    "Offline mode is not ready yet on this phone. Please go online and load offline prep first.";
+ offlineReadyText.textContent =
+  "Offline mode is not ready yet on this phone. Please go online, open the live app, log in again if needed, and press Prepare Offline Mode.";
 }
 
 function clearOfflinePropertyResults_() {
@@ -691,68 +691,7 @@ async function syncShellQueue_() {
 /* end[shell_refresh_and_sync_helpers] */
 
 
-async function fetchPrepPayloadByCode_(code) {
-  const url =
-    APPS_SCRIPT_URL +
-    "?mode=getOfflineShellPrepByCode&code=" +
-    encodeURIComponent(code);
 
-  const response = await fetch(url, { method: "GET", cache: "no-store" });
-  if (!response.ok) {
-    throw new Error("Prep request failed.");
-  }
-
-  return response.json();
-}
-
-async function loadOfflinePrep_() {
-  const code = (prepCodeInput && prepCodeInput.value || "").trim();
-
-  if (!code) {
-    setStatusText_("Please enter the offline prep code.");
-    return;
-  }
-
-  setStatusText_("Loading offline prep...");
-  if (loadPrepBtn) {
-    loadPrepBtn.textContent = "Loading...";
-    loadPrepBtn.disabled = true;
-  }
-
-  try {
-    const res = await fetchPrepPayloadByCode_(code);
-
-    if (!res || !res.ok || !res.payload) {
-      setStatusText_((res && res.message) || "Offline prep failed.");
-      return;
-    }
-
-    saveShellAuth_(res.payload);
-
-    const cleanerName = res.payload.cleanerName || "this cleaner";
-    const currentShiftText =
-      res.payload.currentShift && res.payload.currentShift.property
-        ? ` Current shift: ${res.payload.currentShift.property}.`
-        : "";
-
-    setStatusText_(
-      `Online. Offline mode is prepared for ${cleanerName}.${currentShiftText}`
-    );
-
-    if (prepCodeInput) {
-      prepCodeInput.value = "";
-    }
-  } catch (_) {
-    setStatusText_("Offline prep failed. Please try again while online.");
-  } finally {
-    if (loadPrepBtn) {
-      loadPrepBtn.textContent = "Load Offline Prep";
-      loadPrepBtn.disabled = false;
-    }
-    updateShellUi_();
-    syncShellQueue_();
-  }
-}
 
 function openLiveApp_() {
   setButtonState_("Loading...", "loading");
@@ -831,8 +770,8 @@ function updateShellUi_() {
 
   hideElement_(offlineEntrySection);
   setStatusText_(
-    "No connection, and this phone has not been prepared for offline mode yet. Go online once, open the live app, and press Prepare Offline Mode."
-  );
+  "No connection, and this phone has not been prepared for offline mode yet. Go online, open the live app, log in again if needed, and press Prepare Offline Mode."
+);
   setButtonState_("Offline Prep Needed", "offline");
 }
 /* end[clockin_shell_helpers] */
