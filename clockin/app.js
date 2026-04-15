@@ -848,8 +848,14 @@ if (offlineBtn) {
 /* begin[debug_clear_shell_button] */
 if (clearShellBtn) {
   clearShellBtn.addEventListener("click", function () {
+    const beforeAuthRaw = localStorage.getItem(SHELL_AUTH_KEY);
+    const beforeQueueRaw = localStorage.getItem(SHELL_QUEUE_KEY);
+
     localStorage.removeItem(SHELL_AUTH_KEY);
     localStorage.removeItem(SHELL_QUEUE_KEY);
+
+    const afterAuthRaw = localStorage.getItem(SHELL_AUTH_KEY);
+    const afterQueueRaw = localStorage.getItem(SHELL_QUEUE_KEY);
 
     selectedOfflineProperty = null;
     clearOfflinePropertyResults_();
@@ -857,7 +863,21 @@ if (clearShellBtn) {
     updateOfflineQueueCount_();
     updateShellUi_();
 
-    setStatusText_("Shell storage cleared from this shell.");
+    const beforeAuth = beforeAuthRaw ? "yes" : "no";
+    const afterAuth = afterAuthRaw ? "yes" : "no";
+    const beforeQueue = beforeQueueRaw ? "yes" : "no";
+    const afterQueue = afterQueueRaw ? "yes" : "no";
+
+    setStatusText_(
+      "Clear tapped. rawAuth before=" +
+        beforeAuth +
+        " after=" +
+        afterAuth +
+        " | rawQueue before=" +
+        beforeQueue +
+        " after=" +
+        afterQueue
+    );
   });
 }
 /* end[debug_clear_shell_button] */
