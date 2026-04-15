@@ -12,7 +12,7 @@ const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
 
 /* begin[clockin_shell_dom_refs] */
 const statusText = document.getElementById("statusText");
-const offlineBtn = document.getElementById("offlineBtn");
+const clearShellBtn = document.getElementById("clearShellBtn");
 const installHelp = document.getElementById("installHelp");
 
 const offlineEntrySection = document.getElementById("offlineEntrySection");
@@ -844,7 +844,19 @@ if (offlineBtn) {
     enterOfflineMode_();
   });
 }
+/* begin[debug_clear_shell_button] */
+if (clearShellBtn) {
+  clearShellBtn.addEventListener("click", function () {
+    localStorage.removeItem(SHELL_AUTH_KEY);
+    localStorage.removeItem(SHELL_QUEUE_KEY);
 
+    setStatusText_("Shell storage cleared. Reloading...");
+    setTimeout(function () {
+      window.location.reload();
+    }, 400);
+  });
+}
+/* end[debug_clear_shell_button] */
 
 
 if (offlinePropertySearch) {
@@ -876,21 +888,6 @@ if (saveOfflineEntryBtn) {
 /* end[clockin_shell_event_wiring] */
 
 
-/* begin[clockin_shell_init] */
-document.addEventListener("DOMContentLoaded", async function () {
-  setStatusText_("Preparing app shell...");
-  await registerServiceWorker_();
-
-  if (navigator.onLine) {
-    setStatusText_("Refreshing session...");
-    await refreshShellAuth_();
-  }
-
-  updateShellUi_();
-  updateOfflineQueueCount_();
-  syncShellQueue_();
-});
-/* end[clockin_shell_init] */
 /* begin[clockin_shell_init] */
 document.addEventListener("DOMContentLoaded", async function () {
   setStatusText_("Preparing app shell...");
