@@ -75,8 +75,103 @@ function getShellQueue_() {
 }
 
 function saveShellQueue_(queue) {
-  localStorage.setItem(SHELL_QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
+  localStorage.setItem(
+    SHELL_QUEUE_KEY,
+    JSON.stringify(Array.isArray(queue) ? queue : [])
+  );
 }
+
+/* begin[live_queue_handoff_import_helpers] */
+function clearShellHash_() {
+  if (!window.location.hash) return;
+
+  const cleanUrl =
+    window.location.pathname + (window.location.search || "");
+
+  history.replaceState(null, "", cleanUrl);
+}
+
+function normalizeImportedShellEntry_(entry) {
+  return {
+    queuedId: String((entry && entry.queuedId) || ("import_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8))),
+    cleanerName: String((entry && entry.cleanerName) || ""),
+    submittedAtMs: Number((entry && entry.submittedAtMs) || Date.now()),
+    accessCode: String((entry && entry.accessCode) || ""),
+    sessionToken: String((entry && entry.sessionToken) || ""),
+    clientId: String((entry && entry.clientId) || ""),
+    property: String((entry && entry.property) || ""),
+    eventType: String((entry && entry.eventType) || ""),
+    note: String((entry && entry.note) || ""),
+    source: String((entry && entry.source) || "live_webapp"),
+  };
+}
+
+function applyImportedEntriesToShellAuth_(entries) {
+  const shellAuth = getShellAuth_();
+  if (!shellAuth || !Array.isArray(entries) || !entries.length) return;
+
+  entries.forEach(function (entry) {
+    if (entry.eventType === "clock_in") {
+      shellAuth.currentShift = {
+        property: entry.property || "",
+        clockInMs: Number(entry.submittedAtMs || Date.now()),
+        clockInDisplay: "",
+      };
+    }
+
+    if (entry.eventType === "clock_out") {
+      shellAuth.currentShift = null;
+    }
+  });
+
+  saveShellAuth_(shellAuth);
+}
+
+function importLiveQueueFromHash_() {
+  const rawHash = window.location.hash.replace(/^#/, "");
+  if (!rawHash) return 0;
+
+  const hashParams = new URLSearchParams(rawHash);
+  const rawImport = hashParams.get("importLiveQueue");
+
+  if (!rawImport) {
+    return 0;
+  }
+
+  try {
+    const parsed = JSON.parse(rawImport);
+    const importedEntries = Array.isArray(parsed && parsed.entries)
+      ? parsed.entries.map(normalizeImportedShellEntry_)
+      : [];
+
+    clearShellHash_();
+
+    if (!importedEntries.length) {
+      return 0;
+    }
+
+    const existingQueue = getShellQueue_();
+    const combinedQueue = importedEntries.concat(existingQueue);
+    const seenIds = new Set();
+    const dedupedQueue = [];
+
+    combinedQueue.forEach(function (item) {
+      const itemId = String((item && item.queuedId) || "");
+      if (!itemId || seenIds.has(itemId)) return;
+      seenIds.add(itemId);
+      dedupedQueue.push(item);
+    });
+
+    saveShellQueue_(dedupedQueue);
+    applyImportedEntriesToShellAuth_(importedEntries);
+
+    return importedEntries.length;
+  } catch (_) {
+    clearShellHash_();
+    return 0;
+  }
+}
+/* end[live_queue_handoff_import_helpers] */
 
 /* begin[set_status_text_with_debug_suffix] */
 function setStatusText_(text) {
@@ -1014,7 +1109,13 @@ document.addEventListener("DOMContentLoaded", async function () {
   setStatusText_("Preparing app shell...");
   await registerServiceWorker_();
 
-  setStatusText_(getShellDebugSummary_());
+  const importedCount = importLiveQueueFromHash_();
+
+  if (importedCount > 0) {
+    setStatusText_("Imported " + importedCount + " live app entr" + (importedCount === 1 ? "y" : "ies") + " into this shell.");
+  } else {
+    setStatusText_(getShellDebugSummary_());
+  }
 
   if (navigator.onLine) {
     await refreshShellAuth_();
