@@ -130,36 +130,11 @@ h1 {
 }
 
 .offlineQueueCount {
-  margin-top: 16px;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
   font-size: 15px;
   line-height: 1.4;
   color: #5f6f82;
   text-align: center;
-}
-
-.offlineQueueDetails {
-  background: #f3f7fa;
-  border: 1px solid #d8e2e8;
-  border-radius: 12px;
-  padding: 10px 12px;
-  font-size: 14px;
-  line-height: 1.45;
-  color: #23343b;
-}
-
-.offlineQueueItem {
-  padding: 8px 0;
-  border-bottom: 1px solid #e2e8ed;
-}
-
-.offlineQueueItem:last-child {
-  border-bottom: none;
-}
-
-.offlineQueueMeta {
-  color: #5f6f82;
-  font-size: 13px;
 }
 
 .offlineLabel {
