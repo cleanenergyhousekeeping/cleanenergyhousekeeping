@@ -17,101 +17,134 @@
   <link rel="stylesheet" href="/clockin/style.css">
 </head>
 <body>
-  <div class="wrap">
-    <h1>Clean Energy<br/>Clock In</h1>
+  <div class="appShell">
+    <div class="card">
+      <div class="logoBannerWrap">
+        <img
+          class="logoBanner"
+          src="https://www.cleanenergyhousekeeping.com/logo.png"
+          alt="Clean Energy Housekeeping logo"
+        >
+      </div>
 
-    <p id="statusText" class="statusText">Checking app status...</p>
+      <div class="shellTopSection">
+        <h1 class="screenTitle">Clean Energy Clock In</h1>
+        <p class="screenSubtitle">
+          Offline-ready clock in app for Clean Energy Housekeeping.
+        </p>
 
-    <button id="offlineBtn" class="btn hidden" type="button">
-  Enter Offline Mode
-</button>
+        <div id="statusText" class="statusBox"></div>
 
-<div id="prepSection" class="prepSection hidden">
-  <input id="prepCodeInput" class="prepInput" type="text" inputmode="numeric" maxlength="6" placeholder="Enter offline prep code" />
-  <button id="loadPrepBtn" class="btn btnOnline" type="button">Load Offline Prep</button>
-</div>
+        <button id="offlineBtn" class="actionButton hidden" type="button">
+          Enter Offline Mode
+        </button>
+      </div>
 
-<div id="offlineEntrySection" class="offlineEntrySection hidden">
-  <div id="offlineReadyText" class="offlineReadyText"></div>
+      <div id="prepSection" class="prepCard hidden">
+        <div class="prepSectionTitle">Prepare This Phone</div>
+        <div class="prepSectionText">
+          While online, either open the live app or enter an offline prep code.
+        </div>
 
-  <div id="offlineQueueCount" class="offlineQueueCount">Queued entries: 0</div>
+        <input
+          id="prepCodeInput"
+          class="prepInput"
+          type="text"
+          inputmode="numeric"
+          maxlength="6"
+          placeholder="Enter offline prep code"
+        />
 
-  <label for="offlineActionSelect" class="offlineLabel">Action</label>
-  <select id="offlineActionSelect" class="offlineSelect">
-    <option value="">Select...</option>
-    <option value="clock_in">Clock In</option>
-    <option value="add_note">Add Cleaning Note</option>
-    <option value="clock_out">Clock Out</option>
-  </select>
+        <button id="loadPrepBtn" class="actionButton prepButton" type="button">
+          Load Offline Prep
+        </button>
+      </div>
 
-  <label for="offlinePropertySearch" class="offlineLabel">Property</label>
-  <input
-    id="offlinePropertySearch"
-    class="offlineInput"
-    type="text"
-    placeholder="Search property..."
-    autocomplete="off"
-  />
+      <div id="offlineEntrySection" class="offlineEntrySection hidden">
+        <div id="offlineReadyText" class="offlineReadyText"></div>
+        <div id="offlineQueueCount" class="offlineQueueCount">Queued entries: 0</div>
 
-  <div id="offlinePropertyResults" class="offlineResultsBox hidden"></div>
+        <label for="offlineActionSelect">Action</label>
+        <select id="offlineActionSelect" class="offlineSelect">
+          <option value="">Select...</option>
+          <option value="clock_in">Clock In</option>
+          <option value="add_note">Add Cleaning Note</option>
+          <option value="clock_out">Clock Out</option>
+        </select>
 
-  <div id="offlinePropertyInfoPanel" class="offlinePropertyInfoPanel hidden">
-    <div class="offlinePropertyInfoHeader">Current Property Info</div>
+        <label for="offlinePropertySearch">Property</label>
+        <input
+          id="offlinePropertySearch"
+          class="offlineInput"
+          type="text"
+          placeholder="Search address..."
+          autocomplete="off"
+        />
 
-    <div class="offlinePropertyInfoRow">
-      <div class="offlinePropertyInfoLabel">Entrance</div>
-      <div id="offlinePropertyInfoEntrance" class="offlinePropertyInfoValue"></div>
-    </div>
+        <div id="offlinePropertyResults" class="resultsBox hidden"></div>
 
-    <div class="offlinePropertyInfoRow">
-      <div class="offlinePropertyInfoLabel">Alarm</div>
-      <div id="offlinePropertyInfoAlarm" class="offlinePropertyInfoValue"></div>
-    </div>
+        <div id="offlinePropertyInfoPanel" class="propertyInfoPanel hidden">
+          <div class="propertyInfoHeader">Current Property Info</div>
 
-    <div class="offlinePropertyInfoRow">
-      <div class="offlinePropertyInfoLabel">Wi-Fi</div>
-      <div id="offlinePropertyInfoWifi" class="offlinePropertyInfoValue"></div>
-    </div>
+          <div class="propertyInfoRow">
+            <div class="propertyInfoLabel">Entrance</div>
+            <div id="offlinePropertyInfoEntrance" class="propertyInfoValue"></div>
+          </div>
 
-    <div class="offlinePropertyInfoRow">
-      <div class="offlinePropertyInfoLabel">Wi-Fi Password</div>
-      <div id="offlinePropertyInfoWifiPassword" class="offlinePropertyInfoValue"></div>
-    </div>
+          <div class="propertyInfoRow">
+            <div class="propertyInfoLabel">Alarm</div>
+            <div id="offlinePropertyInfoAlarm" class="propertyInfoValue"></div>
+          </div>
 
-    <div class="offlinePropertyInfoRow">
-      <div class="offlinePropertyInfoLabel">Owner Names</div>
-      <div id="offlinePropertyInfoOwners" class="offlinePropertyInfoValue"></div>
-    </div>
+          <div class="propertyInfoRow">
+            <div class="propertyInfoLabel">Wi-Fi</div>
+            <div id="offlinePropertyInfoWifi" class="propertyInfoValue"></div>
+          </div>
 
-    <div class="offlinePropertyInfoRow">
-      <div class="offlinePropertyInfoLabel">House Notes</div>
-      <div id="offlinePropertyInfoNotes" class="offlinePropertyInfoValue"></div>
-    </div>
-  </div>
+          <div class="propertyInfoRow">
+            <div class="propertyInfoLabel">Wi-Fi Password</div>
+            <div id="offlinePropertyInfoWifiPassword" class="propertyInfoValue"></div>
+          </div>
 
-  <div id="offlineNoteWrap" class="hidden">
-    <label for="offlineNoteInput" class="offlineLabel">Cleaning Note</label>
-    <textarea
-      id="offlineNoteInput"
-      class="offlineTextarea"
-      rows="4"
-      placeholder="Enter cleaning note"
-    ></textarea>
-  </div>
+          <div class="propertyInfoRow">
+            <div class="propertyInfoLabel">Owner Names</div>
+            <div id="offlinePropertyInfoOwners" class="propertyInfoValue"></div>
+          </div>
 
-  <button id="saveOfflineEntryBtn" class="btn btnOffline" type="button">
-    Save Offline Entry
-  </button>
-</div>
+          <div class="propertyInfoRow">
+            <div class="propertyInfoLabel">House Notes</div>
+            <div id="offlinePropertyInfoNotes" class="propertyInfoValue"></div>
+          </div>
+        </div>
 
-    <div id="installHelp" class="installHelp hidden">
-      <p>To install the app icon:</p>
-      <p>
-        Tap the <strong>triple dots</strong> on the bottom right corner of your iPhone screen,
-        then tap <strong>Share</strong> (square with arrow), then <strong>View More</strong>,
-        scroll down and select <strong>Add to Home Screen</strong>.
-      </p>
-      <p class="sub">Installing the icon lets you use the app full-screen.</p>
+        <div id="offlineNoteWrap" class="hidden">
+          <label for="offlineNoteInput">Cleaning Notes</label>
+          <textarea
+            id="offlineNoteInput"
+            class="offlineTextarea"
+            rows="4"
+            placeholder="Only note non-standard work that may have added time"
+          ></textarea>
+        </div>
+
+        <button id="saveOfflineEntryBtn" class="submitButton" type="button">
+          Save Offline Entry
+        </button>
+      </div>
+
+      <div id="installHelp" class="installHelp hidden">
+        <div class="installHelpCard">
+          <div class="installHelpTitle">Install to Home Screen</div>
+          <p>
+            Tap the <strong>triple dots</strong> at the bottom right of Safari,
+            then tap <strong>Share</strong>, then <strong>View More</strong>,
+            then select <strong>Add to Home Screen</strong>.
+          </p>
+          <p class="installHelpSub">
+            Installing the icon lets the shell run full-screen and offline.
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 
