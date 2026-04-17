@@ -675,6 +675,7 @@ async function postShellQueueEntry_(queuedEntry) {
           eventType: queuedEntry.eventType || "",
           note: queuedEntry.note || "",
           submittedAtMs: queuedEntry.submittedAtMs || Date.now(),
+          syncSource: queuedEntry.source || "shell_queue",
         },
       }),
       cache: "no-store",
