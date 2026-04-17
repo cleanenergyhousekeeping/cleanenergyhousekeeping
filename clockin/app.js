@@ -683,9 +683,9 @@ function updateShellUi_() {
   hideElement_(installHelp);
   showElement_(offlineBtn);
 
-  if (online) {
-    showElement_(prepSection);
-    hideElement_(offlineEntrySection);
+ if (online) {
+  showElement_(prepSection);
+  showElement_(offlineEntrySection);
 
     const queueCount = getShellQueue_().length;
     const queueSuffix =
@@ -706,7 +706,7 @@ function updateShellUi_() {
       );
     }
 
-    setButtonState_("Open Live App", "online");
+    setButtonState_("Start", "online");
     return;
   }
 
@@ -767,11 +767,7 @@ window.addEventListener("offline", updateShellUi_);
 
 if (offlineBtn) {
   offlineBtn.addEventListener("click", function () {
-    if (navigator.onLine) {
-      openLiveApp_();
-      return;
-    }
-
+    // Always enter shell mode
     enterOfflineMode_();
   });
 }
