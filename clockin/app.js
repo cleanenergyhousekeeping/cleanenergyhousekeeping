@@ -13,13 +13,14 @@ const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
 /* begin[clockin_shell_dom_refs] */
 const statusText = document.getElementById("statusText");
 const offlineBtn = document.getElementById("offlineBtn");
-const clearShellBtn = document.getElementById("clearShellBtn");
 const installHelp = document.getElementById("installHelp");
+const prepSection = document.getElementById("prepSection");
+const prepCodeInput = document.getElementById("prepCodeInput");
+const loadPrepBtn = document.getElementById("loadPrepBtn");
 
 const offlineEntrySection = document.getElementById("offlineEntrySection");
 const offlineReadyText = document.getElementById("offlineReadyText");
 const offlineQueueCount = document.getElementById("offlineQueueCount");
-const offlineQueueDetails = document.getElementById("offlineQueueDetails");
 const offlineActionSelect = document.getElementById("offlineActionSelect");
 const offlinePropertySearch = document.getElementById("offlinePropertySearch");
 const offlinePropertyResults = document.getElementById("offlinePropertyResults");
@@ -75,137 +76,13 @@ function getShellQueue_() {
 }
 
 function saveShellQueue_(queue) {
-  localStorage.setItem(
-    SHELL_QUEUE_KEY,
-    JSON.stringify(Array.isArray(queue) ? queue : [])
-  );
+  localStorage.setItem(SHELL_QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
 }
 
-/* begin[live_queue_handoff_import_helpers] */
-function clearShellHash_() {
-  if (!window.location.hash) return;
-
-  const cleanUrl =
-    window.location.pathname + (window.location.search || "");
-
-  history.replaceState(null, "", cleanUrl);
-}
-
-function normalizeImportedShellEntry_(entry) {
-  return {
-    queuedId: String((entry && entry.queuedId) || ("import_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8))),
-    cleanerName: String((entry && entry.cleanerName) || ""),
-    submittedAtMs: Number((entry && entry.submittedAtMs) || Date.now()),
-    accessCode: String((entry && entry.accessCode) || ""),
-    sessionToken: String((entry && entry.sessionToken) || ""),
-    clientId: String((entry && entry.clientId) || ""),
-    property: String((entry && entry.property) || ""),
-    eventType: String((entry && entry.eventType) || ""),
-    note: String((entry && entry.note) || ""),
-    source: String((entry && entry.source) || "live_webapp"),
-  };
-}
-
-function applyImportedEntriesToShellAuth_(entries) {
-  const shellAuth = getShellAuth_();
-  if (!shellAuth || !Array.isArray(entries) || !entries.length) return;
-
-  entries.forEach(function (entry) {
-    if (entry.eventType === "clock_in") {
-      shellAuth.currentShift = {
-        property: entry.property || "",
-        clockInMs: Number(entry.submittedAtMs || Date.now()),
-        clockInDisplay: "",
-      };
-    }
-
-    if (entry.eventType === "clock_out") {
-      shellAuth.currentShift = null;
-    }
-  });
-
-  saveShellAuth_(shellAuth);
-}
-
-function importLiveQueueFromHash_() {
-  const rawHash = window.location.hash.replace(/^#/, "");
-  if (!rawHash) return 0;
-
-  const hashParams = new URLSearchParams(rawHash);
-  const rawImport = hashParams.get("importLiveQueue");
-
-  if (!rawImport) {
-    return 0;
-  }
-
-  try {
-    const parsed = JSON.parse(rawImport);
-    const importedEntries = Array.isArray(parsed && parsed.entries)
-      ? parsed.entries.map(normalizeImportedShellEntry_)
-      : [];
-
-    clearShellHash_();
-
-    if (!importedEntries.length) {
-      return 0;
-    }
-
-    const existingQueue = getShellQueue_();
-    const combinedQueue = importedEntries.concat(existingQueue);
-    const seenIds = new Set();
-    const dedupedQueue = [];
-
-    combinedQueue.forEach(function (item) {
-      const itemId = String((item && item.queuedId) || "");
-      if (!itemId || seenIds.has(itemId)) return;
-      seenIds.add(itemId);
-      dedupedQueue.push(item);
-    });
-
-    saveShellQueue_(dedupedQueue);
-    applyImportedEntriesToShellAuth_(importedEntries);
-
-    return importedEntries.length;
-  } catch (_) {
-    clearShellHash_();
-    return 0;
-  }
-}
-/* end[live_queue_handoff_import_helpers] */
-
-/* begin[set_status_text_with_debug_suffix] */
 function setStatusText_(text) {
   if (!statusText) return;
-
-  const baseText = text || "";
-  const debugText = getShellDebugSummary_();
-
-  statusText.textContent = baseText
-    ? baseText + " " + debugText
-    : debugText;
+  statusText.textContent = text || "";
 }
-/* end[set_status_text_with_debug_suffix] */
-/* begin[shell_debug_status_helper] */
-function getShellDebugSummary_() {
-  const shellAuth = getShellAuth_();
-  const queue = getShellQueue_();
-
-  const hasAuth = !!shellAuth;
-  const cleanerName = shellAuth && shellAuth.cleanerName
-    ? shellAuth.cleanerName
-    : "none";
-  const hasSessionToken = !!(shellAuth && shellAuth.sessionToken);
-  const hasClientId = !!(shellAuth && shellAuth.clientId);
-
-  return (
-    "[DEBUG] auth=" + (hasAuth ? "yes" : "no") +
-    " | cleaner=" + cleanerName +
-    " | sessionToken=" + (hasSessionToken ? "yes" : "no") +
-    " | clientId=" + (hasClientId ? "yes" : "no") +
-    " | queue=" + queue.length
-  );
-}
-/* end[shell_debug_status_helper] */
 
 function showElement_(el) {
   if (!el) return;
@@ -232,15 +109,6 @@ function setButtonState_(text, mode) {
   }
 }
 
-function scrollToBottom_() {
-  window.setTimeout(function () {
-    window.scrollTo({
-      top: document.body.scrollHeight,
-      behavior: "smooth",
-    });
-  }, 60);
-}
-
 function getShellProperties_(shellAuth) {
   return Array.isArray(shellAuth && shellAuth.properties) ? shellAuth.properties : [];
 }
@@ -258,51 +126,9 @@ function getCurrentPropertyText_(shellAuth) {
 }
 
 function updateOfflineQueueCount_() {
+  if (!offlineQueueCount) return;
   const queue = getShellQueue_();
-
-  if (offlineQueueCount) {
-    offlineQueueCount.textContent = "Queued entries: " + queue.length;
-  }
-
-  if (!offlineQueueDetails) return;
-
-  if (!queue.length) {
-    offlineQueueDetails.innerHTML = "";
-    hideElement_(offlineQueueDetails);
-    return;
-  }
-
-  offlineQueueDetails.innerHTML = queue
-    .map(function (item) {
-      const actionMap = {
-        clock_in: "Clock In",
-        add_note: "Add Cleaning Note",
-        clock_out: "Clock Out",
-      };
-
-      const actionText = actionMap[item.eventType] || (item.eventType || "—");
-      const timeText = new Date(item.submittedAtMs || Date.now()).toLocaleString([], {
-        month: "numeric",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      });
-
-      const noteHtml = item.note
-        ? '<div class="offlineQueueMeta">Note: ' + item.note + "</div>"
-        : "";
-
-      return (
-        '<div class="offlineQueueItem">' +
-          "<div><strong>" + actionText + "</strong> — " + (item.property || "—") + "</div>" +
-          '<div class="offlineQueueMeta">Saved: ' + timeText + "</div>" +
-          noteHtml +
-        "</div>"
-      );
-    })
-    .join("");
-
-  showElement_(offlineQueueDetails);
+  offlineQueueCount.textContent = "Queued entries: " + queue.length;
 }
 
 function updateOfflineReadyText_(shellAuth) {
@@ -319,8 +145,8 @@ function updateOfflineReadyText_(shellAuth) {
     return;
   }
 
- offlineReadyText.textContent =
-  "Offline mode is not ready yet on this phone. Please go online, open the live app, log in again if needed, and press Prepare Offline Mode.";
+  offlineReadyText.textContent =
+    "Offline mode is not ready yet on this phone. Please go online and load offline prep first.";
 }
 
 function clearOfflinePropertyResults_() {
@@ -427,56 +253,8 @@ function handleOfflinePropertySearch_() {
   showElement_(offlinePropertyResults);
 }
 
-/* begin[offline_action_options_keep_select_default] */
-function updateOfflineActionOptions_(shellAuth) {
-  if (!offlineActionSelect) return;
-
-  const isClockedIn = !!(shellAuth && shellAuth.currentShift);
-
-  const clockInOption = Array.from(offlineActionSelect.options).find(function (opt) {
-    return opt.value === "clock_in";
-  });
-
-  const noteOption = Array.from(offlineActionSelect.options).find(function (opt) {
-    return opt.value === "add_note";
-  });
-
-  const clockOutOption = Array.from(offlineActionSelect.options).find(function (opt) {
-    return opt.value === "clock_out";
-  });
-
-  function setOptionVisible_(option, isVisible) {
-    if (!option) return;
-    option.hidden = !isVisible;
-    option.disabled = !isVisible;
-  }
-
-  setOptionVisible_(clockInOption, !isClockedIn);
-  setOptionVisible_(noteOption, isClockedIn);
-  setOptionVisible_(clockOutOption, isClockedIn);
-
-  const selectedAction = (offlineActionSelect.value || "").trim();
-  const selectedStillAllowed =
-    selectedAction === "" ||
-    (selectedAction === "clock_in" && !isClockedIn) ||
-    ((selectedAction === "add_note" || selectedAction === "clock_out") && isClockedIn);
-
-  if (!selectedStillAllowed) {
-    offlineActionSelect.value = "";
-  }
-
-  if (offlineActionSelect.value === "add_note") {
-    showElement_(offlineNoteWrap);
-  } else {
-    hideElement_(offlineNoteWrap);
-  }
-}
-/* end[offline_action_options_keep_select_default] */
-
-/* begin[reset_offline_entry_form_force_select_default] */
 function resetOfflineEntryForm_(shellAuth) {
   if (offlineActionSelect) {
-    offlineActionSelect.selectedIndex = 0;
     offlineActionSelect.value = "";
   }
 
@@ -496,17 +274,12 @@ function resetOfflineEntryForm_(shellAuth) {
     offlineNoteInput.value = "";
   }
 
-  hideElement_(offlineNoteWrap);
-  updateOfflineActionOptions_(shellAuth);
-
-  if (offlineActionSelect) {
-    offlineActionSelect.selectedIndex = 0;
-    offlineActionSelect.value = "";
+  if (offlineNoteWrap) {
+    hideElement_(offlineNoteWrap);
   }
 
   clearOfflinePropertyResults_();
 }
-/* end[reset_offline_entry_form_force_select_default] */
 
 function saveOfflineEntry_() {
   const shellAuth = getShellAuth_();
@@ -568,7 +341,6 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   setStatusText_("Offline entry saved on this phone.");
-  scrollToBottom_();
 }
 /* begin[shell_refresh_and_sync_helpers] */
 async function refreshShellAuth_() {
@@ -675,7 +447,6 @@ async function postShellQueueEntry_(queuedEntry) {
           eventType: queuedEntry.eventType || "",
           note: queuedEntry.note || "",
           submittedAtMs: queuedEntry.submittedAtMs || Date.now(),
-          syncSource: queuedEntry.source || "shell_queue",
         },
       }),
       cache: "no-store",
@@ -817,92 +588,77 @@ async function syncShellQueue_() {
 /* end[shell_refresh_and_sync_helpers] */
 
 
+async function fetchPrepPayloadByCode_(code) {
+  const url =
+    APPS_SCRIPT_URL +
+    "?mode=getOfflineShellPrepByCode&code=" +
+    encodeURIComponent(code);
 
+  const response = await fetch(url, { method: "GET", cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Prep request failed.");
+  }
 
-/* begin[prepare_offline_mode_direct_post] */
-async function prepareOfflineMode_() {
-  const shellAuth = getShellAuth_() || {};
-  const sessionToken = shellAuth.sessionToken || "";
-  const clientId = shellAuth.clientId || "";
+  return response.json();
+}
 
-  if (!navigator.onLine) {
-    setStatusText_("No connection. Reconnect before preparing offline mode.");
-    setButtonState_("Offline Prep Needed", "offline");
+async function loadOfflinePrep_() {
+  const code = (prepCodeInput && prepCodeInput.value || "").trim();
+
+  if (!code) {
+    setStatusText_("Please enter the offline prep code.");
     return;
   }
 
-  if (!sessionToken) {
-    setStatusText_("Please open the live app and log in before preparing offline mode.");
-    setButtonState_("Open Live App", "online");
-    return;
+  setStatusText_("Loading offline prep...");
+  if (loadPrepBtn) {
+    loadPrepBtn.textContent = "Loading...";
+    loadPrepBtn.disabled = true;
   }
-
-  setButtonState_("Preparing...", "loading");
-  setStatusText_("Preparing offline mode on this phone...");
 
   try {
-    const response = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8",
-      },
-      body: JSON.stringify({
-        mode: "getOfflineShellPrepDirect",
-        payload: {
-          sessionToken: sessionToken,
-          clientId: clientId,
-        },
-      }),
-      cache: "no-store",
-    });
-
-    const rawText = await response.text();
-    let res = null;
-
-    try {
-      res = rawText ? JSON.parse(rawText) : null;
-    } catch (_) {
-      res = null;
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        "Offline prep HTTP " +
-          response.status +
-          (rawText ? " — " + rawText.slice(0, 200) : "")
-      );
-    }
+    const res = await fetchPrepPayloadByCode_(code);
 
     if (!res || !res.ok || !res.payload) {
       setStatusText_((res && res.message) || "Offline prep failed.");
-      setButtonState_("Prepare Offline Mode", "online");
       return;
     }
 
     saveShellAuth_(res.payload);
-    updateOfflineQueueCount_();
-    updateShellUi_();
-    setStatusText_("Offline mode is ready on this phone.");
-  } catch (error) {
+
+    const cleanerName = res.payload.cleanerName || "this cleaner";
+    const currentShiftText =
+      res.payload.currentShift && res.payload.currentShift.property
+        ? ` Current shift: ${res.payload.currentShift.property}.`
+        : "";
+
     setStatusText_(
-      "Offline prep failed: " +
-        ((error && error.message) || "Unknown error")
+      `Online. Offline mode is prepared for ${cleanerName}.${currentShiftText}`
     );
-    setButtonState_("Prepare Offline Mode", "online");
+
+    if (prepCodeInput) {
+      prepCodeInput.value = "";
+    }
+  } catch (_) {
+    setStatusText_("Offline prep failed. Please try again while online.");
+  } finally {
+    if (loadPrepBtn) {
+      loadPrepBtn.textContent = "Load Offline Prep";
+      loadPrepBtn.disabled = false;
+    }
+    updateShellUi_();
+    syncShellQueue_();
   }
 }
-/* end[prepare_offline_mode_direct_post] */
 
-function enterOfflineMode_() {
-  updateShellUi_();
-}
-
-/* begin[open_live_app_helper] */
 function openLiveApp_() {
   setButtonState_("Loading...", "loading");
   window.location.href = LIVE_APP_URL;
 }
-/* end[open_live_app_helper] */
+
+function enterOfflineMode_() {
+  updateShellUi_();
+}
 
 function updateShellUi_() {
   const standalone = isStandaloneMode_();
@@ -912,6 +668,7 @@ function updateShellUi_() {
   if (!standalone) {
     showElement_(installHelp);
     hideElement_(offlineBtn);
+    hideElement_(prepSection);
     hideElement_(offlineEntrySection);
 
     if (online) {
@@ -927,6 +684,7 @@ function updateShellUi_() {
   showElement_(offlineBtn);
 
   if (online) {
+    showElement_(prepSection);
     hideElement_(offlineEntrySection);
 
     const queueCount = getShellQueue_().length;
@@ -942,24 +700,17 @@ function updateShellUi_() {
       setStatusText_(
         `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}${queueSuffix}`
       );
-      setButtonState_("Open Live App", "online");
-      return;
-    }
-
-    if (shellAuth && shellAuth.sessionToken) {
+    } else {
       setStatusText_(
-        `Online. This phone is not prepared for offline mode yet. Tap below to prepare it now.${queueSuffix}`
+        `Online. Tap below to open the live app or load offline prep.${queueSuffix}`
       );
-      setButtonState_("Prepare Offline Mode", "online");
-      return;
     }
 
-    setStatusText_(
-      `Online. Open the live app and log in first, then come back here to prepare offline mode.${queueSuffix}`
-    );
     setButtonState_("Open Live App", "online");
     return;
   }
+
+  hideElement_(prepSection);
 
   if (shellAuth && shellAuth.cleanerName) {
     const currentShiftText =
@@ -980,10 +731,8 @@ function updateShellUi_() {
   }
 
   hideElement_(offlineEntrySection);
-  setStatusText_(
-  "No connection, and this phone has not been prepared for offline mode yet. Go online, open the live app, log in again if needed, and press Prepare Offline Mode."
-);
-  setButtonState_("Offline Prep Needed", "offline");
+  setStatusText_("No connection. Please use Offline Mode.");
+  setButtonState_("Enter Offline Mode", "offline");
 }
 /* end[clockin_shell_helpers] */
 
@@ -1019,18 +768,6 @@ window.addEventListener("offline", updateShellUi_);
 if (offlineBtn) {
   offlineBtn.addEventListener("click", function () {
     if (navigator.onLine) {
-      const shellAuth = getShellAuth_() || {};
-
-      if (shellAuth && shellAuth.cleanerName) {
-        openLiveApp_();
-        return;
-      }
-
-      if (shellAuth && shellAuth.sessionToken) {
-        prepareOfflineMode_();
-        return;
-      }
-
       openLiveApp_();
       return;
     }
@@ -1038,43 +775,10 @@ if (offlineBtn) {
     enterOfflineMode_();
   });
 }
-/* begin[debug_clear_shell_button] */
-if (clearShellBtn) {
-  clearShellBtn.addEventListener("click", function () {
-    const beforeAuthRaw = localStorage.getItem(SHELL_AUTH_KEY);
-    const beforeQueueRaw = localStorage.getItem(SHELL_QUEUE_KEY);
 
-    localStorage.removeItem(SHELL_AUTH_KEY);
-    localStorage.removeItem(SHELL_QUEUE_KEY);
-
-    const afterAuthRaw = localStorage.getItem(SHELL_AUTH_KEY);
-    const afterQueueRaw = localStorage.getItem(SHELL_QUEUE_KEY);
-
-    selectedOfflineProperty = null;
-    clearOfflinePropertyResults_();
-    hideOfflinePropertyInfo_();
-    updateOfflineQueueCount_();
-    updateShellUi_();
-
-    const beforeAuth = beforeAuthRaw ? "yes" : "no";
-    const afterAuth = afterAuthRaw ? "yes" : "no";
-    const beforeQueue = beforeQueueRaw ? "yes" : "no";
-    const afterQueue = afterQueueRaw ? "yes" : "no";
-
-    setStatusText_(
-      "Clear tapped. rawAuth before=" +
-        beforeAuth +
-        " after=" +
-        afterAuth +
-        " | rawQueue before=" +
-        beforeQueue +
-        " after=" +
-        afterQueue
-    );
-  });
+if (loadPrepBtn) {
+  loadPrepBtn.addEventListener("click", loadOfflinePrep_);
 }
-/* end[debug_clear_shell_button] */
-
 
 if (offlinePropertySearch) {
   offlinePropertySearch.addEventListener("input", handleOfflinePropertySearch_);
@@ -1094,8 +798,13 @@ document.addEventListener("click", function (event) {
 
 if (offlineActionSelect) {
   offlineActionSelect.addEventListener("change", function () {
-    const shellAuth = getShellAuth_();
-    updateOfflineActionOptions_(shellAuth);
+    const action = offlineActionSelect.value || "";
+
+    if (action === "add_note") {
+      showElement_(offlineNoteWrap);
+    } else {
+      hideElement_(offlineNoteWrap);
+    }
   });
 }
 
@@ -1110,17 +819,9 @@ document.addEventListener("DOMContentLoaded", async function () {
   setStatusText_("Preparing app shell...");
   await registerServiceWorker_();
 
-  const importedCount = importLiveQueueFromHash_();
-
-  if (importedCount > 0) {
-    setStatusText_("Imported " + importedCount + " live app entr" + (importedCount === 1 ? "y" : "ies") + " into this shell.");
-  } else {
-    setStatusText_(getShellDebugSummary_());
-  }
-
   if (navigator.onLine) {
+    setStatusText_("Refreshing session...");
     await refreshShellAuth_();
-    setStatusText_(getShellDebugSummary_());
   }
 
   updateShellUi_();
