@@ -39,12 +39,50 @@
           Enter Offline Mode
         </button>
       </div>
+      <div id="shellUnlockSection" class="prepCard hidden">
+        <div class="prepSectionTitle">Enter Access Code</div>
+        <div class="prepSectionText">
+          Enter your 4-digit PIN to unlock this phone.
+        </div>
 
+        <div id="pinDots" class="pinDots" aria-label="PIN entry display">
+          <div class="pinDot" data-pin-slot="0"></div>
+          <div class="pinDot" data-pin-slot="1"></div>
+          <div class="pinDot" data-pin-slot="2"></div>
+          <div class="pinDot" data-pin-slot="3"></div>
+        </div>
+
+        <input
+          id="shellAccessCode"
+          type="password"
+          inputmode="numeric"
+          maxlength="4"
+          autocomplete="off"
+          class="visuallyHiddenInput"
+          aria-hidden="true"
+          tabindex="-1"
+        />
+
+        <div class="keypad" id="shellKeypad">
+          <button type="button" class="keypadBtn" data-key="1">1</button>
+          <button type="button" class="keypadBtn" data-key="2">2</button>
+          <button type="button" class="keypadBtn" data-key="3">3</button>
+          <button type="button" class="keypadBtn" data-key="4">4</button>
+          <button type="button" class="keypadBtn" data-key="5">5</button>
+          <button type="button" class="keypadBtn" data-key="6">6</button>
+          <button type="button" class="keypadBtn" data-key="7">7</button>
+          <button type="button" class="keypadBtn" data-key="8">8</button>
+          <button type="button" class="keypadBtn" data-key="9">9</button>
+          <button type="button" class="keypadBtn keypadBtnAlt" id="shellClearPinBtn">Clear</button>
+          <button type="button" class="keypadBtn" data-key="0">0</button>
+          <button type="button" class="keypadBtn keypadBtnAlt" id="shellBackspacePinBtn">⌫</button>
+        </div>
+      </div>
       <div id="prepSection" class="prepCard hidden">
         <div class="prepSectionTitle">Prepare This Phone</div>
-        <div class="prepSectionText">
-          While online, either open the live app or enter an offline prep code.
-        </div>
+       <div class="prepSectionText">
+  While online, prepare this phone once. After that, you can unlock it here with your 4-digit PIN even when offline.
+</div>
 
         <input
           id="prepCodeInput"
