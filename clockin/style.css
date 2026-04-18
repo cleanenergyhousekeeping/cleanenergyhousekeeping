@@ -295,6 +295,68 @@ textarea::placeholder {
   word-break: break-word;
 }
 
+.pinDots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 10px 0 18px;
+}
+
+.pinDot {
+  height: 78px;
+  border: 2px solid #d8e2e8;
+  border-radius: 16px;
+  background: #f9fbfc;
+  position: relative;
+}
+
+.pinDot.filled::after {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #23343b;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.keypadBtn {
+  border: 1px solid #d8e2e8;
+  background: #ffffff;
+  color: #23343b;
+  min-height: 92px;
+  font-size: 34px;
+  font-weight: 600;
+  border-radius: 18px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.keypadBtn:active {
+  background: #eef4f8;
+}
+
+.keypadBtnAlt {
+  background: #f3f7fa;
+}
+
+.visuallyHiddenInput {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+
 .hidden {
   display: none !important;
 }
