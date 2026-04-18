@@ -140,7 +140,7 @@ function saveShellQueue_(queue) {
   localStorage.setItem(SHELL_QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
 }
 
-function startShellBackgroundSync_() {
+/* function startShellBackgroundSync_() {
   if (shellSyncTimer) {
     clearInterval(shellSyncTimer);
     shellSyncTimer = null;
@@ -159,7 +159,7 @@ function startShellBackgroundSync_() {
 
     syncShellQueue_();
   }, 5000);
-}
+} */
 
 function setStatusText_(text) {
   if (!statusText) return;
