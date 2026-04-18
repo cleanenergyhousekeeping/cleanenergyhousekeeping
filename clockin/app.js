@@ -42,6 +42,8 @@ const offlinePropertyInfoNotes = document.getElementById("offlinePropertyInfoNot
 const offlineNoteWrap = document.getElementById("offlineNoteWrap");
 const offlineNoteInput = document.getElementById("offlineNoteInput");
 const saveOfflineEntryBtn = document.getElementById("saveOfflineEntryBtn");
+const shellSyncHud = document.getElementById("shellSyncHud");
+const shellSyncHudDetail = document.getElementById("shellSyncHudDetail");
 /* end[clockin_shell_dom_refs] */
 
 
@@ -162,6 +164,56 @@ function startShellBackgroundSync_() {
 function setStatusText_(text) {
   if (!statusText) return;
   statusText.textContent = text || "";
+}
+
+function setShellEntryLocked_(locked) {
+  const isLocked = !!locked;
+
+  if (offlineActionSelect) {
+    offlineActionSelect.disabled = isLocked;
+    offlineActionSelect.classList.toggle("shellLocked", isLocked);
+  }
+
+  if (offlinePropertySearch) {
+    offlinePropertySearch.disabled = isLocked;
+    offlinePropertySearch.classList.toggle("shellLocked", isLocked);
+  }
+
+  if (offlineNoteInput) {
+    offlineNoteInput.disabled = isLocked;
+    offlineNoteInput.classList.toggle("shellLocked", isLocked);
+  }
+
+  if (saveOfflineEntryBtn) {
+    saveOfflineEntryBtn.disabled = isLocked;
+    saveOfflineEntryBtn.classList.toggle("shellLocked", isLocked);
+  }
+}
+
+function showShellSyncHud_(detailText) {
+  setShellEntryLocked_(true);
+
+  if (shellSyncHudDetail) {
+    shellSyncHudDetail.textContent = detailText || "Please wait...";
+  }
+
+  if (shellSyncHud) {
+    shellSyncHud.classList.remove("hidden");
+    shellSyncHud.setAttribute("aria-hidden", "false");
+  }
+}
+
+function hideShellSyncHud_() {
+  setShellEntryLocked_(false);
+
+  if (shellSyncHud) {
+    shellSyncHud.classList.add("hidden");
+    shellSyncHud.setAttribute("aria-hidden", "true");
+  }
+
+  if (shellSyncHudDetail) {
+    shellSyncHudDetail.textContent = "Please wait...";
+  }
 }
 
 function showElement_(el) {
@@ -387,9 +439,10 @@ function saveOfflineEntry_() {
   }
   
   if (shellSyncInProgress) {
-  setStatusText_("Please wait — syncing previous entry...");
-  return;
-}
+    showShellSyncHud_("Previous entry is still syncing...");
+    setStatusText_("Please wait — syncing previous entry...");
+    return;
+  }
 
   const queue = getShellQueue_();
   queue.push({
@@ -580,6 +633,7 @@ async function syncShellQueue_() {
   if (!initialQueue.length) return;
 
   shellSyncInProgress = true;
+  showShellSyncHud_("Please wait...");
 
   let finalStatusMessage = "";
 
@@ -615,6 +669,11 @@ async function syncShellQueue_() {
         " at " +
         (nextEntry.property || "?");
       setStatusText_(finalStatusMessage);
+      showShellSyncHud_(
+        (nextEntry.eventType || "entry") +
+          " • " +
+          (nextEntry.property || "Property")
+      );
 
       const response = await postShellQueueEntry_(nextEntry);
 
@@ -661,6 +720,7 @@ async function syncShellQueue_() {
     setStatusText_(finalStatusMessage);
   } finally {
     shellSyncInProgress = false;
+    hideShellSyncHud_();
     updateOfflineQueueCount_();
 
     const queueRemaining = getShellQueue_().length;
