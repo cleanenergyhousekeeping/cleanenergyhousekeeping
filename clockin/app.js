@@ -733,6 +733,12 @@ async function syncShellQueue_() {
           : " Queue remaining: 0";
       setStatusText_(finalStatusMessage + suffix);
     }
+
+    if (queueRemaining > 0 && navigator.onLine) {
+      setTimeout(function () {
+        retryQueuedSyncIfReady_();
+      }, 1500);
+    }
   }
 }
 /* end[shell_refresh_and_sync_helpers] */
