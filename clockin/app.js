@@ -41,6 +41,7 @@ const saveOfflineEntryBtn = document.getElementById("saveOfflineEntryBtn");
 let selectedOfflineProperty = null;
 /* end[clockin_shell_state] */
 let shellSyncInProgress = false;
+let shellSyncTimer = null;
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -77,6 +78,27 @@ function getShellQueue_() {
 
 function saveShellQueue_(queue) {
   localStorage.setItem(SHELL_QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
+}
+
+function startShellBackgroundSync_() {
+  if (shellSyncTimer) {
+    clearInterval(shellSyncTimer);
+    shellSyncTimer = null;
+  }
+
+  shellSyncTimer = setInterval(function () {
+    const queue = getShellQueue_();
+
+    if (!queue.length) {
+      return;
+    }
+
+    if (!navigator.onLine) {
+      return;
+    }
+
+    syncShellQueue_();
+  }, 5000);
 }
 
 function setStatusText_(text) {
@@ -341,7 +363,12 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   setStatusText_("Offline entry saved on this phone.");
+
+  if (navigator.onLine) {
+    syncShellQueue_();
+  }
 }
+
 /* begin[shell_refresh_and_sync_helpers] */
 async function refreshShellAuth_() {
   const shellAuth = getShellAuth_() || {};
@@ -822,6 +849,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   updateShellUi_();
   updateOfflineQueueCount_();
+  startShellBackgroundSync_();
   syncShellQueue_();
 });
 /* end[clockin_shell_init] */
