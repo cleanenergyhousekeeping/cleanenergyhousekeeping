@@ -2,6 +2,8 @@
 const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec";
 
+const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";
+
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec";
 
@@ -850,7 +852,8 @@ async function loadOfflinePrep_() {
   /* begin[redirect_to_live_app_for_prep_when_not_authenticated] */
 if (!shellAuth.sessionToken || !shellAuth.clientId || !shellAuth.cleanerName) {
   setStatusText_("Opening Clean Energy app to prepare this phone...");
-  openLiveApp_();
+  setButtonState_("Loading...", "loading");
+  window.location.href = LIVE_APP_PREP_URL;
   return;
 }
 /* end[redirect_to_live_app_for_prep_when_not_authenticated] */
