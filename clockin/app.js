@@ -14,15 +14,8 @@ const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
 const statusText = document.getElementById("statusText");
 const offlineBtn = document.getElementById("offlineBtn");
 const installHelp = document.getElementById("installHelp");
-
-const shellUnlockSection = document.getElementById("shellUnlockSection");
-const shellAccessCode = document.getElementById("shellAccessCode");
-const shellClearPinBtn = document.getElementById("shellClearPinBtn");
-const shellBackspacePinBtn = document.getElementById("shellBackspacePinBtn");
-const shellPinDots = Array.from(document.querySelectorAll("[data-pin-slot]"));
-const shellKeypadButtons = Array.from(document.querySelectorAll("#shellKeypad [data-key]"));
-
 const prepSection = document.getElementById("prepSection");
+const prepCodeInput = document.getElementById("prepCodeInput");
 const loadPrepBtn = document.getElementById("loadPrepBtn");
 
 const offlineEntrySection = document.getElementById("offlineEntrySection");
@@ -41,19 +34,13 @@ const offlinePropertyInfoNotes = document.getElementById("offlinePropertyInfoNot
 const offlineNoteWrap = document.getElementById("offlineNoteWrap");
 const offlineNoteInput = document.getElementById("offlineNoteInput");
 const saveOfflineEntryBtn = document.getElementById("saveOfflineEntryBtn");
-const shellSyncHud = document.getElementById("shellSyncHud");
-const shellSyncHudDetail = document.getElementById("shellSyncHudDetail");
 /* end[clockin_shell_dom_refs] */
 
 
 /* begin[clockin_shell_state] */
 let selectedOfflineProperty = null;
-let shellEnteredPin = "";
-let shellUnlocked = false;
-const SHELL_PIN_LENGTH = 4;
 /* end[clockin_shell_state] */
 let shellSyncInProgress = false;
-let shellSyncTimer = null;
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -76,54 +63,7 @@ function getShellAuth_() {
 function saveShellAuth_(payload) {
   localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(payload));
 }
-async function hashShellPin_(pin) {
-  const normalized = String(pin || "").replace(/\D/g, "").trim();
-  if (!normalized) return "";
 
-  const encoder = new TextEncoder();
-  const data = encoder.encode(normalized);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  const bytes = Array.from(new Uint8Array(digest));
-
-  return bytes.map(function (b) {
-    return b.toString(16).padStart(2, "0");
-  }).join("");
-}
-
-function updateShellPinDots_() {
-  shellPinDots.forEach(function (dot, index) {
-    if (index < shellEnteredPin.length) {
-      dot.classList.add("filled");
-    } else {
-      dot.classList.remove("filled");
-    }
-  });
-
-  if (shellAccessCode) {
-    shellAccessCode.value = shellEnteredPin;
-  }
-}
-
-function clearShellPin_() {
-  shellEnteredPin = "";
-  updateShellPinDots_();
-}
-
-function appendShellPinDigit_(digit) {
-  if (shellEnteredPin.length >= SHELL_PIN_LENGTH) return;
-
-  shellEnteredPin += String(digit);
-  updateShellPinDots_();
-
-  if (shellEnteredPin.length === SHELL_PIN_LENGTH) {
-    unlockShellWithPin_();
-  }
-}
-
-function backspaceShellPin_() {
-  shellEnteredPin = shellEnteredPin.slice(0, -1);
-  updateShellPinDots_();
-}
 function getShellQueue_() {
   try {
     const raw = localStorage.getItem(SHELL_QUEUE_KEY);
@@ -139,80 +79,9 @@ function saveShellQueue_(queue) {
   localStorage.setItem(SHELL_QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
 }
 
-/* function startShellBackgroundSync_() {
-  if (shellSyncTimer) {
-    clearInterval(shellSyncTimer);
-    shellSyncTimer = null;
-  }
-
-  shellSyncTimer = setInterval(function () {
-    const queue = getShellQueue_();
-
-    if (!queue.length) {
-      return;
-    }
-
-    if (!navigator.onLine) {
-      return;
-    }
-
-    syncShellQueue_();
-  }, 5000);
-} */
-
 function setStatusText_(text) {
   if (!statusText) return;
   statusText.textContent = text || "";
-}
-
-function setShellEntryLocked_(locked) {
-  const isLocked = !!locked;
-
-  if (offlineActionSelect) {
-    offlineActionSelect.disabled = isLocked;
-    offlineActionSelect.classList.toggle("shellLocked", isLocked);
-  }
-
-  if (offlinePropertySearch) {
-    offlinePropertySearch.disabled = isLocked;
-    offlinePropertySearch.classList.toggle("shellLocked", isLocked);
-  }
-
-  if (offlineNoteInput) {
-    offlineNoteInput.disabled = isLocked;
-    offlineNoteInput.classList.toggle("shellLocked", isLocked);
-  }
-
-  if (saveOfflineEntryBtn) {
-    saveOfflineEntryBtn.disabled = isLocked;
-    saveOfflineEntryBtn.classList.toggle("shellLocked", isLocked);
-  }
-}
-
-function showShellSyncHud_(detailText) {
-  setShellEntryLocked_(true);
-
-  if (shellSyncHudDetail) {
-    shellSyncHudDetail.textContent = detailText || "Please wait...";
-  }
-
-  if (shellSyncHud) {
-    shellSyncHud.classList.remove("hidden");
-    shellSyncHud.setAttribute("aria-hidden", "false");
-  }
-}
-
-function hideShellSyncHud_() {
-  setShellEntryLocked_(false);
-
-  if (shellSyncHud) {
-    shellSyncHud.classList.add("hidden");
-    shellSyncHud.setAttribute("aria-hidden", "true");
-  }
-
-  if (shellSyncHudDetail) {
-    shellSyncHudDetail.textContent = "Please wait...";
-  }
 }
 
 function showElement_(el) {
@@ -436,12 +305,6 @@ function saveOfflineEntry_() {
     setStatusText_("Please enter a cleaning note.");
     return;
   }
-  
-  if (shellSyncInProgress) {
-    showShellSyncHud_("Previous entry is still syncing...");
-    setStatusText_("Please wait — syncing previous entry...");
-    return;
-  }
 
   const queue = getShellQueue_();
   queue.push({
@@ -478,12 +341,7 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   setStatusText_("Offline entry saved on this phone.");
-
-  if (navigator.onLine) {
-    syncShellQueue_();
-  }
 }
-
 /* begin[shell_refresh_and_sync_helpers] */
 async function refreshShellAuth_() {
   const shellAuth = getShellAuth_() || {};
@@ -626,12 +484,12 @@ async function postShellQueueEntry_(queuedEntry) {
 
 async function syncShellQueue_() {
   if (shellSyncInProgress) return;
+  if (!navigator.onLine) return;
 
   const initialQueue = getShellQueue_();
   if (!initialQueue.length) return;
 
   shellSyncInProgress = true;
-  showShellSyncHud_("Please wait...");
 
   let finalStatusMessage = "";
 
@@ -667,11 +525,6 @@ async function syncShellQueue_() {
         " at " +
         (nextEntry.property || "?");
       setStatusText_(finalStatusMessage);
-      showShellSyncHud_(
-        (nextEntry.eventType || "entry") +
-          " • " +
-          (nextEntry.property || "Property")
-      );
 
       const response = await postShellQueueEntry_(nextEntry);
 
@@ -718,7 +571,6 @@ async function syncShellQueue_() {
     setStatusText_(finalStatusMessage);
   } finally {
     shellSyncInProgress = false;
-    hideShellSyncHud_();
     updateOfflineQueueCount_();
 
     const queueRemaining = getShellQueue_().length;
@@ -731,181 +583,73 @@ async function syncShellQueue_() {
           : " Queue remaining: 0";
       setStatusText_(finalStatusMessage + suffix);
     }
-
-    if (queueRemaining > 0) {
-      setTimeout(function () {
-        retryQueuedSyncIfReady_();
-      }, 1500);
-    }
   }
 }
 /* end[shell_refresh_and_sync_helpers] */
 
-async function unlockShellWithPin_() {
-  const shellAuth = getShellAuth_() || {};
-  const enteredPin = shellEnteredPin.trim();
 
-  if (!shellAuth || !shellAuth.pinHash) {
-    clearShellPin_();
-    setStatusText_("This phone is not ready yet. Go online and prepare it first.");
-    return;
-  }
+async function fetchPrepPayloadByCode_(code) {
+  const url =
+    APPS_SCRIPT_URL +
+    "?mode=getOfflineShellPrepByCode&code=" +
+    encodeURIComponent(code);
 
-  if (!enteredPin) {
-    setStatusText_("Please enter your access code.");
-    return;
-  }
-
-  setStatusText_("Checking access code...");
-
-  try {
-    const enteredHash = await hashShellPin_(enteredPin);
-
-    if (!enteredHash || enteredHash !== String(shellAuth.pinHash || "")) {
-      clearShellPin_();
-      setStatusText_("Invalid access code.");
-      return;
-    }
-
-    shellUnlocked = true;
-    clearShellPin_();
-    updateShellUi_();
-    updateOfflineQueueCount_();
-    resetOfflineEntryForm_(shellAuth);
-
-    const cleanerName = shellAuth.cleanerName || "Cleaner";
-    setStatusText_("Unlocked for " + cleanerName + ".");
-  } catch (error) {
-    clearShellPin_();
-    setStatusText_(
-      "PIN check failed: " +
-        ((error && error.message) || String(error) || "Unknown error")
-    );
-  }
-}
-/* begin[shell_token_prep_flow] */
-const OFFLINE_SHELL_SEED_URL =
-  "https://www.cleanenergyhousekeeping.com/clockin/seed.html";
-
-function buildShellSeedPayload_() {
-  const shellAuth = getShellAuth_() || {};
-
-  return {
-    cleanerName: String(shellAuth.cleanerName || ""),
-    accessLevel: String(shellAuth.accessLevel || "LIMITED"),
-    currentShift: shellAuth.currentShift || null,
-    properties: Array.isArray(shellAuth.properties) ? shellAuth.properties : [],
-    sessionToken: String(shellAuth.sessionToken || ""),
-    clientId: String(shellAuth.clientId || ""),
-    seededAtMs: Date.now(),
-  };
-}
-
-async function requestShellPrepToken_(payload) {
-  const response = await fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8",
-    },
-    body: JSON.stringify({
-      mode: "createOfflineShellPrepToken",
-      payload: payload,
-      sessionToken: String((payload && payload.sessionToken) || ""),
-    }),
-    cache: "no-store",
-  });
-
-  const rawText = await response.text();
-  let parsed = null;
-
-  try {
-    parsed = rawText ? JSON.parse(rawText) : null;
-  } catch (_) {
-    parsed = null;
-  }
-
+  const response = await fetch(url, { method: "GET", cache: "no-store" });
   if (!response.ok) {
-    throw new Error(
-      "Prep token request failed: " +
-        response.status +
-        (rawText ? " — " + rawText.slice(0, 200) : "")
-    );
+    throw new Error("Prep request failed.");
   }
 
-  if (!parsed || !parsed.ok || !parsed.token) {
-    throw new Error((parsed && parsed.message) || "Could not prepare this phone.");
-  }
-
-  return parsed;
+  return response.json();
 }
 
 async function loadOfflinePrep_() {
-  const shellAuth = getShellAuth_() || {};
+  const code = (prepCodeInput && prepCodeInput.value || "").trim();
 
-  if (!navigator.onLine) {
-    setStatusText_("No connection. Reconnect before preparing this phone.");
+  if (!code) {
+    setStatusText_("Please enter the offline prep code.");
     return;
   }
 
-  if (!shellAuth.sessionToken || !shellAuth.clientId || !shellAuth.cleanerName) {
-    setStatusText_("Please log in online first so this phone can be prepared.");
-    return;
-  }
-
-  setStatusText_("Preparing this phone...");
+  setStatusText_("Loading offline prep...");
   if (loadPrepBtn) {
-    loadPrepBtn.textContent = "Preparing...";
+    loadPrepBtn.textContent = "Loading...";
     loadPrepBtn.disabled = true;
   }
 
   try {
-    const payload = buildShellSeedPayload_();
-    const res = await requestShellPrepToken_(payload);
-    const seedUrl = OFFLINE_SHELL_SEED_URL + "#token=" + encodeURIComponent(res.token);
+    const res = await fetchPrepPayloadByCode_(code);
 
-    const seedWindow = window.open(seedUrl, "_blank");
-
-    if (!seedWindow) {
-      throw new Error("Popup blocked. Please allow popups and try again.");
+    if (!res || !res.ok || !res.payload) {
+      setStatusText_((res && res.message) || "Offline prep failed.");
+      return;
     }
 
-    let finished = false;
+    saveShellAuth_(res.payload);
 
-    function finishShellPrepSuccess_() {
-      if (finished) return;
-      finished = true;
-      window.removeEventListener("message", handleShellSeedMessage_);
-      setStatusText_("Offline mode prepared on this phone.");
-      updateShellUi_();
-      syncShellQueue_();
-    }
+    const cleanerName = res.payload.cleanerName || "this cleaner";
+    const currentShiftText =
+      res.payload.currentShift && res.payload.currentShift.property
+        ? ` Current shift: ${res.payload.currentShift.property}.`
+        : "";
 
-    function handleShellSeedMessage_(event) {
-      if (!event || !event.data || event.data.type !== "shell-seed-saved") {
-        return;
-      }
-
-      finishShellPrepSuccess_();
-    }
-
-    window.addEventListener("message", handleShellSeedMessage_);
-
-    setTimeout(function () {
-      finishShellPrepSuccess_();
-    }, 2500);
-  } catch (error) {
     setStatusText_(
-      "Offline prep failed: " +
-        ((error && error.message) || String(error) || "Unknown error")
+      `Online. Offline mode is prepared for ${cleanerName}.${currentShiftText}`
     );
+
+    if (prepCodeInput) {
+      prepCodeInput.value = "";
+    }
+  } catch (_) {
+    setStatusText_("Offline prep failed. Please try again while online.");
   } finally {
     if (loadPrepBtn) {
-      loadPrepBtn.textContent = "Prepare This Phone";
+      loadPrepBtn.textContent = "Load Offline Prep";
       loadPrepBtn.disabled = false;
     }
+    updateShellUi_();
+    syncShellQueue_();
   }
 }
-/* end[shell_token_prep_flow] */
 
 function openLiveApp_() {
   setButtonState_("Loading...", "loading");
@@ -924,7 +668,6 @@ function updateShellUi_() {
   if (!standalone) {
     showElement_(installHelp);
     hideElement_(offlineBtn);
-    hideElement_(shellUnlockSection);
     hideElement_(prepSection);
     hideElement_(offlineEntrySection);
 
@@ -938,60 +681,58 @@ function updateShellUi_() {
   }
 
   hideElement_(installHelp);
-  hideElement_(offlineBtn);
+  showElement_(offlineBtn);
 
-  if (shellAuth && shellAuth.cleanerName) {
-    if (!shellUnlocked) {
-      showElement_(shellUnlockSection);
-      hideElement_(prepSection);
-      hideElement_(offlineEntrySection);
-
-      setStatusText_(
-        online
-          ? "Phone is prepared. Enter your access code to unlock."
-          : "Offline mode is ready. Enter your access code to unlock."
-      );
-      return;
-    }
-
-    hideElement_(shellUnlockSection);
-
-    if (online) {
-      showElement_(prepSection);
-    } else {
-      hideElement_(prepSection);
-    }
-
-    showElement_(offlineEntrySection);
-
-    const currentShiftText =
-      shellAuth.currentShift && shellAuth.currentShift.property
-        ? ` Current shift: ${shellAuth.currentShift.property}.`
-        : "";
+  if (online) {
+    showElement_(prepSection);
+    hideElement_(offlineEntrySection);
 
     const queueCount = getShellQueue_().length;
     const queueSuffix =
       queueCount > 0 ? ` Queued entries: ${queueCount}.` : "";
 
+    if (shellAuth && shellAuth.cleanerName) {
+      const currentShiftText =
+        shellAuth.currentShift && shellAuth.currentShift.property
+          ? ` Current shift: ${shellAuth.currentShift.property}.`
+          : "";
+
+      setStatusText_(
+        `Online. Offline mode is prepared for ${shellAuth.cleanerName}.${currentShiftText}${queueSuffix}`
+      );
+    } else {
+      setStatusText_(
+        `Online. Tap below to open the live app or load offline prep.${queueSuffix}`
+      );
+    }
+
+    setButtonState_("Open Live App", "online");
+    return;
+  }
+
+  hideElement_(prepSection);
+
+  if (shellAuth && shellAuth.cleanerName) {
+    const currentShiftText =
+      shellAuth.currentShift && shellAuth.currentShift.property
+        ? ` Current shift: ${shellAuth.currentShift.property}.`
+        : "";
+
     setStatusText_(
-      `${online ? "Online" : "Offline"} ready for ${shellAuth.cleanerName}.${currentShiftText}${queueSuffix}`
+      `No signal detected. Offline mode is ready for ${shellAuth.cleanerName}.${currentShiftText}`
     );
 
+    hideElement_(offlineBtn);
+    showElement_(offlineEntrySection);
     updateOfflineReadyText_(shellAuth);
     updateOfflineQueueCount_();
     resetOfflineEntryForm_(shellAuth);
     return;
   }
 
-  hideElement_(shellUnlockSection);
   hideElement_(offlineEntrySection);
-  showElement_(prepSection);
-
-  if (online) {
-    setStatusText_("Go online once and prepare this phone.");
-  } else {
-    setStatusText_("No connection. This phone is not ready yet. Go online once and prepare it first.");
-  }
+  setStatusText_("No connection. Please use Offline Mode.");
+  setButtonState_("Enter Offline Mode", "offline");
 }
 /* end[clockin_shell_helpers] */
 
@@ -1024,71 +765,14 @@ window.addEventListener("online", function () {
 
 window.addEventListener("offline", updateShellUi_);
 
-function retryQueuedSyncIfReady_() {
-  updateShellUi_();
-
-  if (shellSyncInProgress) {
-    return;
-  }
-
-  const queue = getShellQueue_();
-  if (!queue.length) {
-    return;
-  }
-
-  syncShellQueue_();
-}
-
-document.addEventListener("visibilitychange", function () {
-  if (document.visibilityState !== "visible") {
-    return;
-  }
-
-  retryQueuedSyncIfReady_();
-
-  setTimeout(function () {
-    retryQueuedSyncIfReady_();
-  }, 900);
-});
-
-window.addEventListener("pageshow", function () {
-  retryQueuedSyncIfReady_();
-
-  setTimeout(function () {
-    retryQueuedSyncIfReady_();
-  }, 900);
-});
-
-window.addEventListener("focus", function () {
-  retryQueuedSyncIfReady_();
-
-  setTimeout(function () {
-    retryQueuedSyncIfReady_();
-  }, 900);
-});
-
 if (offlineBtn) {
   offlineBtn.addEventListener("click", function () {
-    // Always enter shell mode
+    if (navigator.onLine) {
+      openLiveApp_();
+      return;
+    }
+
     enterOfflineMode_();
-  });
-}
-
-shellKeypadButtons.forEach(function (btn) {
-  btn.addEventListener("click", function () {
-    appendShellPinDigit_(btn.getAttribute("data-key"));
-  });
-});
-
-if (shellClearPinBtn) {
-  shellClearPinBtn.addEventListener("click", function () {
-    clearShellPin_();
-  });
-}
-
-if (shellBackspacePinBtn) {
-  shellBackspacePinBtn.addEventListener("click", function () {
-    backspaceShellPin_();
   });
 }
 
@@ -1132,8 +816,6 @@ if (saveOfflineEntryBtn) {
 
 /* begin[clockin_shell_init] */
 document.addEventListener("DOMContentLoaded", async function () {
-  shellUnlocked = false;
-  clearShellPin_();
   setStatusText_("Preparing app shell...");
   await registerServiceWorker_();
 
