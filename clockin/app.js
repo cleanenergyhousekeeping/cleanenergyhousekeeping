@@ -959,16 +959,8 @@ window.addEventListener("online", function () {
 
 window.addEventListener("offline", updateShellUi_);
 
-document.addEventListener("visibilitychange", function () {
-  if (document.visibilityState !== "visible") {
-    return;
-  }
-
+function retryQueuedSyncIfReady_() {
   updateShellUi_();
-
-  if (!navigator.onLine) {
-    return;
-  }
 
   if (shellSyncInProgress) {
     return;
@@ -979,7 +971,39 @@ document.addEventListener("visibilitychange", function () {
     return;
   }
 
+  if (!navigator.onLine) {
+    return;
+  }
+
   syncShellQueue_();
+}
+
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState !== "visible") {
+    return;
+  }
+
+  retryQueuedSyncIfReady_();
+
+  setTimeout(function () {
+    retryQueuedSyncIfReady_();
+  }, 900);
+});
+
+window.addEventListener("pageshow", function () {
+  retryQueuedSyncIfReady_();
+
+  setTimeout(function () {
+    retryQueuedSyncIfReady_();
+  }, 900);
+});
+
+window.addEventListener("focus", function () {
+  retryQueuedSyncIfReady_();
+
+  setTimeout(function () {
+    retryQueuedSyncIfReady_();
+  }, 900);
 });
 
 if (offlineBtn) {
