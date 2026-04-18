@@ -405,13 +405,6 @@ textarea::placeholder {
   display: none !important;
 }
 
-/* begin[hide_obsolete_manual_prep_ui] */
-#prepSection,
-.obsoletePrepSection {
-  display: none !important;
-}
-/* end[hide_obsolete_manual_prep_ui] */
-
 @media (min-width: 760px) {
   .card {
     margin: 0 auto;
