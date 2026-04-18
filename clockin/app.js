@@ -627,7 +627,6 @@ async function postShellQueueEntry_(queuedEntry) {
 
 async function syncShellQueue_() {
   if (shellSyncInProgress) return;
-  if (!navigator.onLine) return;
 
   const initialQueue = getShellQueue_();
   if (!initialQueue.length) return;
@@ -734,7 +733,7 @@ async function syncShellQueue_() {
       setStatusText_(finalStatusMessage + suffix);
     }
 
-    if (queueRemaining > 0 && navigator.onLine) {
+    if (queueRemaining > 0) {
       setTimeout(function () {
         retryQueuedSyncIfReady_();
       }, 1500);
@@ -974,10 +973,6 @@ function retryQueuedSyncIfReady_() {
 
   const queue = getShellQueue_();
   if (!queue.length) {
-    return;
-  }
-
-  if (!navigator.onLine) {
     return;
   }
 
