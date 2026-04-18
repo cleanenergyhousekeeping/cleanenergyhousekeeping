@@ -385,6 +385,11 @@ function saveOfflineEntry_() {
     setStatusText_("Please enter a cleaning note.");
     return;
   }
+  
+  if (shellSyncInProgress) {
+  setStatusText_("Please wait — syncing previous entry...");
+  return;
+}
 
   const queue = getShellQueue_();
   queue.push({
@@ -971,7 +976,6 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   updateShellUi_();
   updateOfflineQueueCount_();
-  startShellBackgroundSync_();
   syncShellQueue_();
 });
 /* end[clockin_shell_init] */
