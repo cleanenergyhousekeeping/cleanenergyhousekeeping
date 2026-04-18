@@ -959,6 +959,29 @@ window.addEventListener("online", function () {
 
 window.addEventListener("offline", updateShellUi_);
 
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState !== "visible") {
+    return;
+  }
+
+  updateShellUi_();
+
+  if (!navigator.onLine) {
+    return;
+  }
+
+  if (shellSyncInProgress) {
+    return;
+  }
+
+  const queue = getShellQueue_();
+  if (!queue.length) {
+    return;
+  }
+
+  syncShellQueue_();
+});
+
 if (offlineBtn) {
   offlineBtn.addEventListener("click", function () {
     // Always enter shell mode
