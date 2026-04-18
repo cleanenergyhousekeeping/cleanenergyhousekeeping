@@ -847,10 +847,13 @@ async function loadOfflinePrep_() {
     return;
   }
 
-  if (!shellAuth.sessionToken || !shellAuth.clientId || !shellAuth.cleanerName) {
-    setStatusText_("Please log in online first so this phone can be prepared.");
-    return;
-  }
+  /* begin[redirect_to_live_app_for_prep_when_not_authenticated] */
+if (!shellAuth.sessionToken || !shellAuth.clientId || !shellAuth.cleanerName) {
+  setStatusText_("Opening Clean Energy app to prepare this phone...");
+  openLiveApp_();
+  return;
+}
+/* end[redirect_to_live_app_for_prep_when_not_authenticated] */
 
   setStatusText_("Preparing this phone...");
   if (loadPrepBtn) {
