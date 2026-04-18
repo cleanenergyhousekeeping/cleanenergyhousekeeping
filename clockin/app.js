@@ -23,7 +23,6 @@ const shellPinDots = Array.from(document.querySelectorAll("[data-pin-slot]"));
 const shellKeypadButtons = Array.from(document.querySelectorAll("#shellKeypad [data-key]"));
 
 const prepSection = document.getElementById("prepSection");
-const prepCodeInput = document.getElementById("prepCodeInput");
 const loadPrepBtn = document.getElementById("loadPrepBtn");
 
 const offlineEntrySection = document.getElementById("offlineEntrySection");
@@ -784,68 +783,129 @@ async function unlockShellWithPin_() {
     );
   }
 }
-async function fetchPrepPayloadByCode_(code) {
-  const url =
-    APPS_SCRIPT_URL +
-    "?mode=getOfflineShellPrepByCode&code=" +
-    encodeURIComponent(code);
+/* begin[shell_token_prep_flow] */
+const OFFLINE_SHELL_SEED_URL =
+  "https://www.cleanenergyhousekeeping.com/clockin/seed.html";
 
-  const response = await fetch(url, { method: "GET", cache: "no-store" });
-  if (!response.ok) {
-    throw new Error("Prep request failed.");
+function buildShellSeedPayload_() {
+  const shellAuth = getShellAuth_() || {};
+
+  return {
+    cleanerName: String(shellAuth.cleanerName || ""),
+    accessLevel: String(shellAuth.accessLevel || "LIMITED"),
+    currentShift: shellAuth.currentShift || null,
+    properties: Array.isArray(shellAuth.properties) ? shellAuth.properties : [],
+    sessionToken: String(shellAuth.sessionToken || ""),
+    clientId: String(shellAuth.clientId || ""),
+    seededAtMs: Date.now(),
+  };
+}
+
+async function requestShellPrepToken_(payload) {
+  const response = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify({
+      mode: "createOfflineShellPrepToken",
+      payload: payload,
+      sessionToken: String((payload && payload.sessionToken) || ""),
+    }),
+    cache: "no-store",
+  });
+
+  const rawText = await response.text();
+  let parsed = null;
+
+  try {
+    parsed = rawText ? JSON.parse(rawText) : null;
+  } catch (_) {
+    parsed = null;
   }
 
-  return response.json();
+  if (!response.ok) {
+    throw new Error(
+      "Prep token request failed: " +
+        response.status +
+        (rawText ? " — " + rawText.slice(0, 200) : "")
+    );
+  }
+
+  if (!parsed || !parsed.ok || !parsed.token) {
+    throw new Error((parsed && parsed.message) || "Could not prepare this phone.");
+  }
+
+  return parsed;
 }
 
 async function loadOfflinePrep_() {
-  const code = (prepCodeInput && prepCodeInput.value || "").trim();
+  const shellAuth = getShellAuth_() || {};
 
-  if (!code) {
-    setStatusText_("Please enter the offline prep code.");
+  if (!navigator.onLine) {
+    setStatusText_("No connection. Reconnect before preparing this phone.");
     return;
   }
 
-  setStatusText_("Loading offline prep...");
+  if (!shellAuth.sessionToken || !shellAuth.clientId || !shellAuth.cleanerName) {
+    setStatusText_("Please log in online first so this phone can be prepared.");
+    return;
+  }
+
+  setStatusText_("Preparing this phone...");
   if (loadPrepBtn) {
-    loadPrepBtn.textContent = "Loading...";
+    loadPrepBtn.textContent = "Preparing...";
     loadPrepBtn.disabled = true;
   }
 
   try {
-    const res = await fetchPrepPayloadByCode_(code);
+    const payload = buildShellSeedPayload_();
+    const res = await requestShellPrepToken_(payload);
+    const seedUrl = OFFLINE_SHELL_SEED_URL + "#token=" + encodeURIComponent(res.token);
 
-    if (!res || !res.ok || !res.payload) {
-      setStatusText_((res && res.message) || "Offline prep failed.");
-      return;
+    const seedWindow = window.open(seedUrl, "_blank");
+
+    if (!seedWindow) {
+      throw new Error("Popup blocked. Please allow popups and try again.");
     }
 
-    saveShellAuth_(res.payload);
+    let finished = false;
 
-    const cleanerName = res.payload.cleanerName || "this cleaner";
-    const currentShiftText =
-      res.payload.currentShift && res.payload.currentShift.property
-        ? ` Current shift: ${res.payload.currentShift.property}.`
-        : "";
+    function finishShellPrepSuccess_() {
+      if (finished) return;
+      finished = true;
+      window.removeEventListener("message", handleShellSeedMessage_);
+      setStatusText_("Offline mode prepared on this phone.");
+      updateShellUi_();
+      syncShellQueue_();
+    }
 
+    function handleShellSeedMessage_(event) {
+      if (!event || !event.data || event.data.type !== "shell-seed-saved") {
+        return;
+      }
+
+      finishShellPrepSuccess_();
+    }
+
+    window.addEventListener("message", handleShellSeedMessage_);
+
+    setTimeout(function () {
+      finishShellPrepSuccess_();
+    }, 2500);
+  } catch (error) {
     setStatusText_(
-      `Online. Offline mode is prepared for ${cleanerName}.${currentShiftText}`
+      "Offline prep failed: " +
+        ((error && error.message) || String(error) || "Unknown error")
     );
-
-    if (prepCodeInput) {
-      prepCodeInput.value = "";
-    }
-  } catch (_) {
-    setStatusText_("Offline prep failed. Please try again while online.");
   } finally {
     if (loadPrepBtn) {
-      loadPrepBtn.textContent = "Load Offline Prep";
+      loadPrepBtn.textContent = "Prepare This Phone";
       loadPrepBtn.disabled = false;
     }
-    updateShellUi_();
-    syncShellQueue_();
   }
 }
+/* end[shell_token_prep_flow] */
 
 function openLiveApp_() {
   setButtonState_("Loading...", "loading");
