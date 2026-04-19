@@ -880,6 +880,40 @@ async function refreshShellAuth_() {
   }
 }
 
+async function refreshShellAuthBeforeUnlock_() {
+  if (!navigator.onLine) {
+    return {
+      ok: true,
+      skipped: true,
+      message: "Offline unlock path.",
+    };
+  }
+
+  const refreshResult = await refreshShellAuth_();
+
+  if (refreshResult && refreshResult.ok) {
+    return {
+      ok: true,
+      skipped: false,
+      payload: refreshResult.payload || null,
+    };
+  }
+
+  if (refreshResult && refreshResult.requiresLogin) {
+    return {
+      ok: false,
+      requiresLogin: true,
+      message: refreshResult.message || "Session expired. Please log in again.",
+    };
+  }
+
+  return {
+    ok: true,
+    skipped: true,
+    message: "Auth refresh unavailable. Falling back to local unlock.",
+  };
+}
+
 async function postShellQueueEntry_(queuedEntry) {
   const shellAuth = getShellAuth_() || {};
 
@@ -1062,7 +1096,7 @@ async function syncShellQueue_() {
 
 /* begin[unlock_shell_with_welcome_flash] */
 async function unlockShellWithPin_() {
-  const shellAuth = getShellAuth_() || {};
+  let shellAuth = getShellAuth_() || {};
   const enteredPin = shellEnteredPin.trim();
 
   if (!shellAuth || !shellAuth.pinHash) {
@@ -1076,9 +1110,27 @@ async function unlockShellWithPin_() {
     return;
   }
 
-  setStatusText_("Checking access code...");
+  setStatusText_(navigator.onLine ? "Checking access and permissions..." : "Checking access code...");
 
   try {
+    const refreshGate = await refreshShellAuthBeforeUnlock_();
+
+    if (!refreshGate.ok && refreshGate.requiresLogin) {
+      clearShellPin_();
+      setStatusText_(refreshGate.message || "Session expired. Please log in again.");
+      showShellFlashHud_(refreshGate.message || "Session expired. Please log in again.", false);
+      return;
+    }
+
+    shellAuth = getShellAuth_() || {};
+
+    if (!shellAuth || !shellAuth.pinHash) {
+      clearShellPin_();
+      setStatusText_("This phone is no longer authorized. Please prepare it again online.");
+      showShellFlashHud_("This phone is no longer authorized.", false);
+      return;
+    }
+
     const enteredHash = await hashShellPin_(enteredPin);
 
     if (!enteredHash || enteredHash !== String(shellAuth.pinHash || "")) {
@@ -1309,7 +1361,7 @@ function renderShellWorkHistory_(data) {
     shellWorkHistoryWeekLabel.textContent = data.weekLabel || "";
   }
 
-  if (!data.properties || !data.properties.length) {
+  if (!data.rows || !data.rows.length) {
     if (shellWorkHistoryContent) {
       shellWorkHistoryContent.innerHTML =
         '<div class="shellWorkHistoryEmpty">No completed shifts yet this week.</div>';
@@ -1326,7 +1378,21 @@ function renderShellWorkHistory_(data) {
     return;
   }
 
-  const fragments = data.properties.map(function (entry) {
+  const fragments = data.rows.map(function (entry) {
+    if (entry.type === "transit") {
+      return (
+        '<div class="shellWorkHistoryTransitWrap">' +
+          '<div class="shellWorkHistoryTransitLine">' +
+            'Transit after ' + (entry.property || "shift") + ": " +
+            (entry.transitHoursText || "0:00") +
+            " (" +
+            (entry.transitHoursDecimal || "0.00") +
+            " hrs)" +
+          '</div>' +
+        '</div>'
+      );
+    }
+
     return (
       '<div class="shellWorkHistoryRow">' +
         '<div class="shellWorkHistoryProperty">' + (entry.property || "—") + '</div>' +
