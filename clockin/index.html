@@ -229,6 +229,27 @@
         <div id="offlineQueueCount" class="offlineQueueCount hidden"></div>
         <!-- end[offline_bottom_status_markup] -->
       </div>
+      <!-- begin[shell_work_history_modal_markup] -->
+      <div id="shellWorkHistoryModal" class="shellWorkHistoryModal hidden" aria-hidden="true">
+        <div class="shellWorkHistoryModalInner">
+          <div class="shellWorkHistoryModalTopBar">
+            <div class="shellWorkHistoryTitleWrap">
+              <div class="shellWorkHistoryTitle">Work History</div>
+              <div id="shellWorkHistoryWeekLabel" class="shellWorkHistoryWeekLabel"></div>
+            </div>
+          </div>
+
+          <div id="shellWorkHistoryContent" class="shellWorkHistoryContent"></div>
+
+          <div class="shellWorkHistoryTotalWrap">
+            <div class="shellWorkHistoryTotalLabel">Total</div>
+            <div id="shellWorkHistoryTotalValue" class="shellWorkHistoryTotalValue">0:00 (0.00 hrs)</div>
+            <button type="button" id="shellWorkHistoryBackBtn" class="shellWorkHistoryBackBtn">← Back</button>
+          </div>
+        </div>
+      </div>
+      <!-- end[shell_work_history_modal_markup] -->
+
       <div id="shellSyncHud" class="shellSyncHud hidden" aria-live="polite" aria-hidden="true">
         <div id="shellSyncHudCard" class="shellSyncHudCard">
           SYNCING
