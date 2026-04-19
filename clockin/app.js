@@ -34,6 +34,7 @@ const prepKeypadButtons = Array.from(document.querySelectorAll("#prepKeypad [dat
 
 const offlineEntrySection = document.getElementById("offlineEntrySection");
 const offlineCleanerDisplay = document.getElementById("offlineCleanerDisplay");
+const offlineGuidanceText = document.getElementById("offlineGuidanceText");
 const offlineReadyText = document.getElementById("offlineReadyText");
 const offlineQueueCount = document.getElementById("offlineQueueCount");
 const offlineCurrentCleanStatusRow = document.getElementById("offlineCurrentCleanStatusRow");
@@ -219,8 +220,13 @@ function setStatusText_(text) {
   statusText.textContent = text || "";
 }
 
+/* begin[shell_entry_lock_helper] */
 function setShellEntryLocked_(locked) {
   const isLocked = !!locked;
+
+  if (offlineEntrySection) {
+    offlineEntrySection.classList.toggle("shellEntryDimmed", isLocked);
+  }
 
   if (offlineActionSelect) {
     offlineActionSelect.disabled = isLocked;
@@ -242,6 +248,7 @@ function setShellEntryLocked_(locked) {
     saveOfflineEntryBtn.classList.toggle("shellLocked", isLocked);
   }
 }
+/* end[shell_entry_lock_helper] */
 
 function showShellSyncHud_(detailText) {
   setShellEntryLocked_(true);
@@ -456,28 +463,81 @@ function getCurrentPropertyText_(shellAuth) {
   return "";
 }
 
+/* begin[offline_queue_panel_and_guidance_helpers] */
+function formatOfflineActionLabel_(eventType) {
+  const value = String(eventType || "").trim();
+
+  if (value === "clock_in") return "Clock In";
+  if (value === "clock_out") return "Clock Out";
+  if (value === "add_note") return "Add Note";
+
+  return value ? value.replace(/_/g, " ") : "Entry";
+}
+
+function formatOfflineQueueTimestamp_(submittedAtMs) {
+  const d = new Date(Number(submittedAtMs || 0));
+  if (Number.isNaN(d.getTime())) return "Time unavailable";
+
+  return d.toLocaleString([], {
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function updateOfflineQueueCount_() {
   if (!offlineQueueCount) return;
 
   const queue = getShellQueue_();
 
   if (!queue.length) {
-    offlineQueueCount.textContent = "";
-    offlineQueueCount.style.display = "none";
+    offlineQueueCount.innerHTML = "";
+    offlineQueueCount.classList.add("hidden");
     return;
   }
 
   const latest = queue[queue.length - 1];
-  const latestType = String((latest && latest.eventType) || "").replace(/_/g, " ");
-  const latestProperty = String((latest && latest.property) || "");
+  const latestAction = formatOfflineActionLabel_(latest && latest.eventType);
+  const latestProperty = String((latest && latest.property) || "No property");
+  const latestTime = formatOfflineQueueTimestamp_(latest && latest.submittedAtMs);
 
-  offlineQueueCount.textContent =
-    "Queued: " +
-    queue.length +
-    (latestType ? " • Last: " + latestType : "") +
-    (latestProperty ? " at " + latestProperty : "");
+  offlineQueueCount.innerHTML =
+    '<div class="offlineQueueCountTitle">Queued entries: ' + queue.length + "</div>" +
+    '<div class="offlineQueueCountMeta">Latest: ' + latestAction + "</div>" +
+    '<div class="offlineQueueCountMeta">' + latestProperty + "</div>" +
+    '<div class="offlineQueueCountMeta">Saved: ' + latestTime + "</div>";
 
-  offlineQueueCount.style.display = "block";
+  offlineQueueCount.classList.remove("hidden");
+}
+
+function updateOfflineGuidanceText_(shellAuth) {
+  if (!offlineGuidanceText) return;
+
+  const hasActiveShift = !!(shellAuth && shellAuth.currentShift);
+  const hasProperty = !!(selectedOfflineProperty && selectedOfflineProperty.name);
+  const selectedAction = String((offlineActionSelect && offlineActionSelect.value) || "");
+
+  let guidance = "";
+
+  if (hasActiveShift) {
+    guidance = "You are clocked in. Add a note or clock out when finished.";
+  } else if (!hasProperty && !selectedAction) {
+    guidance = "Select a property and action to begin.";
+  } else if (hasProperty && !selectedAction) {
+    guidance = "Property selected. Now choose an action.";
+  } else if (!hasProperty && selectedAction) {
+    guidance = "Action selected. Now choose a property from the list.";
+  }
+
+  if (!guidance) {
+    offlineGuidanceText.textContent = "";
+    offlineGuidanceText.classList.add("hidden");
+    return;
+  }
+
+  offlineGuidanceText.textContent = guidance;
+  offlineGuidanceText.classList.remove("hidden");
 }
 
 function updateOfflineReadyText_(shellAuth) {
@@ -488,6 +548,7 @@ function updateOfflineReadyText_(shellAuth) {
 
   renderOfflineCurrentCleanStatus_(shellAuth);
   updateOfflineActionOptions_(shellAuth);
+  updateOfflineGuidanceText_(shellAuth);
 
   if (!offlineReadyText) return;
 
@@ -498,6 +559,7 @@ function updateOfflineReadyText_(shellAuth) {
 
   offlineReadyText.textContent = "";
 }
+/* end[offline_queue_panel_and_guidance_helpers] */
 
 function clearOfflinePropertyResults_() {
   if (!offlinePropertyResults) return;
@@ -534,6 +596,7 @@ function hideOfflinePropertyInfo_() {
   hideElement_(offlinePropertyInfoPanel);
 }
 
+/* begin[select_offline_property_with_guidance_refresh] */
 function selectOfflineProperty_(prop) {
   selectedOfflineProperty = prop || null;
 
@@ -548,7 +611,10 @@ function selectOfflineProperty_(prop) {
   } else {
     hideOfflinePropertyInfo_();
   }
+
+  updateOfflineGuidanceText_(getShellAuth_());
 }
+/* end[select_offline_property_with_guidance_refresh] */
 
 function findOfflinePropertyByName_(name, shellAuth) {
   const target = String(name || "").trim();
@@ -559,6 +625,7 @@ function findOfflinePropertyByName_(name, shellAuth) {
   }) || null;
 }
 
+/* begin[offline_property_search_with_guidance_refresh] */
 function handleOfflinePropertySearch_() {
   const shellAuth = getShellAuth_();
   const query = (offlinePropertySearch && offlinePropertySearch.value || "").trim().toLowerCase();
@@ -567,6 +634,7 @@ function handleOfflinePropertySearch_() {
     selectedOfflineProperty = null;
     clearOfflinePropertyResults_();
     hideOfflinePropertyInfo_();
+    updateOfflineGuidanceText_(shellAuth);
     return;
   }
 
@@ -588,6 +656,7 @@ function handleOfflinePropertySearch_() {
   clearOfflinePropertyResults_();
 
   if (!matches.length) {
+    updateOfflineGuidanceText_(shellAuth);
     return;
   }
 
@@ -604,8 +673,11 @@ function handleOfflinePropertySearch_() {
   });
 
   showElement_(offlinePropertyResults);
+  updateOfflineGuidanceText_(shellAuth);
 }
+/* end[offline_property_search_with_guidance_refresh] */
 
+/* begin[reset_offline_entry_form_with_guidance_refresh] */
 function resetOfflineEntryForm_(shellAuth) {
   if (offlineActionSelect) {
     offlineActionSelect.value = "";
@@ -640,7 +712,9 @@ function resetOfflineEntryForm_(shellAuth) {
   }
 
   clearOfflinePropertyResults_();
+  updateOfflineGuidanceText_(shellAuth);
 }
+/* end[reset_offline_entry_form_with_guidance_refresh] */
 
 function saveOfflineEntry_() {
   const shellAuth = getShellAuth_();
@@ -979,6 +1053,7 @@ async function syncShellQueue_() {
 }
 /* end[shell_refresh_and_sync_helpers] */
 
+/* begin[unlock_shell_with_welcome_flash] */
 async function unlockShellWithPin_() {
   const shellAuth = getShellAuth_() || {};
   const enteredPin = shellEnteredPin.trim();
@@ -1002,6 +1077,7 @@ async function unlockShellWithPin_() {
     if (!enteredHash || enteredHash !== String(shellAuth.pinHash || "")) {
       clearShellPin_();
       setStatusText_("Invalid access code.");
+      showShellFlashHud_("Invalid access code.", false);
       return;
     }
 
@@ -1013,14 +1089,17 @@ async function unlockShellWithPin_() {
 
     const cleanerName = shellAuth.cleanerName || "Cleaner";
     setStatusText_("Unlocked for " + cleanerName + ".");
+    showShellFlashHud_("Welcome back, " + cleanerName + ".", true);
   } catch (error) {
     clearShellPin_();
     setStatusText_(
       "PIN check failed: " +
         ((error && error.message) || String(error) || "Unknown error")
     );
+    showShellFlashHud_("PIN check failed.", false);
   }
 }
+/* end[unlock_shell_with_welcome_flash] */
 /* begin[shell_token_prep_flow] */
 const OFFLINE_SHELL_SEED_URL =
   "https://www.cleanenergyhousekeeping.com/clockin/seed.html";
@@ -1385,6 +1464,7 @@ document.addEventListener("click", function (event) {
   }
 });
 
+/* begin[offline_action_change_with_guidance_refresh] */
 if (offlineActionSelect) {
   offlineActionSelect.addEventListener("change", function () {
     const action = offlineActionSelect.value || "";
@@ -1394,8 +1474,11 @@ if (offlineActionSelect) {
     } else {
       hideElement_(offlineNoteWrap);
     }
+
+    updateOfflineGuidanceText_(getShellAuth_());
   });
 }
+/* end[offline_action_change_with_guidance_refresh] */
 
 if (saveOfflineEntryBtn) {
   saveOfflineEntryBtn.addEventListener("click", saveOfflineEntry_);
