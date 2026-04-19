@@ -26,6 +26,11 @@ const shellKeypadButtons = Array.from(document.querySelectorAll("#shellKeypad [d
 
 const prepSection = document.getElementById("prepSection");
 const loadPrepBtn = document.getElementById("loadPrepBtn");
+const prepAccessCode = document.getElementById("prepAccessCode");
+const prepClearPinBtn = document.getElementById("prepClearPinBtn");
+const prepBackspacePinBtn = document.getElementById("prepBackspacePinBtn");
+const prepPinDots = Array.from(document.querySelectorAll("[data-prep-pin-slot]"));
+const prepKeypadButtons = Array.from(document.querySelectorAll("#prepKeypad [data-prep-key]"));
 
 const offlineEntrySection = document.getElementById("offlineEntrySection");
 const offlineReadyText = document.getElementById("offlineReadyText");
@@ -51,6 +56,7 @@ const shellSyncHudDetail = document.getElementById("shellSyncHudDetail");
 /* begin[clockin_shell_state] */
 let selectedOfflineProperty = null;
 let shellEnteredPin = "";
+let prepEnteredPin = "";
 let shellUnlocked = false;
 const SHELL_PIN_LENGTH = 4;
 /* end[clockin_shell_state] */
@@ -125,6 +131,37 @@ function appendShellPinDigit_(digit) {
 function backspaceShellPin_() {
   shellEnteredPin = shellEnteredPin.slice(0, -1);
   updateShellPinDots_();
+}
+
+function updatePrepPinDots_() {
+  prepPinDots.forEach(function (dot, index) {
+    if (index < prepEnteredPin.length) {
+      dot.classList.add("filled");
+    } else {
+      dot.classList.remove("filled");
+    }
+  });
+
+  if (prepAccessCode) {
+    prepAccessCode.value = prepEnteredPin;
+  }
+}
+
+function clearPrepPin_() {
+  prepEnteredPin = "";
+  updatePrepPinDots_();
+}
+
+function appendPrepPinDigit_(digit) {
+  if (prepEnteredPin.length >= SHELL_PIN_LENGTH) return;
+
+  prepEnteredPin += String(digit);
+  updatePrepPinDots_();
+}
+
+function backspacePrepPin_() {
+  prepEnteredPin = prepEnteredPin.slice(0, -1);
+  updatePrepPinDots_();
 }
 function getShellQueue_() {
   try {
@@ -842,22 +879,17 @@ async function requestShellPrepToken_(payload) {
 }
 
 async function loadOfflinePrep_() {
-  const shellAuth = getShellAuth_() || {};
-
   if (!navigator.onLine) {
     setStatusText_("No connection. Reconnect before preparing this phone.");
     return;
   }
 
-  /* begin[redirect_to_live_app_for_prep_when_not_authenticated] */
-/* begin[send_shell_prep_back_to_regular_live_app] */
-if (!shellAuth.sessionToken || !shellAuth.clientId || !shellAuth.cleanerName) {
-  setStatusText_("Opening Clean Energy app to prepare this phone...");
-  openLiveApp_();
-  return;
-}
-/* end[send_shell_prep_back_to_regular_live_app] */
-/* end[redirect_to_live_app_for_prep_when_not_authenticated] */
+  const pin = String(prepEnteredPin || "").trim();
+
+  if (!pin || pin.length !== SHELL_PIN_LENGTH) {
+    setStatusText_("Please enter your 4-digit PIN to prepare this phone.");
+    return;
+  }
 
   setStatusText_("Preparing this phone...");
   if (loadPrepBtn) {
@@ -866,37 +898,63 @@ if (!shellAuth.sessionToken || !shellAuth.clientId || !shellAuth.cleanerName) {
   }
 
   try {
-    const payload = buildShellSeedPayload_();
-    const res = await requestShellPrepToken_(payload);
-    const seedUrl = OFFLINE_SHELL_SEED_URL + "#token=" + encodeURIComponent(res.token);
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        mode: "loginWithPin",
+        payload: {
+          accessCode: pin,
+          clientId: "",
+        },
+      }),
+      cache: "no-store",
+    });
 
-    window.location.href = seedUrl;
-return;
+    const rawText = await response.text();
+    let parsed = null;
 
-    let finished = false;
-
-    function finishShellPrepSuccess_() {
-      if (finished) return;
-      finished = true;
-      window.removeEventListener("message", handleShellSeedMessage_);
-      setStatusText_("Offline mode prepared on this phone.");
-      updateShellUi_();
-      syncShellQueue_();
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch (_) {
+      parsed = null;
     }
 
-    function handleShellSeedMessage_(event) {
-      if (!event || !event.data || event.data.type !== "shell-seed-saved") {
-        return;
-      }
-
-      finishShellPrepSuccess_();
+    if (!response.ok) {
+      throw new Error(
+        "Prepare login failed: " +
+          response.status +
+          (rawText ? " — " + rawText.slice(0, 200) : "")
+      );
     }
 
-    window.addEventListener("message", handleShellSeedMessage_);
+    if (!parsed || !parsed.ok) {
+      setStatusText_((parsed && parsed.message) || "Could not prepare this phone.");
+      return;
+    }
 
-    setTimeout(function () {
-      finishShellPrepSuccess_();
-    }, 2500);
+    const pinHash = await hashShellPin_(pin);
+
+    const shellAuth = {
+      cleanerName: String(parsed.cleanerName || ""),
+      accessLevel: String(parsed.accessLevel || "LIMITED"),
+      currentShift: parsed.currentShift || null,
+      properties: Array.isArray(parsed.properties) ? parsed.properties : [],
+      sessionToken: String(parsed.sessionToken || ""),
+      clientId: String(parsed.clientId || ""),
+      pinHash: pinHash,
+      seededAtMs: Date.now(),
+    };
+
+    saveShellAuth_(shellAuth);
+    shellUnlocked = false;
+    clearPrepPin_();
+    clearShellPin_();
+    updateShellUi_();
+    updateOfflineQueueCount_();
+    setStatusText_("Phone is prepared. Enter your access code to unlock.");
   } catch (error) {
     setStatusText_(
       "Offline prep failed: " +
@@ -1084,6 +1142,24 @@ shellKeypadButtons.forEach(function (btn) {
   });
 });
 
+prepKeypadButtons.forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    appendPrepPinDigit_(btn.getAttribute("data-prep-key"));
+  });
+});
+
+if (prepClearPinBtn) {
+  prepClearPinBtn.addEventListener("click", function () {
+    clearPrepPin_();
+  });
+}
+
+if (prepBackspacePinBtn) {
+  prepBackspacePinBtn.addEventListener("click", function () {
+    backspacePrepPin_();
+  });
+}
+
 if (shellClearPinBtn) {
   shellClearPinBtn.addEventListener("click", function () {
     clearShellPin_();
@@ -1131,6 +1207,8 @@ if (offlineActionSelect) {
 if (saveOfflineEntryBtn) {
   saveOfflineEntryBtn.addEventListener("click", saveOfflineEntry_);
 }
+
+
 /* end[clockin_shell_event_wiring] */
 
 
@@ -1138,6 +1216,7 @@ if (saveOfflineEntryBtn) {
 document.addEventListener("DOMContentLoaded", async function () {
   shellUnlocked = false;
   clearShellPin_();
+  clearPrepPin_();
   setStatusText_("Preparing app shell...");
   await registerServiceWorker_();
 
