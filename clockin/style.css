@@ -141,12 +141,14 @@ textarea::placeholder {
 .actionButton {
   background: #649fca;
   color: #ffffff;
-  font-size: 48px;
-  min-height: 120px;
+  font-size: 40px;
+  min-height: 110px;
 }
 
 .prepButton {
   margin-top: 12px;
+  font-size: 44px;
+  min-height: 120px;
 }
 
 .submitButton {
