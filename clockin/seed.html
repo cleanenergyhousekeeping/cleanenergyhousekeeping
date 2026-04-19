@@ -1,424 +1,153 @@
-html {
-  -webkit-text-size-adjust: 100%;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Prepare Offline Mode</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <style>
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      min-height: 100dvh;
+      color: #23343b;
+    }
+
+    .wrap {
+      text-align: center;
+      padding: 28px;
+      max-width: 720px;
+      width: 96vw;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      margin: 0 0 20px;
+      font-size: 48px;
+      line-height: 1.08;
+    }
+
+    .statusText {
+      margin-bottom: 20px;
+      font-size: 28px;
+      color: #4d6474;
+      line-height: 1.35;
+    }
+
+    .btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 24px 26px;
+      border-radius: 16px;
+      background: #649fca;
+      color: #fff;
+      border: none;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 36px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .btnSecondary {
+      background: #23343b;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Prepare Offline Mode</h1>
+    <p id="statusText" class="statusText">Preparing this phone for offline mode...</p>
+
+    <a id="openShellBtn" class="btn btnSecondary hidden" href="/clockin/">Open Clock In Shell</a>
+  </div>
+
+  <script>
+    (function () {
+      const SHELL_AUTH_KEY = "ce_shell_auth_v1";
+      const APPS_SCRIPT_URL =
+        "https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec";
+
+      const statusText = document.getElementById("statusText");
+      const openShellBtn = document.getElementById("openShellBtn");
+
+      function parseHashParams_() {
+        const raw = window.location.hash.replace(/^#/, "");
+        return new URLSearchParams(raw);
+      }
+
+      async function fetchPrepPayload_(token) {
+        const url =
+          APPS_SCRIPT_URL +
+          "?mode=getOfflineShellPrep&token=" +
+          encodeURIComponent(token);
+
+        const response = await fetch(url, { method: "GET", cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Prep request failed.");
+        }
+
+        return response.json();
+      }
+
+      const params = parseHashParams_();
+      openShellBtn.classList.remove("hidden");
+
+      if (params.get("clear") === "1") {
+  localStorage.removeItem(SHELL_AUTH_KEY);
+  localStorage.removeItem("ce_shell_queue_v1");
+  statusText.textContent = "Offline mode and queued entries were cleared on this phone.";
+  return;
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  min-height: 100%;
-  font-family: Arial, sans-serif;
-  background: #f5f7f9;
-  overflow-x: hidden;
-}
+      const token = params.get("token");
+      if (!token) {
+        statusText.textContent = "No offline prep token was received.";
+        return;
+      }
 
-body {
-  min-height: 100vh;
-  min-height: 100dvh;
-}
+      fetchPrepPayload_(token)
+        .then(function (res) {
+          if (!res || !res.ok || !res.payload) {
+            statusText.textContent =
+              (res && res.message) || "Offline prep failed.";
+            return;
+          }
 
-.appShell {
-  width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding: 0;
-  margin: 0;
-  box-sizing: border-box;
-  overflow-x: hidden;
-}
-
-.card {
-  width: 100%;
-  max-width: 720px;
-  margin: 0 auto;
-  background: #ffffff;
-  border-radius: 0;
-  padding: 10px 14px 24px;
-  box-sizing: border-box;
-  box-shadow: none;
-  overflow-x: hidden;
-}
-
-.logoBannerWrap {
-  width: 100%;
-  background: #ffffff;
-  padding: 10px 0 6px;
-  margin: 0 0 6px;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.logoBanner {
-  display: block;
-  width: 100%;
-  max-width: 170px;
-  height: auto;
-  max-height: 64px;
-  object-fit: contain;
-  margin: 0;
-}
-
-.shellTopSection {
-  margin-bottom: 0;
-}
-
-.pinCard {
-  width: 100%;
-  max-width: none;
-  margin-left: 0;
-  margin-right: 0;
-}
-
-.screenTitle {
-  margin: 8px 0 8px;
-  font-size: 32px;
-  line-height: 1.12;
-  color: #23343b;
-}
-
-.screenSubtitle {
-  margin: 0 0 18px;
-  color: #5f6f82;
-  font-size: 18px;
-  line-height: 1.4;
-}
-
-label {
-  display: block;
-  margin: 16px 0 8px;
-  font-weight: 700;
-  font-size: 18px;
-  color: #23343b;
-}
-
-input,
-select,
-textarea,
-button {
-  width: 100%;
-  border-radius: 14px;
-  box-sizing: border-box;
-}
-
-input,
-textarea,
-select {
-  border: 1px solid #cfd8dc;
-  padding: 16px 18px;
-  background: #ffffff;
-  font-size: 18px;
-  line-height: 1.35;
-  color: #23343b;
-}
-
-select {
-  color: #23343b;
-  min-height: 58px;
-}
-
-textarea {
-  resize: vertical;
-  min-height: 130px;
-  font-family: Arial, sans-serif;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: #98acb8;
-}
-
-.actionButton,
-.submitButton {
-  border: none;
-  padding: 16px 18px;
-  cursor: pointer;
-  font-weight: 700;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.actionButton {
-  background: #649fca;
-  color: #ffffff;
-  font-size: 40px;
-  min-height: 110px;
-}
-
-.prepButton {
-  margin-top: 12px;
-  font-size: 44px;
-  min-height: 120px;
-}
-
-.submitButton {
-  margin-top: 22px;
-  background: #23343b;
-  color: #ffffff;
-  font-size: 22px;
-}
-
-.statusBox {
-  margin-top: 14px;
-  margin-bottom: 0;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: #f3f7fa;
-  color: #4d6474;
-  font-size: 17px;
-  line-height: 1.45;
-  border: 1px solid #d8e2e8;
-}
-
-.prepCard,
-.installHelpCard {
-  margin-top: 12px;
-  padding: 14px 12px;
-  border: 1px solid #d8e2e8;
-  border-radius: 14px;
-  background: #f7fafc;
-}
-
-.prepSectionTitle,
-.installHelpTitle {
-  font-size: 48px;
-  font-weight: 700;
-  color: #23343b;
-  margin-bottom: 8px;
-}
-
-.prepSectionText,
-.installHelpCard p {
-  margin: 0 0 12px;
-  color: #4d6474;
-  font-size: 40px;
-  line-height: 1.28;
-}
-
-.installHelpSub {
-  margin-top: 10px;
-  color: #5f6f82;
-}
-
-.prepInput {
-  text-align: center;
-  letter-spacing: 1px;
-}
-
-.offlineEntrySection {
-  margin-top: 18px;
-}
-
-.offlineReadyText {
-  margin-bottom: 10px;
-  padding: 14px 14px 12px;
-  border: 1px solid #bfe8d5;
-  border-radius: 14px;
-  background: #e7f8f1;
-  color: #146c43;
-  font-size: 16px;
-  line-height: 1.45;
-}
-
-.offlineQueueCount {
-  margin-bottom: 16px;
-  color: #5f6f82;
-  font-size: 15px;
-  line-height: 1.4;
-}
-
-.resultsBox {
-  background: #f3f7fa;
-  border: 1px solid #d8e2e8;
-  border-radius: 12px;
-  margin-top: 6px;
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-.offlineResultItem {
-  padding: 16px 14px;
-  border-bottom: 1px solid #e9eef2;
-  font-size: 18px;
-  line-height: 1.4;
-  cursor: pointer;
-  background: transparent;
-  color: #23343b;
-}
-
-.offlineResultItem:last-child {
-  border-bottom: none;
-}
-
-.offlineResultItem:hover {
-  background: #eef4f8;
-}
-
-.offlineResultItem:active {
-  background: #eaf2f7;
-}
-
-.propertyInfoPanel {
-  margin-top: 12px;
-  margin-bottom: 14px;
-  padding: 14px 12px;
-  border: 1px solid #d8e2e8;
-  border-radius: 14px;
-  background: #f7fafc;
-}
-
-.propertyInfoPanel,
-.propertyInfoRow,
-.propertyInfoValue {
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow-wrap: anywhere;
-}
-
-.propertyInfoHeader {
-  font-size: 20px;
-  font-weight: 700;
-  color: #23343b;
-  margin-top: 2px;
-  margin-bottom: 14px;
-}
-
-.propertyInfoRow {
-  margin-bottom: 12px;
-}
-
-.propertyInfoRow:last-child {
-  margin-bottom: 0;
-}
-
-.propertyInfoLabel {
-  font-size: 17px;
-  font-weight: 700;
-  margin-bottom: 6px;
-  color: #23343b;
-}
-
-.propertyInfoValue {
-  font-size: 17px;
-  line-height: 1.35;
-  color: #23343b;
-  word-break: break-word;
-}
-
-.pinDots {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin: 10px 0 18px;
-}
-
-.pinDot {
-  height: 78px;
-  border: 2px solid #d8e2e8;
-  border-radius: 16px;
-  background: #f9fbfc;
-  position: relative;
-}
-
-.pinDot.filled::after {
-  content: "";
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #23343b;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.keypad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-top: 4px;
-}
-
-.keypadBtn {
-  border: 1px solid #d8e2e8;
-  background: #ffffff;
-  color: #23343b;
-  min-height: 170px;
-  font-size: 60px;
-  font-weight: 600;
-  border-radius: 18px;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.keypadBtn:active {
-  background: #eef4f8;
-}
-
-.keypadBtnAlt {
-  background: #f3f7fa;
-}
-
-.visuallyHiddenInput {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  width: 1px;
-  height: 1px;
-}
-
-.shellSyncHud {
-  position: fixed;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.84);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  z-index: 10002;
-}
-
-.shellSyncHudCard {
-  width: min(88vw, 420px);
-  background: #ffffff;
-  border: 2px solid #d8e2e8;
-  border-radius: 18px;
-  padding: 22px 20px;
-  box-shadow: 0 10px 28px rgba(35, 52, 59, 0.16);
-  color: #23343b;
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: center;
-}
-
-.shellSyncHudDetail {
-  display: block;
-  margin-top: 8px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #5f6f82;
-}
-
-.shellLocked {
-  opacity: 0.65;
-}
-
-.hidden {
-  display: none !important;
-}
-
-@media (min-width: 760px) {
-  .card {
-    margin: 0 auto;
-    padding: 18px 18px 28px;
+          localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(res.payload));
+          try {
+  if (window.opener) {
+    window.opener.postMessage({ type: "shell-seed-saved" }, "*");
   }
+} catch (_) {}
 
-  .screenTitle {
-    font-size: 36px;
-  }
+          const cleanerName = res.payload.cleanerName || "this cleaner";
+          const currentShiftText =
+            res.payload.currentShift && res.payload.currentShift.property
+              ? ` Current shift: ${res.payload.currentShift.property}.`
+              : "";
 
-  .screenSubtitle {
-    font-size: 19px;
-  }
-}
+          statusText.textContent =
+            `Offline mode is ready for ${cleanerName} on this phone.` +
+            currentShiftText;
+        })
+        .catch(function () {
+          statusText.textContent =
+            "Offline prep failed. Please go back and try again while online.";
+        });
+    })();
+  </script>
+</body>
+</html>
