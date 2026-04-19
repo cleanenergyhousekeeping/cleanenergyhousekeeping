@@ -65,7 +65,7 @@ body {
 
 .pinCard {
   width: 100%;
-  max-width: none;
+  max-width: 380px;
   margin-left: 0;
   margin-right: 0;
 }
@@ -141,14 +141,11 @@ textarea::placeholder {
 .actionButton {
   background: #649fca;
   color: #ffffff;
-  font-size: 40px;
-  min-height: 110px;
+  font-size: 20px;
 }
 
 .prepButton {
   margin-top: 12px;
-  font-size: 44px;
-  min-height: 120px;
 }
 
 .submitButton {
@@ -181,7 +178,7 @@ textarea::placeholder {
 
 .prepSectionTitle,
 .installHelpTitle {
-  font-size: 48px;
+  font-size: 20px;
   font-weight: 700;
   color: #23343b;
   margin-bottom: 8px;
@@ -189,10 +186,10 @@ textarea::placeholder {
 
 .prepSectionText,
 .installHelpCard p {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   color: #4d6474;
-  font-size: 40px;
-  line-height: 1.28;
+  font-size: 16px;
+  line-height: 1.45;
 }
 
 .installHelpSub {
@@ -308,14 +305,14 @@ textarea::placeholder {
 .pinDots {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin: 10px 0 18px;
+  gap: 8px;
+  margin: 10px 0 14px;
 }
 
 .pinDot {
-  height: 78px;
+  height: 62px;
   border: 2px solid #d8e2e8;
-  border-radius: 16px;
+  border-radius: 14px;
   background: #f9fbfc;
   position: relative;
 }
@@ -335,18 +332,18 @@ textarea::placeholder {
 .keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-top: 4px;
+  gap: 8px;
+  margin-top: 2px;
 }
 
 .keypadBtn {
   border: 1px solid #d8e2e8;
   background: #ffffff;
   color: #23343b;
-  min-height: 170px;
-  font-size: 60px;
+  min-height: 76px;
+  font-size: 30px;
   font-weight: 600;
-  border-radius: 18px;
+  border-radius: 16px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
