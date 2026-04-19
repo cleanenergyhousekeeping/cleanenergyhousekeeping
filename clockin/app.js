@@ -33,8 +33,13 @@ const prepPinDots = Array.from(document.querySelectorAll("[data-prep-pin-slot]")
 const prepKeypadButtons = Array.from(document.querySelectorAll("#prepKeypad [data-prep-key]"));
 
 const offlineEntrySection = document.getElementById("offlineEntrySection");
+const offlineCleanerDisplay = document.getElementById("offlineCleanerDisplay");
 const offlineReadyText = document.getElementById("offlineReadyText");
 const offlineQueueCount = document.getElementById("offlineQueueCount");
+const offlineCurrentCleanStatusRow = document.getElementById("offlineCurrentCleanStatusRow");
+const offlineCurrentCleanStatusText = document.getElementById("offlineCurrentCleanStatusText");
+const offlineCurrentCleanStartedText = document.getElementById("offlineCurrentCleanStartedText");
+const offlineDirectionsBtn = document.getElementById("offlineDirectionsBtn");
 const offlineActionSelect = document.getElementById("offlineActionSelect");
 const offlinePropertySearch = document.getElementById("offlinePropertySearch");
 const offlinePropertyResults = document.getElementById("offlinePropertyResults");
@@ -279,6 +284,76 @@ function setButtonState_(text, mode) {
   }
 }
 
+function formatShellClockTime_(ms) {
+  const d = new Date(Number(ms || 0));
+  if (Number.isNaN(d.getTime())) return "—";
+
+  return d.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatShellElapsedTime_(ms) {
+  if (!ms || ms < 0) return "";
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  const colon = '<span class="timerColon">:</span>';
+  const clock = `${hours}${colon}${String(minutes).padStart(2, "0")}`;
+
+  return `${clock} (${hours}h ${minutes}m elapsed)`;
+}
+
+function renderOfflineCurrentCleanStatus_(shellAuth) {
+  if (
+    !offlineCurrentCleanStatusRow ||
+    !offlineCurrentCleanStatusText ||
+    !offlineCurrentCleanStartedText
+  ) {
+    return;
+  }
+
+  const shift = shellAuth && shellAuth.currentShift ? shellAuth.currentShift : null;
+
+  if (!shift || !shift.property || !shift.clockInMs) {
+    hideElement_(offlineCurrentCleanStatusRow);
+    offlineCurrentCleanStatusText.textContent = "";
+    offlineCurrentCleanStartedText.innerHTML = "";
+    return;
+  }
+
+  showElement_(offlineCurrentCleanStatusRow);
+  offlineCurrentCleanStatusText.textContent =
+    "Clocked In at " + String(shift.property || "");
+
+  const startedText = shift.clockInDisplay || formatShellClockTime_(shift.clockInMs);
+  const elapsedText = formatShellElapsedTime_(Date.now() - Number(shift.clockInMs || 0));
+
+  offlineCurrentCleanStartedText.innerHTML =
+    'Started: ' + startedText + ' • <span class="offlineElapsedText">' + elapsedText + "</span>";
+}
+
+function updateOfflineDirectionsButton_(prop) {
+  if (!offlineDirectionsBtn) return;
+
+  const destination = String((prop && prop.name) || "").trim();
+  if (!destination) {
+    offlineDirectionsBtn.setAttribute("href", "#");
+    offlineDirectionsBtn.classList.add("hidden");
+    return;
+  }
+
+  offlineDirectionsBtn.setAttribute(
+    "href",
+    "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(destination)
+  );
+  offlineDirectionsBtn.classList.remove("hidden");
+}
+
 function getShellProperties_(shellAuth) {
   return Array.isArray(shellAuth && shellAuth.properties) ? shellAuth.properties : [];
 }
@@ -302,6 +377,13 @@ function updateOfflineQueueCount_() {
 }
 
 function updateOfflineReadyText_(shellAuth) {
+  if (offlineCleanerDisplay) {
+    offlineCleanerDisplay.value =
+      shellAuth && shellAuth.cleanerName ? String(shellAuth.cleanerName) : "";
+  }
+
+  renderOfflineCurrentCleanStatus_(shellAuth);
+
   if (!offlineReadyText) return;
 
   if (shellAuth && shellAuth.cleanerName) {
@@ -334,7 +416,7 @@ function fillOfflinePropertyInfo_(prop) {
   offlinePropertyInfoWifiPassword.textContent = prop.wifiPassword || "—";
   offlinePropertyInfoOwners.textContent = prop.ownerNames || "—";
   offlinePropertyInfoNotes.textContent = prop.houseNotes || "—";
-
+updateOfflineDirectionsButton_(prop);
   showElement_(offlinePropertyInfoPanel);
 }
 
@@ -347,7 +429,10 @@ function hideOfflinePropertyInfo_() {
   offlinePropertyInfoWifiPassword.textContent = "";
   offlinePropertyInfoOwners.textContent = "";
   offlinePropertyInfoNotes.textContent = "";
-
+  if (offlineDirectionsBtn) {
+    offlineDirectionsBtn.setAttribute("href", "#");
+    offlineDirectionsBtn.classList.add("hidden");
+  }
   hideElement_(offlinePropertyInfoPanel);
 }
 
@@ -432,6 +517,14 @@ function resetOfflineEntryForm_(shellAuth) {
     const currentPropertyName = getCurrentPropertyText_(shellAuth);
     offlinePropertySearch.value = currentPropertyName;
     selectedOfflineProperty = findOfflinePropertyByName_(currentPropertyName, shellAuth);
+
+    if (currentPropertyName) {
+      offlinePropertySearch.readOnly = true;
+      offlinePropertySearch.classList.add("lockedProperty");
+    } else {
+      offlinePropertySearch.readOnly = false;
+      offlinePropertySearch.classList.remove("lockedProperty");
+    }
 
     if (selectedOfflineProperty) {
       fillOfflinePropertyInfo_(selectedOfflineProperty);
