@@ -869,11 +869,8 @@ if (!shellAuth.sessionToken || !shellAuth.clientId || !shellAuth.cleanerName) {
     const res = await requestShellPrepToken_(payload);
     const seedUrl = OFFLINE_SHELL_SEED_URL + "#token=" + encodeURIComponent(res.token);
 
-    const seedWindow = window.open(seedUrl, "_blank");
-
-    if (!seedWindow) {
-      throw new Error("Popup blocked. Please allow popups and try again.");
-    }
+    window.location.href = seedUrl;
+return;
 
     let finished = false;
 
