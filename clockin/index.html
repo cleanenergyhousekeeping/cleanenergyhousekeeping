@@ -19,11 +19,13 @@
 <body>
   <div class="appShell">
     <div class="card">
-      <div class="shellBlueBar">
-        <button type="button" id="shellWorkHistoryBtn" class="shellWorkHistoryBtn" disabled>
+      <!-- begin[shell_work_history_bar_markup] -->
+      <div id="shellBlueBar" class="shellBlueBar hidden">
+        <button type="button" id="shellWorkHistoryBtn" class="shellWorkHistoryBtn">
           Work History
         </button>
       </div>
+      <!-- end[shell_work_history_bar_markup] -->
 
       <div class="logoBannerWrap">
         <img
@@ -135,8 +137,6 @@
         <div id="offlineGuidanceText" class="offlineGuidanceText hidden">
           Select a property and action to begin.
         </div>
-
-        <div id="offlineReadyText" class="offlineReadyText"></div>
         <!-- end[offline_top_guidance_markup] -->
 
         <label for="offlinePropertySearch">Property</label>
@@ -220,13 +220,14 @@
           ></textarea>
         </div>
 
-       <button id="saveOfflineEntryBtn" class="submitButton" type="button">
-  Submit
-</button>
+        <button id="saveOfflineEntryBtn" class="submitButton" type="button">
+          Submit
+        </button>
 
-        <!-- begin[offline_queue_only_markup] -->
+        <!-- begin[offline_bottom_status_markup] -->
+        <div id="offlineReadyText" class="offlineReadyText"></div>
         <div id="offlineQueueCount" class="offlineQueueCount hidden"></div>
-        <!-- end[offline_queue_only_markup] -->
+        <!-- end[offline_bottom_status_markup] -->
       </div>
       <div id="shellSyncHud" class="shellSyncHud hidden" aria-live="polite" aria-hidden="true">
         <div id="shellSyncHudCard" class="shellSyncHudCard">
