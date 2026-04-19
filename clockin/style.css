@@ -38,7 +38,9 @@ body {
   margin-top: calc(env(safe-area-inset-top) + 17px);
   background: #ffffff;
   border-radius: 0;
-  padding: 0 14px 4px;
+  padding: 0 14px 18px;
+  padding-bottom: calc(constant(safe-area-inset-bottom) + 18px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 18px);
   box-sizing: border-box;
   box-shadow: none;
   overflow-x: hidden;
@@ -634,6 +636,8 @@ body.shellWorkHistoryOpen {
   z-index: 2;
   background: #eaf1ff;
   padding: 12px 12px 10px;
+  padding-top: calc(constant(safe-area-inset-top) + 12px);
+  padding-top: calc(env(safe-area-inset-top) + 12px);
   border-bottom: 1px solid #c7d7e6;
 }
 
@@ -652,7 +656,7 @@ body.shellWorkHistoryOpen {
 .shellWorkHistoryContent {
   flex: 1;
   overflow-y: auto;
-  padding: 18px 14px 28px;
+  padding: 18px 14px 40px;
 }
 
 .shellWorkHistoryRow {
@@ -697,6 +701,8 @@ body.shellWorkHistoryOpen {
   border-top: 1px solid #d8e2e8;
   background: #ffffff;
   padding: 14px 16px 18px;
+  padding-bottom: calc(constant(safe-area-inset-bottom) + 18px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 18px);
 }
 
 .shellWorkHistoryTotalLabel {
