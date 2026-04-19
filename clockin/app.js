@@ -55,6 +55,9 @@ const offlineNoteInput = document.getElementById("offlineNoteInput");
 const saveOfflineEntryBtn = document.getElementById("saveOfflineEntryBtn");
 const shellSyncHud = document.getElementById("shellSyncHud");
 const shellSyncHudDetail = document.getElementById("shellSyncHudDetail");
+const shellFlashHud = document.getElementById("shellFlashHud");
+const shellFlashHudTitle = document.getElementById("shellFlashHudTitle");
+const shellFlashHudDetail = document.getElementById("shellFlashHudDetail");
 /* end[clockin_shell_dom_refs] */
 
 
@@ -259,6 +262,30 @@ function hideShellSyncHud_() {
   }
 }
 
+let shellFlashHudTimer = null;
+
+function showShellFlashHud_(message, isSuccess) {
+  if (!shellFlashHud || !shellFlashHudTitle || !shellFlashHudDetail) return;
+
+  if (shellFlashHudTimer) {
+    clearTimeout(shellFlashHudTimer);
+    shellFlashHudTimer = null;
+  }
+
+  shellFlashHud.classList.remove("hidden", "success", "error");
+  shellFlashHud.classList.add(isSuccess ? "success" : "error");
+  shellFlashHud.setAttribute("aria-hidden", "false");
+
+  shellFlashHudTitle.textContent = isSuccess ? "SUCCESS" : "ERROR";
+  shellFlashHudDetail.textContent = message || "";
+
+  shellFlashHudTimer = setTimeout(function () {
+    shellFlashHud.classList.add("hidden");
+    shellFlashHud.classList.remove("success", "error");
+    shellFlashHud.setAttribute("aria-hidden", "true");
+  }, 1800);
+}
+
 function showElement_(el) {
   if (!el) return;
   el.classList.remove("hidden");
@@ -354,6 +381,51 @@ function updateOfflineDirectionsButton_(prop) {
   offlineDirectionsBtn.classList.remove("hidden");
 }
 
+function updateOfflineActionOptions_(shellAuth) {
+  if (!offlineActionSelect) return;
+
+  const isClockedIn = !!(shellAuth && shellAuth.currentShift);
+
+  const clockInOption = Array.from(offlineActionSelect.options).find(function (opt) {
+    return opt.value === "clock_in";
+  });
+
+  const noteOption = Array.from(offlineActionSelect.options).find(function (opt) {
+    return opt.value === "add_note";
+  });
+
+  const clockOutOption = Array.from(offlineActionSelect.options).find(function (opt) {
+    return opt.value === "clock_out";
+  });
+
+  function setOptionVisible_(option, isVisible) {
+    if (!option) return;
+    option.hidden = !isVisible;
+    option.disabled = !isVisible;
+  }
+
+  setOptionVisible_(clockInOption, !isClockedIn);
+  setOptionVisible_(noteOption, isClockedIn);
+  setOptionVisible_(clockOutOption, isClockedIn);
+
+  const currentValue = offlineActionSelect.value || "";
+  const currentStillAllowed =
+    (currentValue === "clock_in" && !isClockedIn) ||
+    (currentValue === "add_note" && isClockedIn) ||
+    (currentValue === "clock_out" && isClockedIn);
+
+  if (!currentStillAllowed) {
+    offlineActionSelect.value = "";
+  }
+
+  const selectedAction = offlineActionSelect.value || "";
+  if (selectedAction === "add_note") {
+    showElement_(offlineNoteWrap);
+  } else {
+    hideElement_(offlineNoteWrap);
+  }
+}
+
 function getShellProperties_(shellAuth) {
   return Array.isArray(shellAuth && shellAuth.properties) ? shellAuth.properties : [];
 }
@@ -372,8 +444,26 @@ function getCurrentPropertyText_(shellAuth) {
 
 function updateOfflineQueueCount_() {
   if (!offlineQueueCount) return;
+
   const queue = getShellQueue_();
-  offlineQueueCount.textContent = "Queued entries: " + queue.length;
+
+  if (!queue.length) {
+    offlineQueueCount.textContent = "";
+    offlineQueueCount.style.display = "none";
+    return;
+  }
+
+  const latest = queue[queue.length - 1];
+  const latestType = String((latest && latest.eventType) || "").replace(/_/g, " ");
+  const latestProperty = String((latest && latest.property) || "");
+
+  offlineQueueCount.textContent =
+    "Queued: " +
+    queue.length +
+    (latestType ? " • Last: " + latestType : "") +
+    (latestProperty ? " at " + latestProperty : "");
+
+  offlineQueueCount.style.display = "block";
 }
 
 function updateOfflineReadyText_(shellAuth) {
@@ -383,6 +473,7 @@ function updateOfflineReadyText_(shellAuth) {
   }
 
   renderOfflineCurrentCleanStatus_(shellAuth);
+    updateOfflineActionOptions_(shellAuth);
 
   if (!offlineReadyText) return;
 
@@ -550,28 +641,28 @@ function saveOfflineEntry_() {
   const note = (offlineNoteInput && offlineNoteInput.value || "").trim();
 
   if (!shellAuth || !shellAuth.cleanerName) {
-    setStatusText_("Offline mode is not ready yet on this phone. Please go online and load offline prep first.");
+    showShellFlashHud_("This phone is not ready yet. Please prepare it first.", false);
     return;
   }
 
   if (!action) {
-    setStatusText_("Please select an offline action.");
+    showShellFlashHud_("Please select an action.", false);
     return;
   }
 
   if (!selectedOfflineProperty || !selectedOfflineProperty.name) {
-    setStatusText_("Please select a property from the list.");
+    showShellFlashHud_("Please select a property from the list.", false);
     return;
   }
 
   if (action === "add_note" && !note) {
-    setStatusText_("Please enter a cleaning note.");
+    showShellFlashHud_("Please enter a cleaning note.", false);
     return;
   }
-  
+
   if (shellSyncInProgress) {
     showShellSyncHud_("Previous entry is still syncing...");
-    setStatusText_("Please wait — syncing previous entry...");
+    showShellFlashHud_("Please wait — syncing previous entry.", false);
     return;
   }
 
@@ -609,10 +700,18 @@ function saveOfflineEntry_() {
   updateOfflineReadyText_(shellAuth);
   resetOfflineEntryForm_(shellAuth);
 
-  setStatusText_("Offline entry saved on this phone.");
-
   if (navigator.onLine) {
+    showShellFlashHud_("Submitting entry...", true);
     syncShellQueue_();
+  } else {
+    const actionLabel =
+      action === "clock_in"
+        ? "Clock in saved offline."
+        : action === "clock_out"
+        ? "Clock out saved offline."
+        : "Note saved offline.";
+
+    showShellFlashHud_(actionLabel, true);
   }
 }
 
