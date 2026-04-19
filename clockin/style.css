@@ -46,12 +46,13 @@ body {
 /* end[shell_card_spacing_tightened] */
 
 .shellBlueBar {
-  width: calc(100% + 28px);
+  width: 100%;
   background: #e8f0fe;
   padding: 8px 12px;
-  margin: 0 0 0 -14px;
+  margin: 0 0 8px 0;
   box-sizing: border-box;
   text-align: right;
+  border-radius: 12px;
 }
 
 .shellWorkHistoryBtn {
@@ -86,7 +87,7 @@ body {
   height: auto;
   max-height: 64px;
   object-fit: contain;
-  margin: 0;
+  margin: 0 auto;
 }
 
 .shellTopSection {
@@ -103,8 +104,17 @@ body {
 
 #shellUnlockSection,
 #prepSection {
+  width: min(100%, 380px);
+  max-width: 380px;
   margin-left: auto;
   margin-right: auto;
+}
+
+#shellUnlockSection .prepSectionTitle,
+#shellUnlockSection .prepSectionText,
+#prepSection .prepSectionTitle,
+#prepSection .prepSectionText {
+  text-align: center;
 }
 
 #shellUnlockSection .pinDots,
@@ -329,14 +339,15 @@ textarea::placeholder {
 }
 
 .offlineReadyText {
-  margin-top: 6px;
+  margin-top: 12px;
   margin-bottom: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: #4d6474;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #e7f8f1;
+  color: #146c43;
   font-size: 15px;
   line-height: 1.4;
+  border: 1px solid #bfe8d5;
 }
 
 .offlineQueueCount {
