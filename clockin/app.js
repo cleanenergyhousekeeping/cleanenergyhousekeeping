@@ -850,12 +850,13 @@ async function loadOfflinePrep_() {
   }
 
   /* begin[redirect_to_live_app_for_prep_when_not_authenticated] */
+/* begin[send_shell_prep_back_to_regular_live_app] */
 if (!shellAuth.sessionToken || !shellAuth.clientId || !shellAuth.cleanerName) {
   setStatusText_("Opening Clean Energy app to prepare this phone...");
-  setButtonState_("Loading...", "loading");
-  window.location.href = LIVE_APP_PREP_URL;
+  openLiveApp_();
   return;
 }
+/* end[send_shell_prep_back_to_regular_live_app] */
 /* end[redirect_to_live_app_for_prep_when_not_authenticated] */
 
   setStatusText_("Preparing this phone...");
