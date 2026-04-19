@@ -672,6 +672,19 @@ body.shellWorkHistoryOpen {
   border-bottom: none;
 }
 
+.shellWorkHistoryTransitWrap {
+  margin-top: 8px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.shellWorkHistoryTransitLine {
+  display: inline-block;
+  font-size: 16px;
+  line-height: 1.35;
+  color: #6b7f8d;
+}
+
 .shellWorkHistoryProperty {
   flex: 1;
   font-size: 18px;
