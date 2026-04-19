@@ -28,20 +28,22 @@ body {
   overflow-x: hidden;
 }
 
+/* begin[shell_card_spacing_tightened] */
 .card {
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  margin-top: 48px;
-margin-top: calc(constant(safe-area-inset-top) + 32px);
-margin-top: calc(env(safe-area-inset-top) + 32px);
+  margin-top: 33px;
+  margin-top: calc(constant(safe-area-inset-top) + 17px);
+  margin-top: calc(env(safe-area-inset-top) + 17px);
   background: #ffffff;
   border-radius: 0;
-  padding: 0 14px 24px;
+  padding: 0 14px 4px;
   box-sizing: border-box;
   box-shadow: none;
   overflow-x: hidden;
 }
+/* end[shell_card_spacing_tightened] */
 
 .shellBlueBar {
   width: calc(100% + 28px);
@@ -66,14 +68,16 @@ margin-top: calc(env(safe-area-inset-top) + 32px);
   text-align: right;
 }
 
+/* begin[shell_logo_spacing_tightened] */
 .logoBannerWrap {
   width: 100%;
   background: #ffffff;
-  padding: 22px 0 8px;
-  margin: 0 0 6px;
+  padding: 7px 0 4px;
+  margin: 0 0 2px;
   box-sizing: border-box;
   overflow: hidden;
 }
+/* end[shell_logo_spacing_tightened] */
 
 .logoBanner {
   display: block;
@@ -89,11 +93,29 @@ margin-top: calc(env(safe-area-inset-top) + 32px);
   margin-bottom: 0;
 }
 
+/* begin[shell_pin_card_centering] */
 .pinCard {
   width: min(100%, 380px);
   max-width: 380px;
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: auto;
 }
+
+#shellUnlockSection,
+#prepSection {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#shellUnlockSection .pinDots,
+#shellUnlockSection .keypad,
+#prepSection .pinDots,
+#prepSection .keypad {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* end[shell_pin_card_centering] */
 
 .screenTitle {
   margin: 8px 0 8px;
@@ -296,27 +318,25 @@ textarea::placeholder {
 
 /* begin[offline_guidance_queue_and_sync_polish_styles] */
 .offlineGuidanceText {
-  margin-top: 12px;
+  margin-top: 8px;
   margin-bottom: 0;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: #f7fafc;
+  padding: 0;
+  border: none;
+  background: transparent;
   color: #5f6f82;
   font-size: 15px;
   line-height: 1.45;
-  border: 1px solid #d8e2e8;
 }
 
 .offlineReadyText {
-  margin-top: 12px;
+  margin-top: 6px;
   margin-bottom: 0;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: #f3f7fa;
+  padding: 0;
+  border: none;
+  background: transparent;
   color: #4d6474;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.4;
-  border: 1px solid #d8e2e8;
 }
 
 .offlineQueueCount {
