@@ -659,6 +659,10 @@ body.shellWorkHistoryOpen {
   padding: 18px 14px 40px;
 }
 
+.shellWorkHistoryRow {
+  border-bottom: 1px solid #e3eaee;
+}
+
 .shellWorkHistoryDayHeader {
   margin-top: 12px;
   margin-bottom: 12px;
