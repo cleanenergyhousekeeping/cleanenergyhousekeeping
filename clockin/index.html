@@ -212,9 +212,9 @@
           ></textarea>
         </div>
 
-        <button id="saveOfflineEntryBtn" class="submitButton" type="button">
-          Save Offline Entry
-        </button>
+       <button id="saveOfflineEntryBtn" class="submitButton" type="button">
+  Submit
+</button>
 
         <div id="offlineReadyText" class="offlineReadyText"></div>
         <div id="offlineQueueCount" class="offlineQueueCount">Queued entries: 0</div>
@@ -223,6 +223,12 @@
         <div id="shellSyncHudCard" class="shellSyncHudCard">
           SYNCING
           <span id="shellSyncHudDetail" class="shellSyncHudDetail">Please wait...</span>
+        </div>
+      </div>
+            <div id="shellFlashHud" class="shellFlashHud hidden" aria-live="polite" aria-hidden="true">
+        <div id="shellFlashHudCard" class="shellFlashHudCard">
+          <div id="shellFlashHudTitle" class="shellFlashHudTitle">SUCCESS</div>
+          <div id="shellFlashHudDetail" class="shellFlashHudDetail">Done.</div>
         </div>
       </div>
       <div id="installHelp" class="installHelp hidden">
