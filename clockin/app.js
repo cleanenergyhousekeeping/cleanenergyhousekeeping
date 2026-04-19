@@ -132,6 +132,9 @@ function appendShellPinDigit_(digit) {
   updateShellPinDots_();
 
   if (shellEnteredPin.length === SHELL_PIN_LENGTH) {
+    if (navigator.vibrate) {
+      navigator.vibrate(35);
+    }
     unlockShellWithPin_();
   }
 }
@@ -165,6 +168,10 @@ function appendPrepPinDigit_(digit) {
 
   prepEnteredPin += String(digit);
   updatePrepPinDots_();
+
+  if (prepEnteredPin.length === SHELL_PIN_LENGTH && navigator.vibrate) {
+    navigator.vibrate(35);
+  }
 }
 
 function backspacePrepPin_() {
@@ -358,6 +365,13 @@ function renderOfflineCurrentCleanStatus_(shellAuth) {
     "Clocked In at " + String(shift.property || "");
 
   const startedText = shift.clockInDisplay || formatShellClockTime_(shift.clockInMs);
+
+  if (!navigator.onLine) {
+    offlineCurrentCleanStartedText.innerHTML =
+      'Started: ' + startedText + ' • <span class="offlineElapsedText">Time elapsed unavailable offline.</span>';
+    return;
+  }
+
   const elapsedText = formatShellElapsedTime_(Date.now() - Number(shift.clockInMs || 0));
 
   offlineCurrentCleanStartedText.innerHTML =
@@ -473,23 +487,16 @@ function updateOfflineReadyText_(shellAuth) {
   }
 
   renderOfflineCurrentCleanStatus_(shellAuth);
-    updateOfflineActionOptions_(shellAuth);
+  updateOfflineActionOptions_(shellAuth);
 
   if (!offlineReadyText) return;
 
   if (shellAuth && shellAuth.cleanerName) {
-    const currentShiftText =
-      shellAuth.currentShift && shellAuth.currentShift.property
-        ? " Current shift: " + shellAuth.currentShift.property + "."
-        : "";
-
-    offlineReadyText.textContent =
-      "Offline mode is ready for " + shellAuth.cleanerName + "." + currentShiftText;
+    offlineReadyText.textContent = "Welcome, " + shellAuth.cleanerName + ".";
     return;
   }
 
-  offlineReadyText.textContent =
-    "Offline mode is not ready yet on this phone. Please go online and load offline prep first.";
+  offlineReadyText.textContent = "";
 }
 
 function clearOfflinePropertyResults_() {
