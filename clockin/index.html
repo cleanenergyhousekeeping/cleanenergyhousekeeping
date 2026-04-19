@@ -74,7 +74,40 @@
       <div id="prepSection" class="prepCard hidden">
         <div class="prepSectionTitle">Prepare This Phone</div>
         <div class="prepSectionText">
-          While online, tap below once to refresh offline access on this phone automatically.
+          While online, enter your 4-digit PIN once to prepare offline mode on this phone.
+        </div>
+
+        <div id="prepPinDots" class="pinDots" aria-label="Prep PIN entry display">
+          <div class="pinDot" data-prep-pin-slot="0"></div>
+          <div class="pinDot" data-prep-pin-slot="1"></div>
+          <div class="pinDot" data-prep-pin-slot="2"></div>
+          <div class="pinDot" data-prep-pin-slot="3"></div>
+        </div>
+
+        <input
+          id="prepAccessCode"
+          type="password"
+          inputmode="numeric"
+          maxlength="4"
+          autocomplete="off"
+          class="visuallyHiddenInput"
+          aria-hidden="true"
+          tabindex="-1"
+        />
+
+        <div class="keypad" id="prepKeypad">
+          <button type="button" class="keypadBtn" data-prep-key="1">1</button>
+          <button type="button" class="keypadBtn" data-prep-key="2">2</button>
+          <button type="button" class="keypadBtn" data-prep-key="3">3</button>
+          <button type="button" class="keypadBtn" data-prep-key="4">4</button>
+          <button type="button" class="keypadBtn" data-prep-key="5">5</button>
+          <button type="button" class="keypadBtn" data-prep-key="6">6</button>
+          <button type="button" class="keypadBtn" data-prep-key="7">7</button>
+          <button type="button" class="keypadBtn" data-prep-key="8">8</button>
+          <button type="button" class="keypadBtn" data-prep-key="9">9</button>
+          <button type="button" class="keypadBtn keypadBtnAlt" id="prepClearPinBtn">Clear</button>
+          <button type="button" class="keypadBtn" data-prep-key="0">0</button>
+          <button type="button" class="keypadBtn keypadBtnAlt" id="prepBackspacePinBtn">⌫</button>
         </div>
 
         <button id="loadPrepBtn" class="actionButton prepButton" type="button">
