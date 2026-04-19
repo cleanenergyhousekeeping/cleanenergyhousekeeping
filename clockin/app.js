@@ -1408,17 +1408,13 @@ function renderShellWorkHistory_(data) {
       return;
     }
 
-    if (entry.type === "transit") {
-      const fromText = entry.fromProperty || "Previous job";
-      const toText = entry.toProperty || "Next job";
+     if (entry.type === "transit") {
       const startText = entry.transitStartText || "?";
       const endText = entry.transitEndText || "?";
 
       fragments.push(
         '<div class="shellWorkHistoryTransitWrap">' +
-          '<div class="shellWorkHistoryTransitLine">' +
-            "Transit: " + fromText + " → " + toText +
-          "</div>" +
+          '<div class="shellWorkHistoryTransitLine">Transit</div>' +
           '<div class="shellWorkHistoryTransitMeta">' +
             startText +
             " – " +
@@ -1429,7 +1425,7 @@ function renderShellWorkHistory_(data) {
             (entry.transitHoursDecimal || "0.00") +
             " hrs)" +
           "</div>" +
-        "</div>"
+        '</div>'
       );
     }
   });
