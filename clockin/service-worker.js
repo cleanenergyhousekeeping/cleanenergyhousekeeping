@@ -1,51 +1,422 @@
-const CACHE_NAME = "ce-clockin-shell-v212";
+html {
+  -webkit-text-size-adjust: 100%;
+}
 
-const APP_SHELL_FILES = [
-  "/clockin/",
-  "/clockin/index.html",
-  "/clockin/style.css",
-  "/clockin/app.js",
-  "/clockin/seed.html",
-  "/clockin/manifest.webmanifest",
-  "/clockin/icon.png"
-];
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  font-family: Arial, sans-serif;
+  background: #f5f7f9;
+  overflow-x: hidden;
+}
 
-self.addEventListener("install", function (event) {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(APP_SHELL_FILES);
-    })
-  );
-  self.skipWaiting();
-});
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
 
-self.addEventListener("activate", function (event) {
-  event.waitUntil(
-    caches.keys().then(function (keys) {
-      return Promise.all(
-        keys.map(function (key) {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
-    })
-  );
-  self.clients.claim();
-});
+.appShell {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
 
-self.addEventListener("fetch", function (event) {
-  const request = event.request;
+.card {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  background: #ffffff;
+  border-radius: 0;
+  padding: 10px 14px 24px;
+  box-sizing: border-box;
+  box-shadow: none;
+  overflow-x: hidden;
+}
 
-  if (request.method !== "GET") {
-    return;
+.logoBannerWrap {
+  width: 100%;
+  background: #ffffff;
+  padding: 10px 0 6px;
+  margin: 0 0 6px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.logoBanner {
+  display: block;
+  width: 100%;
+  max-width: 170px;
+  height: auto;
+  max-height: 64px;
+  object-fit: contain;
+  margin: 0;
+}
+
+.shellTopSection {
+  margin-bottom: 0;
+}
+
+.pinCard {
+  width: 100%;
+  max-width: 460px;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.screenTitle {
+  margin: 8px 0 8px;
+  font-size: 32px;
+  line-height: 1.12;
+  color: #23343b;
+}
+
+.screenSubtitle {
+  margin: 0 0 18px;
+  color: #5f6f82;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+label {
+  display: block;
+  margin: 16px 0 8px;
+  font-weight: 700;
+  font-size: 18px;
+  color: #23343b;
+}
+
+input,
+select,
+textarea,
+button {
+  width: 100%;
+  border-radius: 14px;
+  box-sizing: border-box;
+}
+
+input,
+textarea,
+select {
+  border: 1px solid #cfd8dc;
+  padding: 16px 18px;
+  background: #ffffff;
+  font-size: 18px;
+  line-height: 1.35;
+  color: #23343b;
+}
+
+select {
+  color: #23343b;
+  min-height: 58px;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 130px;
+  font-family: Arial, sans-serif;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #98acb8;
+}
+
+.actionButton,
+.submitButton {
+  border: none;
+  padding: 16px 18px;
+  cursor: pointer;
+  font-weight: 700;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.actionButton {
+  background: #649fca;
+  color: #ffffff;
+  font-size: 28px;
+  min-height: 74px;
+}
+
+.prepButton {
+  margin-top: 12px;
+}
+
+.submitButton {
+  margin-top: 22px;
+  background: #23343b;
+  color: #ffffff;
+  font-size: 22px;
+}
+
+.statusBox {
+  margin-top: 14px;
+  margin-bottom: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f3f7fa;
+  color: #4d6474;
+  font-size: 17px;
+  line-height: 1.45;
+  border: 1px solid #d8e2e8;
+}
+
+.prepCard,
+.installHelpCard {
+  margin-top: 12px;
+  padding: 14px 12px;
+  border: 1px solid #d8e2e8;
+  border-radius: 14px;
+  background: #f7fafc;
+}
+
+.prepSectionTitle,
+.installHelpTitle {
+  font-size: 24px;
+  font-weight: 700;
+  color: #23343b;
+  margin-bottom: 8px;
+}
+
+.prepSectionText,
+.installHelpCard p {
+  margin: 0 0 10px;
+  color: #4d6474;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.installHelpSub {
+  margin-top: 10px;
+  color: #5f6f82;
+}
+
+.prepInput {
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.offlineEntrySection {
+  margin-top: 18px;
+}
+
+.offlineReadyText {
+  margin-bottom: 10px;
+  padding: 14px 14px 12px;
+  border: 1px solid #bfe8d5;
+  border-radius: 14px;
+  background: #e7f8f1;
+  color: #146c43;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.offlineQueueCount {
+  margin-bottom: 16px;
+  color: #5f6f82;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.resultsBox {
+  background: #f3f7fa;
+  border: 1px solid #d8e2e8;
+  border-radius: 12px;
+  margin-top: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.offlineResultItem {
+  padding: 16px 14px;
+  border-bottom: 1px solid #e9eef2;
+  font-size: 18px;
+  line-height: 1.4;
+  cursor: pointer;
+  background: transparent;
+  color: #23343b;
+}
+
+.offlineResultItem:last-child {
+  border-bottom: none;
+}
+
+.offlineResultItem:hover {
+  background: #eef4f8;
+}
+
+.offlineResultItem:active {
+  background: #eaf2f7;
+}
+
+.propertyInfoPanel {
+  margin-top: 12px;
+  margin-bottom: 14px;
+  padding: 14px 12px;
+  border: 1px solid #d8e2e8;
+  border-radius: 14px;
+  background: #f7fafc;
+}
+
+.propertyInfoPanel,
+.propertyInfoRow,
+.propertyInfoValue {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+.propertyInfoHeader {
+  font-size: 20px;
+  font-weight: 700;
+  color: #23343b;
+  margin-top: 2px;
+  margin-bottom: 14px;
+}
+
+.propertyInfoRow {
+  margin-bottom: 12px;
+}
+
+.propertyInfoRow:last-child {
+  margin-bottom: 0;
+}
+
+.propertyInfoLabel {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #23343b;
+}
+
+.propertyInfoValue {
+  font-size: 17px;
+  line-height: 1.35;
+  color: #23343b;
+  word-break: break-word;
+}
+
+.pinDots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.pinDot {
+  height: 76px;
+  border: 2px solid #d8e2e8;
+  border-radius: 16px;
+  background: #f9fbfc;
+  position: relative;
+}
+
+.pinDot.filled::after {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #23343b;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.keypadBtn {
+  border: 1px solid #d8e2e8;
+  background: #ffffff;
+  color: #23343b;
+  min-height: 96px;
+  font-size: 38px;
+  font-weight: 600;
+  border-radius: 18px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.keypadBtn:active {
+  background: #eef4f8;
+}
+
+.keypadBtnAlt {
+  background: #f3f7fa;
+}
+
+.visuallyHiddenInput {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+
+.shellSyncHud {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.84);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 10002;
+}
+
+.shellSyncHudCard {
+  width: min(88vw, 420px);
+  background: #ffffff;
+  border: 2px solid #d8e2e8;
+  border-radius: 18px;
+  padding: 22px 20px;
+  box-shadow: 0 10px 28px rgba(35, 52, 59, 0.16);
+  color: #23343b;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.shellSyncHudDetail {
+  display: block;
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #5f6f82;
+}
+
+.shellLocked {
+  opacity: 0.65;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@media (min-width: 760px) {
+  .card {
+    margin: 0 auto;
+    padding: 18px 18px 28px;
   }
 
-  event.respondWith(
-    fetch(request).catch(function () {
-      return caches.match(request).then(function (cachedResponse) {
-        return cachedResponse || caches.match("/clockin/index.html");
-      });
-    })
-  );
-});
+  .screenTitle {
+    font-size: 36px;
+  }
+
+  .screenSubtitle {
+    font-size: 19px;
+  }
+}
