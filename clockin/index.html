@@ -208,7 +208,7 @@
             id="offlineNoteInput"
             class="offlineTextarea"
             rows="4"
-            placeholder="Only note non-standard work that may have added time"
+            placeholder="Clock-in time corrections: extra tasks completed that added value or time (e.g., washed guest duvet cover)."
           ></textarea>
         </div>
 
@@ -216,8 +216,15 @@
   Submit
 </button>
 
+        <!-- begin[offline_guidance_and_queue_markup] -->
+        <div id="offlineGuidanceText" class="offlineGuidanceText hidden">
+          Select a property and action to begin.
+        </div>
+
         <div id="offlineReadyText" class="offlineReadyText"></div>
-        <div id="offlineQueueCount" class="offlineQueueCount">Queued entries: 0</div>
+
+        <div id="offlineQueueCount" class="offlineQueueCount hidden"></div>
+        <!-- end[offline_guidance_and_queue_markup] -->
       </div>
       <div id="shellSyncHud" class="shellSyncHud hidden" aria-live="polite" aria-hidden="true">
         <div id="shellSyncHudCard" class="shellSyncHudCard">
