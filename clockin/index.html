@@ -131,6 +131,14 @@
           readonly
         />
 
+        <!-- begin[offline_top_guidance_markup] -->
+        <div id="offlineGuidanceText" class="offlineGuidanceText hidden">
+          Select a property and action to begin.
+        </div>
+
+        <div id="offlineReadyText" class="offlineReadyText"></div>
+        <!-- end[offline_top_guidance_markup] -->
+
         <label for="offlinePropertySearch">Property</label>
         <input
           id="offlinePropertySearch"
@@ -216,15 +224,9 @@
   Submit
 </button>
 
-        <!-- begin[offline_guidance_and_queue_markup] -->
-        <div id="offlineGuidanceText" class="offlineGuidanceText hidden">
-          Select a property and action to begin.
-        </div>
-
-        <div id="offlineReadyText" class="offlineReadyText"></div>
-
+        <!-- begin[offline_queue_only_markup] -->
         <div id="offlineQueueCount" class="offlineQueueCount hidden"></div>
-        <!-- end[offline_guidance_and_queue_markup] -->
+        <!-- end[offline_queue_only_markup] -->
       </div>
       <div id="shellSyncHud" class="shellSyncHud hidden" aria-live="polite" aria-hidden="true">
         <div id="shellSyncHudCard" class="shellSyncHudCard">
