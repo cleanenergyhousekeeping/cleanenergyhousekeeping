@@ -61,6 +61,11 @@ const shellSyncHudDetail = document.getElementById("shellSyncHudDetail");
 const shellFlashHud = document.getElementById("shellFlashHud");
 const shellFlashHudTitle = document.getElementById("shellFlashHudTitle");
 const shellFlashHudDetail = document.getElementById("shellFlashHudDetail");
+const shellWorkHistoryModal = document.getElementById("shellWorkHistoryModal");
+const shellWorkHistoryBackBtn = document.getElementById("shellWorkHistoryBackBtn");
+const shellWorkHistoryWeekLabel = document.getElementById("shellWorkHistoryWeekLabel");
+const shellWorkHistoryContent = document.getElementById("shellWorkHistoryContent");
+const shellWorkHistoryTotalValue = document.getElementById("shellWorkHistoryTotalValue");
 /* end[clockin_shell_dom_refs] */
 
 
@@ -1258,6 +1263,168 @@ function enterOfflineMode_() {
   updateShellUi_();
 }
 
+/* begin[shell_work_history_helpers] */
+let shellWorkHistoryLoading = false;
+
+function clearShellWorkHistoryUi_() {
+  if (shellWorkHistoryWeekLabel) {
+    shellWorkHistoryWeekLabel.textContent = "";
+  }
+
+  if (shellWorkHistoryContent) {
+    shellWorkHistoryContent.innerHTML = "";
+  }
+
+  if (shellWorkHistoryTotalValue) {
+    shellWorkHistoryTotalValue.textContent = "0:00 (0.00 hrs)";
+  }
+}
+
+function showShellWorkHistoryModal_() {
+  if (!shellWorkHistoryModal) return;
+  shellWorkHistoryModal.classList.remove("hidden");
+  shellWorkHistoryModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("shellWorkHistoryOpen");
+}
+
+function hideShellWorkHistoryModal_() {
+  if (!shellWorkHistoryModal) return;
+  shellWorkHistoryModal.classList.add("hidden");
+  shellWorkHistoryModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("shellWorkHistoryOpen");
+}
+
+function renderShellWorkHistory_(data) {
+  clearShellWorkHistoryUi_();
+
+  if (!data || !data.ok) {
+    if (shellWorkHistoryContent) {
+      shellWorkHistoryContent.innerHTML =
+        '<div class="shellWorkHistoryEmpty">Could not load work history.</div>';
+    }
+    return;
+  }
+
+  if (shellWorkHistoryWeekLabel) {
+    shellWorkHistoryWeekLabel.textContent = data.weekLabel || "";
+  }
+
+  if (!data.properties || !data.properties.length) {
+    if (shellWorkHistoryContent) {
+      shellWorkHistoryContent.innerHTML =
+        '<div class="shellWorkHistoryEmpty">No completed shifts yet this week.</div>';
+    }
+
+    if (shellWorkHistoryTotalValue) {
+      shellWorkHistoryTotalValue.textContent =
+        (data.totalHoursText || "0:00") +
+        " (" +
+        (data.totalHoursDecimal || "0.00") +
+        " hrs)";
+    }
+
+    return;
+  }
+
+  const fragments = data.properties.map(function (entry) {
+    return (
+      '<div class="shellWorkHistoryRow">' +
+        '<div class="shellWorkHistoryProperty">' + (entry.property || "—") + '</div>' +
+        '<div class="shellWorkHistoryHours">' +
+          (entry.hoursText || "0:00") +
+          " (" +
+          (entry.hoursDecimal || "0.00") +
+          " hrs)" +
+        '</div>' +
+      '</div>'
+    );
+  });
+
+  if (shellWorkHistoryContent) {
+    shellWorkHistoryContent.innerHTML = fragments.join("");
+  }
+
+  if (shellWorkHistoryTotalValue) {
+    shellWorkHistoryTotalValue.textContent =
+      (data.totalHoursText || "0:00") +
+      " (" +
+      (data.totalHoursDecimal || "0.00") +
+      " hrs)";
+  }
+}
+
+async function loadShellWorkHistory_() {
+  if (shellWorkHistoryLoading) return;
+
+  const shellAuth = getShellAuth_() || {};
+  const sessionToken = String(shellAuth.sessionToken || "");
+
+  if (!sessionToken) {
+    showShellFlashHud_("Session missing. Please log in online again.", false);
+    return;
+  }
+
+  shellWorkHistoryLoading = true;
+  clearShellWorkHistoryUi_();
+
+  if (shellWorkHistoryContent) {
+    shellWorkHistoryContent.innerHTML =
+      '<div class="shellWorkHistoryEmpty">Loading...</div>';
+  }
+
+  showShellWorkHistoryModal_();
+
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        mode: "getShellWorkHistory",
+        payload: {
+          sessionToken: sessionToken,
+        },
+      }),
+      cache: "no-store",
+    });
+
+    const rawText = await response.text();
+    let parsed = null;
+
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch (_) {
+      parsed = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        "Shell work history HTTP " +
+          response.status +
+          (rawText ? " — " + rawText.slice(0, 200) : "")
+      );
+    }
+
+    if (!parsed) {
+      throw new Error("Shell work history returned a non-JSON response.");
+    }
+
+    renderShellWorkHistory_(parsed);
+  } catch (error) {
+    if (shellWorkHistoryContent) {
+      shellWorkHistoryContent.innerHTML =
+        '<div class="shellWorkHistoryEmpty">' +
+        ("Could not load work history: " +
+          ((error && error.message) || String(error) || "Unknown error")) +
+        '</div>';
+    }
+  } finally {
+    shellWorkHistoryLoading = false;
+  }
+}
+/* end[shell_work_history_helpers] */
+
 function updateShellUi_() {
   const standalone = isStandaloneMode_();
   const online = navigator.onLine;
@@ -1490,9 +1657,11 @@ if (saveOfflineEntryBtn) {
 }
 
 if (shellWorkHistoryBtn) {
-  shellWorkHistoryBtn.addEventListener("click", function () {
-    showShellFlashHud_("Work History is coming next.", true);
-  });
+  shellWorkHistoryBtn.addEventListener("click", loadShellWorkHistory_);
+}
+
+if (shellWorkHistoryBackBtn) {
+  shellWorkHistoryBackBtn.addEventListener("click", hideShellWorkHistoryModal_);
 }
 
 
