@@ -90,7 +90,7 @@ margin-top: calc(env(safe-area-inset-top) + 32px);
 }
 
 .pinCard {
-  width: min(80%, 200px);
+  width: min(100%, 380px);
   max-width: 380px;
   margin: 0 auto;
 }
