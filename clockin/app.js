@@ -1017,13 +1017,7 @@ function updateShellUi_() {
     }
 
     hideElement_(shellUnlockSection);
-
-    if (online) {
-      showElement_(prepSection);
-    } else {
-      hideElement_(prepSection);
-    }
-
+    hideElement_(prepSection);
     showElement_(offlineEntrySection);
 
     const currentShiftText =
