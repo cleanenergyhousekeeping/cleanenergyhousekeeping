@@ -16,6 +16,8 @@ const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
 const statusText = document.getElementById("statusText");
 const offlineBtn = document.getElementById("offlineBtn");
 const installHelp = document.getElementById("installHelp");
+const shellBlueBar = document.getElementById("shellBlueBar");
+const shellWorkHistoryBtn = document.getElementById("shellWorkHistoryBtn");
 
 const shellUnlockSection = document.getElementById("shellUnlockSection");
 const shellAccessCode = document.getElementById("shellAccessCode");
@@ -1261,6 +1263,8 @@ function updateShellUi_() {
   const online = navigator.onLine;
   const shellAuth = getShellAuth_();
 
+  hideElement_(shellBlueBar);
+
   if (!standalone) {
     showElement_(installHelp);
     hideElement_(offlineBtn);
@@ -1294,6 +1298,7 @@ function updateShellUi_() {
       return;
     }
 
+    showElement_(shellBlueBar);
     hideElement_(shellUnlockSection);
     hideElement_(prepSection);
     showElement_(offlineEntrySection);
@@ -1482,6 +1487,12 @@ if (offlineActionSelect) {
 
 if (saveOfflineEntryBtn) {
   saveOfflineEntryBtn.addEventListener("click", saveOfflineEntry_);
+}
+
+if (shellWorkHistoryBtn) {
+  shellWorkHistoryBtn.addEventListener("click", function () {
+    showShellFlashHud_("Work History is coming next.", true);
+  });
 }
 
 
