@@ -659,48 +659,53 @@ body.shellWorkHistoryOpen {
   padding: 18px 14px 40px;
 }
 
-.shellWorkHistoryRow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid #e3eaee;
-}
-
-.shellWorkHistoryRow:last-child {
-  border-bottom: none;
-}
-
-.shellWorkHistoryTransitWrap {
-  margin-top: 8px;
+.shellWorkHistoryDayHeader {
+  margin-top: 12px;
   margin-bottom: 12px;
-  text-align: center;
-}
-
-.shellWorkHistoryTransitLine {
-  display: inline-block;
-  font-size: 16px;
-  line-height: 1.35;
-  color: #6b7f8d;
-}
-
-.shellWorkHistoryProperty {
-  flex: 1;
-  font-size: 18px;
-  line-height: 1.35;
+  font-size: 20px;
   font-weight: 700;
   color: #23343b;
 }
 
-.shellWorkHistoryHours {
-  flex: 0 0 auto;
+.shellWorkHistoryShiftBlock {
+  margin-bottom: 14px;
+}
+
+.shellWorkHistoryProperty {
   font-size: 18px;
-  line-height: 1.35;
   font-weight: 700;
-  color: #146c43;
-  text-align: right;
-  white-space: nowrap;
+  line-height: 1.3;
+  color: #23343b;
+}
+
+.shellWorkHistoryShiftMeta {
+  margin-top: 4px;
+  font-size: 16px;
+  line-height: 1.35;
+  color: #4d6474;
+}
+
+.shellWorkHistoryMetaDot {
+  padding: 0 8px;
+}
+
+.shellWorkHistoryTransitWrap {
+  margin-top: 6px;
+  margin-bottom: 16px;
+  padding-left: 6px;
+}
+
+.shellWorkHistoryTransitLine {
+  font-size: 15px;
+  line-height: 1.35;
+  color: #6b7f8d;
+}
+
+.shellWorkHistoryTransitMeta {
+  margin-top: 2px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: #6b7f8d;
 }
 
 .shellWorkHistoryEmpty {
