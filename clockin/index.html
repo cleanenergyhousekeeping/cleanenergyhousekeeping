@@ -19,6 +19,12 @@
 <body>
   <div class="appShell">
     <div class="card">
+      <div class="shellBlueBar">
+        <button type="button" id="shellWorkHistoryBtn" class="shellWorkHistoryBtn" disabled>
+          Work History
+        </button>
+      </div>
+
       <div class="logoBannerWrap">
         <img
           class="logoBanner"
@@ -116,16 +122,14 @@
       </div>
 
       <div id="offlineEntrySection" class="offlineEntrySection hidden">
-        <div id="offlineReadyText" class="offlineReadyText"></div>
-        <div id="offlineQueueCount" class="offlineQueueCount">Queued entries: 0</div>
-
-        <label for="offlineActionSelect">Action</label>
-        <select id="offlineActionSelect" class="offlineSelect">
-          <option value="">Select...</option>
-          <option value="clock_in">Clock In</option>
-          <option value="add_note">Add Cleaning Note</option>
-          <option value="clock_out">Clock Out</option>
-        </select>
+        <label for="offlineCleanerDisplay">Cleaner</label>
+        <input
+          id="offlineCleanerDisplay"
+          class="offlineInput offlineReadonlyInput"
+          type="text"
+          placeholder="Cleaner"
+          readonly
+        />
 
         <label for="offlinePropertySearch">Property</label>
         <input
@@ -138,8 +142,26 @@
 
         <div id="offlinePropertyResults" class="resultsBox hidden"></div>
 
+        <div id="offlineCurrentCleanStatusRow" class="offlineCurrentCleanStatusRow hidden">
+          <div class="offlineCurrentCleanLabel">Current Clean Status</div>
+          <div id="offlineCurrentCleanStatusText" class="offlineCurrentCleanStatusText"></div>
+          <div id="offlineCurrentCleanStartedText" class="offlineCurrentCleanStartedText"></div>
+        </div>
+
         <div id="offlinePropertyInfoPanel" class="propertyInfoPanel hidden">
           <div class="propertyInfoHeader">Current Property Info</div>
+
+          <div class="propertyInfoRow">
+            <a
+              id="offlineDirectionsBtn"
+              class="offlineDirectionsBtn hidden"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Google Map Directions
+            </a>
+          </div>
 
           <div class="propertyInfoRow">
             <div class="propertyInfoLabel">Entrance</div>
@@ -172,6 +194,14 @@
           </div>
         </div>
 
+        <label for="offlineActionSelect">Action</label>
+        <select id="offlineActionSelect" class="offlineSelect">
+          <option value="">Select...</option>
+          <option value="clock_in">Clock In</option>
+          <option value="add_note">Add Cleaning Note</option>
+          <option value="clock_out">Clock Out</option>
+        </select>
+
         <div id="offlineNoteWrap" class="hidden">
           <label for="offlineNoteInput">Cleaning Notes</label>
           <textarea
@@ -185,6 +215,9 @@
         <button id="saveOfflineEntryBtn" class="submitButton" type="button">
           Save Offline Entry
         </button>
+
+        <div id="offlineReadyText" class="offlineReadyText"></div>
+        <div id="offlineQueueCount" class="offlineQueueCount">Queued entries: 0</div>
       </div>
       <div id="shellSyncHud" class="shellSyncHud hidden" aria-live="polite" aria-hidden="true">
         <div id="shellSyncHudCard" class="shellSyncHudCard">
