@@ -1378,32 +1378,60 @@ function renderShellWorkHistory_(data) {
     return;
   }
 
-  const fragments = data.rows.map(function (entry) {
+  const fragments = [];
+  let lastDayHeader = "";
+
+  data.rows.forEach(function (entry) {
+    if (entry.type === "shift") {
+      if (entry.dayHeader && entry.dayHeader !== lastDayHeader) {
+        fragments.push(
+          '<div class="shellWorkHistoryDayHeader">' + entry.dayHeader + "</div>"
+        );
+        lastDayHeader = entry.dayHeader;
+      }
+
+      fragments.push(
+        '<div class="shellWorkHistoryShiftBlock">' +
+          '<div class="shellWorkHistoryProperty">' + (entry.property || "—") + '</div>' +
+          '<div class="shellWorkHistoryShiftMeta">' +
+            (entry.clockInText || "?") +
+            " – " +
+            (entry.clockOutText || "?") +
+            '<span class="shellWorkHistoryMetaDot">•</span>' +
+            (entry.shiftHoursText || "0:00") +
+            " (" +
+            (entry.shiftHoursDecimal || "0.00") +
+            " hrs)" +
+          "</div>" +
+        "</div>"
+      );
+      return;
+    }
+
     if (entry.type === "transit") {
-      return (
+      const fromText = entry.fromProperty || "Previous job";
+      const toText = entry.toProperty || "Next job";
+      const startText = entry.transitStartText || "?";
+      const endText = entry.transitEndText || "?";
+
+      fragments.push(
         '<div class="shellWorkHistoryTransitWrap">' +
           '<div class="shellWorkHistoryTransitLine">' +
-            'Transit after ' + (entry.property || "shift") + ": " +
+            "Transit: " + fromText + " → " + toText +
+          "</div>" +
+          '<div class="shellWorkHistoryTransitMeta">' +
+            startText +
+            " – " +
+            endText +
+            '<span class="shellWorkHistoryMetaDot">•</span>' +
             (entry.transitHoursText || "0:00") +
             " (" +
             (entry.transitHoursDecimal || "0.00") +
             " hrs)" +
-          '</div>' +
-        '</div>'
+          "</div>" +
+        "</div>"
       );
     }
-
-    return (
-      '<div class="shellWorkHistoryRow">' +
-        '<div class="shellWorkHistoryProperty">' + (entry.property || "—") + '</div>' +
-        '<div class="shellWorkHistoryHours">' +
-          (entry.hoursText || "0:00") +
-          " (" +
-          (entry.hoursDecimal || "0.00") +
-          " hrs)" +
-        '</div>' +
-      '</div>'
-    );
   });
 
   if (shellWorkHistoryContent) {
