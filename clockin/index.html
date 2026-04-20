@@ -28,9 +28,12 @@
       <!-- end[shell_work_history_bar_markup] -->
 
       <div class="logoBannerWrap">
-       <div style="text-align:center;font-weight:700;font-size:18px;margin:8px 0 12px;color:#a12626;">
-  INDEX PAGE TEST
-</div>
+        <div
+          id="jsProbe"
+          style="text-align:center;font-weight:700;font-size:18px;margin:8px 0 12px;color:#a12626;"
+        >
+          INDEX PAGE TEST
+        </div>
       </div>
 
       <div class="shellTopSection">
@@ -277,6 +280,15 @@
       <div id="statusText" class="statusBox"></div>
     </div>
   </div>
+
+  <script>
+    (function () {
+      var probe = document.getElementById("jsProbe");
+      if (probe) {
+        probe.textContent = "INLINE JS RAN";
+      }
+    })();
+  </script>
 
   <script src="/clockin/app.js"></script>
 </body>
