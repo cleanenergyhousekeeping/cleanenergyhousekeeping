@@ -1,9 +1,4 @@
-(function () {
-  var probe = document.getElementById("jsProbe");
-  if (probe) {
-    probe.textContent = "APP.JS STARTED";
-  }
-})();
+
 /* begin[clockin_shell_constants] */
 const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec";
