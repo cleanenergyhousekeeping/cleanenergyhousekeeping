@@ -86,6 +86,7 @@ const SHELL_PIN_LENGTH = 4;
 /* end[clockin_shell_state] */
 let shellSyncInProgress = false;
 let shellSyncTimer = null;
+let shellLastForegroundRefreshMs = 0;
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -1013,6 +1014,68 @@ async function refreshShellAuthBeforeUnlock_() {
   };
 }
 
+async function refreshShellAuthOnForegroundIfNeeded_() {
+  if (!navigator.onLine) {
+    return {
+      ok: false,
+      skipped: true,
+      message: "Offline. Using saved phone data.",
+    };
+  }
+
+  const shellAuth = getShellAuth_() || {};
+  if (!shellAuth || !shellAuth.sessionToken) {
+    return {
+      ok: false,
+      skipped: true,
+      message: "No prepared shell session found.",
+    };
+  }
+
+  const now = Date.now();
+  if (now - shellLastForegroundRefreshMs < 4000) {
+    return {
+      ok: true,
+      skipped: true,
+      message: "Foreground refresh throttled.",
+    };
+  }
+
+  shellLastForegroundRefreshMs = now;
+
+  const refreshResult = await refreshShellAuthWithRetry_({
+    maxAttempts: 3,
+    retryDelayMs: 700,
+    statusPrefix: "Refreshing permissions",
+    showStatus: false,
+  });
+
+  if (refreshResult && refreshResult.ok) {
+    const freshShellAuth = getShellAuth_() || {};
+    updateOfflineReadyText_(freshShellAuth);
+    updateOfflineQueueCount_();
+    resetOfflineEntryForm_(freshShellAuth);
+    updateShellUi_();
+
+    return {
+      ok: true,
+      skipped: false,
+      payload: refreshResult.payload || null,
+    };
+  }
+
+  updateShellUi_();
+
+  return {
+    ok: false,
+    skipped: true,
+    message:
+      (refreshResult && refreshResult.message) ||
+      "Could not refresh permissions in the background.",
+    requiresLogin: !!(refreshResult && refreshResult.requiresLogin),
+  };
+}
+
 async function postShellQueueEntry_(queuedEntry) {
   const shellAuth = getShellAuth_() || {};
 
@@ -1725,6 +1788,7 @@ async function registerServiceWorker_() {
 /* begin[clockin_shell_event_wiring] */
 window.addEventListener("online", function () {
   updateShellUi_();
+  refreshShellAuthOnForegroundIfNeeded_();
   syncShellQueue_();
 });
 
@@ -1745,32 +1809,31 @@ function retryQueuedSyncIfReady_() {
   syncShellQueue_();
 }
 
+function handleShellForegroundResume_() {
+  updateShellUi_();
+  refreshShellAuthOnForegroundIfNeeded_();
+  retryQueuedSyncIfReady_();
+
+  setTimeout(function () {
+    refreshShellAuthOnForegroundIfNeeded_();
+    retryQueuedSyncIfReady_();
+  }, 900);
+}
+
 document.addEventListener("visibilitychange", function () {
   if (document.visibilityState !== "visible") {
     return;
   }
 
-  retryQueuedSyncIfReady_();
-
-  setTimeout(function () {
-    retryQueuedSyncIfReady_();
-  }, 900);
+  handleShellForegroundResume_();
 });
 
 window.addEventListener("pageshow", function () {
-  retryQueuedSyncIfReady_();
-
-  setTimeout(function () {
-    retryQueuedSyncIfReady_();
-  }, 900);
+  handleShellForegroundResume_();
 });
 
 window.addEventListener("focus", function () {
-  retryQueuedSyncIfReady_();
-
-  setTimeout(function () {
-    retryQueuedSyncIfReady_();
-  }, 900);
+  handleShellForegroundResume_();
 });
 
 if (offlineBtn) {
