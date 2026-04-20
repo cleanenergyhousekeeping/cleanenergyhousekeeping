@@ -918,6 +918,91 @@ async function refreshShellAuth_() {
     };
   }
 }
+async function refreshShellAuthFromPin_(pin) {
+  const normalizedPin = String(pin || "").trim();
+
+  if (!normalizedPin) {
+    return {
+      ok: false,
+      message: "Missing access code.",
+      requiresLogin: false,
+    };
+  }
+
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        mode: "loginWithPin",
+        payload: {
+          accessCode: normalizedPin,
+          clientId: "",
+        },
+      }),
+      cache: "no-store",
+    });
+
+    const rawText = await response.text();
+    let parsed = null;
+
+    try {
+      parsed = rawText ? JSON.parse(rawText) : null;
+    } catch (_) {
+      parsed = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        "PIN refresh HTTP " +
+          response.status +
+          (rawText ? " — " + rawText.slice(0, 200) : "")
+      );
+    }
+
+    if (!parsed) {
+      throw new Error("PIN refresh returned a non-JSON response.");
+    }
+
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        message: parsed.message || "Could not refresh live permissions.",
+        requiresLogin: /invalid access code/i.test(parsed.message || ""),
+      };
+    }
+
+    const pinHash = await hashShellPin_(normalizedPin);
+
+    const freshShellAuth = {
+      cleanerName: String(parsed.cleanerName || ""),
+      accessLevel: String(parsed.accessLevel || "LIMITED"),
+      currentShift: parsed.currentShift || null,
+      properties: Array.isArray(parsed.properties) ? parsed.properties : [],
+      sessionToken: String(parsed.sessionToken || ""),
+      clientId: String(parsed.clientId || ""),
+      pinHash: pinHash,
+      seededAtMs: Date.now(),
+    };
+
+    saveShellAuth_(freshShellAuth);
+
+    return {
+      ok: true,
+      payload: freshShellAuth,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        "PIN refresh failed: " +
+        ((error && error.message) || String(error) || "Unknown error"),
+      requiresLogin: false,
+    };
+  }
+}
 
 async function refreshShellAuthWithRetry_(options) {
   const opts = options || {};
@@ -1275,20 +1360,32 @@ async function unlockShellWithPin_() {
     return;
   }
 
-  setStatusText_(navigator.onLine ? "Checking access and permissions..." : "Checking access code...");
+  setStatusText_(navigator.onLine ? "Checking live permissions..." : "Checking access code...");
 
   try {
-    const refreshGate = await refreshShellAuthBeforeUnlock_();
-    const usedSavedFallback = !!(refreshGate && refreshGate.skipped && navigator.onLine);
+    let usedSavedFallback = false;
 
-    if (!refreshGate.ok && refreshGate.requiresLogin) {
-      clearShellPin_();
-      setStatusText_(refreshGate.message || "Session expired. Please log in again.");
-      showShellFlashHud_(refreshGate.message || "Session expired. Please log in again.", false);
-      return;
+    if (navigator.onLine) {
+      const livePinRefresh = await refreshShellAuthFromPin_(enteredPin);
+
+      if (livePinRefresh && livePinRefresh.ok) {
+        shellAuth = getShellAuth_() || {};
+      } else {
+        const refreshGate = await refreshShellAuthBeforeUnlock_();
+
+        if (!refreshGate.ok && refreshGate.requiresLogin) {
+          clearShellPin_();
+          setStatusText_(refreshGate.message || "Session expired. Please log in again.");
+          showShellFlashHud_(refreshGate.message || "Session expired. Please log in again.", false);
+          return;
+        }
+
+        usedSavedFallback = true;
+        shellAuth = getShellAuth_() || {};
+      }
+    } else {
+      usedSavedFallback = true;
     }
-
-    shellAuth = getShellAuth_() || {};
 
     if (!shellAuth || !shellAuth.pinHash) {
       clearShellPin_();
@@ -1314,13 +1411,19 @@ async function unlockShellWithPin_() {
 
     const cleanerName = shellAuth.cleanerName || "Cleaner";
 
-    if (usedSavedFallback) {
+    if (usedSavedFallback && navigator.onLine) {
       setStatusText_("Unlocked for " + cleanerName + " using saved phone data.");
+      showShellFlashHud_("Using saved phone data.", false);
+      return;
+    }
+
+    if (usedSavedFallback && !navigator.onLine) {
+      setStatusText_("Unlocked for " + cleanerName + " offline.");
       showShellFlashHud_("Welcome back, " + cleanerName + ".", true);
       return;
     }
 
-    setStatusText_("Unlocked for " + cleanerName + ".");
+    setStatusText_("Unlocked for " + cleanerName + " with live permissions.");
     showShellFlashHud_("Welcome back, " + cleanerName + ".", true);
   } catch (error) {
     clearShellPin_();
