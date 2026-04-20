@@ -1,4 +1,4 @@
-const CACHE_NAME = "ce-clockin-shell-v232";
+const CACHE_NAME = "ce-clockin-shell-v233";
 
 const APP_SHELL_FILES = [
   "/clockin/",
@@ -41,11 +41,25 @@ self.addEventListener("fetch", function (event) {
     return;
   }
 
+  const isNavigationRequest = request.mode === "navigate";
+
   event.respondWith(
-    fetch(request).catch(function () {
-      return caches.match(request).then(function (cachedResponse) {
-        return cachedResponse || caches.match("/clockin/index.html");
-      });
-    })
+    fetch(request)
+      .then(function (response) {
+        return response;
+      })
+      .catch(function () {
+        return caches.match(request).then(function (cachedResponse) {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+
+          if (isNavigationRequest) {
+            return caches.match("/clockin/index.html");
+          }
+
+          return Response.error();
+        });
+      })
   );
 });
