@@ -47,6 +47,8 @@ const offlineActionSelect = document.getElementById("offlineActionSelect");
 const offlinePropertySearch = document.getElementById("offlinePropertySearch");
 const offlinePropertyResults = document.getElementById("offlinePropertyResults");
 const offlinePropertyInfoPanel = document.getElementById("offlinePropertyInfoPanel");
+const offlinePropertyInfoEntranceRow = document.getElementById("offlinePropertyInfoEntranceRow");
+const offlinePropertyInfoAlarmRow = document.getElementById("offlinePropertyInfoAlarmRow");
 const offlinePropertyInfoEntrance = document.getElementById("offlinePropertyInfoEntrance");
 const offlinePropertyInfoAlarm = document.getElementById("offlinePropertyInfoAlarm");
 const offlinePropertyInfoWifi = document.getElementById("offlinePropertyInfoWifi");
@@ -577,18 +579,39 @@ function clearOfflinePropertyResults_() {
 function fillOfflinePropertyInfo_(prop) {
   if (!prop || !offlinePropertyInfoPanel) return;
 
-  offlinePropertyInfoEntrance.textContent = prop.entranceInfo || "—";
-  offlinePropertyInfoAlarm.textContent = prop.alarmInfo || "—";
+  const shellAuth = getShellAuth_() || {};
+  const accessLevel = String(shellAuth.accessLevel || "LIMITED").trim().toUpperCase();
+  const hasFullAccess = accessLevel === "FULL";
+
+  if (offlinePropertyInfoEntranceRow) {
+    offlinePropertyInfoEntranceRow.classList.toggle("hidden", !hasFullAccess);
+  }
+
+  if (offlinePropertyInfoAlarmRow) {
+    offlinePropertyInfoAlarmRow.classList.toggle("hidden", !hasFullAccess);
+  }
+
+  offlinePropertyInfoEntrance.textContent = hasFullAccess ? (prop.entranceInfo || "—") : "";
+  offlinePropertyInfoAlarm.textContent = hasFullAccess ? (prop.alarmInfo || "—") : "";
   offlinePropertyInfoWifi.textContent = prop.wifiNetwork || "—";
   offlinePropertyInfoWifiPassword.textContent = prop.wifiPassword || "—";
   offlinePropertyInfoOwners.textContent = prop.ownerNames || "—";
   offlinePropertyInfoNotes.textContent = prop.houseNotes || "—";
-updateOfflineDirectionsButton_(prop);
+
+  updateOfflineDirectionsButton_(prop);
   showElement_(offlinePropertyInfoPanel);
 }
 
 function hideOfflinePropertyInfo_() {
   if (!offlinePropertyInfoPanel) return;
+
+  if (offlinePropertyInfoEntranceRow) {
+    offlinePropertyInfoEntranceRow.classList.remove("hidden");
+  }
+
+  if (offlinePropertyInfoAlarmRow) {
+    offlinePropertyInfoAlarmRow.classList.remove("hidden");
+  }
 
   offlinePropertyInfoEntrance.textContent = "";
   offlinePropertyInfoAlarm.textContent = "";
@@ -596,10 +619,12 @@ function hideOfflinePropertyInfo_() {
   offlinePropertyInfoWifiPassword.textContent = "";
   offlinePropertyInfoOwners.textContent = "";
   offlinePropertyInfoNotes.textContent = "";
+
   if (offlineDirectionsBtn) {
     offlineDirectionsBtn.setAttribute("href", "#");
     offlineDirectionsBtn.classList.add("hidden");
   }
+
   hideElement_(offlinePropertyInfoPanel);
 }
 
