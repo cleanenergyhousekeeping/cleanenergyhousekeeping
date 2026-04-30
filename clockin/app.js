@@ -1335,6 +1335,10 @@ async function syncShellQueue_() {
     }
 
     if (queueRemaining > 0) {
+      showShellFlashHud_("Saved on phone. Not synced yet.", false);
+    }
+
+    if (queueRemaining > 0) {
       setTimeout(function () {
         retryQueuedSyncIfReady_();
       }, 1500);
