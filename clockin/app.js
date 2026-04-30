@@ -662,6 +662,16 @@ function findOfflinePropertyByName_(name, shellAuth) {
 /* begin[offline_property_search_with_guidance_refresh] */
 function handleOfflinePropertySearch_() {
   const shellAuth = getShellAuth_();
+
+  if (
+    !offlinePropertySearch ||
+    offlinePropertySearch.readOnly ||
+    !!(shellAuth && shellAuth.currentShift)
+  ) {
+    clearOfflinePropertyResults_();
+    return;
+  }
+
   const query = (offlinePropertySearch && offlinePropertySearch.value || "").trim().toLowerCase();
 
   if (!query) {
@@ -816,17 +826,10 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   if (navigator.onLine) {
-    showShellFlashHud_("Submitting entry...", true);
+    showShellSyncHud_("Submitting...");
     syncShellQueue_();
   } else {
-    const actionLabel =
-      action === "clock_in"
-        ? "Clock in saved offline."
-        : action === "clock_out"
-        ? "Clock out saved offline."
-        : "Note saved offline.";
-
-    showShellFlashHud_(actionLabel, true);
+    showShellFlashHud_("Saved on phone. Not synced yet.", false);
   }
 }
 
@@ -1184,6 +1187,7 @@ async function postShellQueueEntry_(queuedEntry) {
           eventType: queuedEntry.eventType || "",
           note: queuedEntry.note || "",
           submittedAtMs: queuedEntry.submittedAtMs || Date.now(),
+          syncSource: "shell_offline",
         },
       }),
       cache: "no-store",
@@ -1226,7 +1230,7 @@ async function syncShellQueue_() {
   if (!initialQueue.length) return;
 
   shellSyncInProgress = true;
-  showShellSyncHud_("Please wait...");
+  showShellSyncHud_("Syncing...");
 
   let finalStatusMessage = "";
 
@@ -1303,6 +1307,7 @@ async function syncShellQueue_() {
     if (!remainingQueue.length) {
       finalStatusMessage = "Offline entries synced.";
       setStatusText_(finalStatusMessage);
+      showShellFlashHud_("Synced.", true);
     } else if (!finalStatusMessage) {
       finalStatusMessage =
         "Some offline entries are still queued: " + remainingQueue.length;
@@ -1327,6 +1332,10 @@ async function syncShellQueue_() {
           ? " Queue remaining: " + queueRemaining
           : " Queue remaining: 0";
       setStatusText_(finalStatusMessage + suffix);
+    }
+
+    if (queueRemaining > 0) {
+      showShellFlashHud_("Saved on phone. Not synced yet.", false);
     }
 
     if (queueRemaining > 0) {
@@ -1355,7 +1364,7 @@ async function unlockShellWithPin_() {
     return;
   }
 
-  setStatusText_(navigator.onLine ? "Checking live permissions..." : "Checking access code...");
+  setStatusText_("Logging in...");
 
   try {
     let usedSavedFallback = false;
@@ -1414,12 +1423,11 @@ async function unlockShellWithPin_() {
 
     if (usedSavedFallback && !navigator.onLine) {
       setStatusText_("Unlocked for " + cleanerName + " offline.");
-      showShellFlashHud_("Welcome back, " + cleanerName + ".", true);
       return;
     }
 
     setStatusText_("Unlocked for " + cleanerName + " with live permissions.");
-    showShellFlashHud_("Welcome back, " + cleanerName + ".", true);
+
   } catch (error) {
     clearShellPin_();
     setStatusText_(
