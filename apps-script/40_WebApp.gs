@@ -39,6 +39,17 @@ function doPost(e) {
         property: safeStr_(body && body.payload && body.payload.property),
         submittedAtMs: Number((body && body.payload && body.payload.submittedAtMs) || 0),
       }));
+      logClockInDebugEvent_({
+        area: "webapp_post",
+        mode: body.mode,
+        eventType: safeStr_(body && body.payload && body.payload.eventType),
+        cleanerName: safeStr_(body && body.payload && body.payload.cleanerName),
+        property: safeStr_(body && body.payload && body.payload.property),
+        syncSource: safeStr_(body && body.payload && body.payload.syncSource),
+        clientId: safeStr_(body && body.payload && body.payload.clientId),
+        queuedId: safeStr_(body && body.payload && body.payload.queuedId),
+        reason: "submit_attempt",
+      });
       const result = submitWebAppTimeEntry(body.payload || {});
       if (!result || !result.ok) {
         Logger.log("[shell_queue_submit_failure] " + JSON.stringify({
@@ -47,6 +58,18 @@ function doPost(e) {
           property: safeStr_(body && body.payload && body.payload.property),
           message: safeStr_(result && result.message),
         }));
+        logClockInDebugEvent_({
+          area: "webapp_post",
+          mode: body.mode,
+          eventType: safeStr_(body && body.payload && body.payload.eventType),
+          cleanerName: safeStr_(body && body.payload && body.payload.cleanerName),
+          property: safeStr_(body && body.payload && body.payload.property),
+          syncSource: safeStr_(body && body.payload && body.payload.syncSource),
+          clientId: safeStr_(body && body.payload && body.payload.clientId),
+          queuedId: safeStr_(body && body.payload && body.payload.queuedId),
+          reason: "submit_non_ok",
+          message: safeStr_(result && result.message),
+        });
       }
       return ContentService
         .createTextOutput(JSON.stringify(result))
@@ -106,6 +129,18 @@ function doPost(e) {
       mode: safeStr_(body && body.mode),
       keys: body ? Object.keys(body) : [],
     }));
+    logClockInDebugEvent_({
+      area: "webapp_post",
+      mode: safeStr_(body && body.mode),
+      eventType: safeStr_(body && body.payload && body.payload.eventType),
+      cleanerName: safeStr_(body && body.payload && body.payload.cleanerName),
+      property: safeStr_(body && body.payload && body.payload.property),
+      syncSource: safeStr_(body && body.payload && body.payload.syncSource),
+      clientId: safeStr_(body && body.payload && body.payload.clientId),
+      queuedId: safeStr_(body && body.payload && body.payload.queuedId),
+      reason: "unsupported_post_mode",
+      message: "Unsupported POST mode.",
+    });
     return ContentService
       .createTextOutput(JSON.stringify({
         ok: false,

@@ -114,6 +114,55 @@ function escapeForFindText_(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/* begin[clock_in_debug_log_helpers] */
+const CLOCK_IN_DEBUG_LOG_SHEET_NAME = "Clock In Debug Log";
+const CLOCK_IN_DEBUG_LOG_HEADERS = [
+  "Timestamp",
+  "Area",
+  "Mode",
+  "Event Type",
+  "Cleaner Name",
+  "Property",
+  "Sync Source",
+  "Client ID",
+  "Queued ID",
+  "Reason",
+  "Message",
+];
+
+function getOrCreateClockInDebugLogSheet_() {
+  const ss = SpreadsheetApp.getActive();
+  let sheet = ss.getSheetByName(CLOCK_IN_DEBUG_LOG_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(CLOCK_IN_DEBUG_LOG_SHEET_NAME);
+  }
+  ensureHeaders_(sheet, CLOCK_IN_DEBUG_LOG_HEADERS);
+  return sheet;
+}
+
+function logClockInDebugEvent_(details) {
+  try {
+    const sheet = getOrCreateClockInDebugLogSheet_();
+    const row = [
+      new Date(),
+      safeStr_(details && details.area),
+      safeStr_(details && details.mode),
+      safeStr_(details && details.eventType),
+      safeStr_(details && details.cleanerName),
+      safeStr_(details && details.property),
+      safeStr_(details && details.syncSource),
+      safeStr_(details && details.clientId),
+      safeStr_(details && details.queuedId),
+      safeStr_(details && details.reason),
+      safeStr_(details && details.message),
+    ];
+    sheet.appendRow(row);
+  } catch (error) {
+    // Never block app behavior because debug logging failed.
+  }
+}
+/* end[clock_in_debug_log_helpers] */
+
 /* begin[seed_users_sheet] */
 /* begin[seed_users_sheet_from_config] */
 function seedUsersSheetFromConfig_() {

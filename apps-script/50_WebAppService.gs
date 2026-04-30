@@ -1089,6 +1089,18 @@ function submitWebAppTimeEntry(payload) {
             property: safeStr_(property),
             reason: "no_open_shift",
           }));
+          logClockInDebugEvent_({
+            area: "submit_webapp_time_entry",
+            mode: "submitShellQueueEntry",
+            eventType: "clock_out",
+            cleanerName: safeStr_(name),
+            property: safeStr_(property),
+            syncSource: safeStr_(syncSource),
+            clientId: safeStr_(clientId),
+            queuedId: safeStr_(payload && payload.queuedId),
+            reason: "no_open_shift",
+            message: "Clock out rejected because no open shift exists.",
+          });
         }
         return {
           ok: false,
@@ -1104,6 +1116,18 @@ function submitWebAppTimeEntry(payload) {
             openProperty: safeStr_(openShift.property),
             reason: "property_mismatch",
           }));
+          logClockInDebugEvent_({
+            area: "submit_webapp_time_entry",
+            mode: "submitShellQueueEntry",
+            eventType: "clock_out",
+            cleanerName: safeStr_(name),
+            property: safeStr_(property),
+            syncSource: safeStr_(syncSource),
+            clientId: safeStr_(clientId),
+            queuedId: safeStr_(payload && payload.queuedId),
+            reason: "property_mismatch",
+            message: "Clock out rejected because property does not match open shift.",
+          });
         }
         return {
           ok: false,
@@ -1316,6 +1340,13 @@ function refreshShellAuth(sessionToken, clientId) {
       reason: "missing_session_token",
       clientId: safeClientId,
     }));
+    logClockInDebugEvent_({
+      area: "refresh_shell_auth",
+      mode: "refreshShellAuth",
+      clientId: safeClientId,
+      reason: "missing_session_token",
+      message: "Missing session token.",
+    });
     return { ok: false, message: "Missing session token." };
   }
 
@@ -1325,6 +1356,13 @@ function refreshShellAuth(sessionToken, clientId) {
       reason: "session_expired",
       clientId: safeClientId,
     }));
+    logClockInDebugEvent_({
+      area: "refresh_shell_auth",
+      mode: "refreshShellAuth",
+      clientId: safeClientId,
+      reason: "session_expired",
+      message: "Session expired. Please log in again.",
+    });
     return { ok: false, message: "Session expired. Please log in again." };
   }
 
@@ -1334,6 +1372,13 @@ function refreshShellAuth(sessionToken, clientId) {
       reason: "missing_session_pin",
       clientId: safeClientId,
     }));
+    logClockInDebugEvent_({
+      area: "refresh_shell_auth",
+      mode: "refreshShellAuth",
+      clientId: safeClientId,
+      reason: "missing_session_pin",
+      message: "Session expired. Please log in again.",
+    });
     return { ok: false, message: "Session expired. Please log in again." };
   }
 
@@ -1343,6 +1388,13 @@ function refreshShellAuth(sessionToken, clientId) {
       reason: "cleaner_not_found",
       clientId: safeClientId,
     }));
+    logClockInDebugEvent_({
+      area: "refresh_shell_auth",
+      mode: "refreshShellAuth",
+      clientId: safeClientId,
+      reason: "cleaner_not_found",
+      message: "Cleaner record not found. Please log in again.",
+    });
     return { ok: false, message: "Cleaner record not found. Please log in again." };
   }
 
