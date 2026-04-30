@@ -826,7 +826,7 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   if (navigator.onLine) {
-    showShellSyncHud_("Submitting...");
+    showShellFlashHud_("Submitting...", true);
     syncShellQueue_();
   } else {
     showShellFlashHud_("Saved on phone. Not synced yet.", false);
