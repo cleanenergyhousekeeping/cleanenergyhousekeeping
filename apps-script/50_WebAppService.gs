@@ -1083,6 +1083,20 @@ function submitWebAppTimeEntry(payload) {
       const openShift = findOpenShiftForCleaner_(name);
 
       if (!openShift) {
+        if (eventType === "clock_out") {
+          logClockInDebug_({
+            event: "clock_out_rejected_no_open_shift",
+            context: "submitWebAppTimeEntry",
+            cleanerName: name,
+            property: property,
+            eventType: eventType,
+            syncSource: syncSource,
+            sessionPresent: !!session,
+            clientId: clientId,
+            result: "non_ok",
+            message: "No open shift found for clock_out.",
+          });
+        }
         return {
           ok: false,
           message: `${name}, you are not currently clocked in.`,
@@ -1090,6 +1104,21 @@ function submitWebAppTimeEntry(payload) {
       }
 
       if (safeStr_(openShift.property) !== property) {
+        if (eventType === "clock_out") {
+          logClockInDebug_({
+            event: "clock_out_rejected_property_mismatch",
+            context: "submitWebAppTimeEntry",
+            cleanerName: name,
+            property: property,
+            eventType: eventType,
+            syncSource: syncSource,
+            sessionPresent: !!session,
+            clientId: clientId,
+            result: "non_ok",
+            message:
+              "Open shift property mismatch. Open: " + safeStr_(openShift.property),
+          });
+        }
         return {
           ok: false,
           message: `${name}, you are currently clocked in at ${openShift.property}, not ${property}.`,
@@ -1297,21 +1326,55 @@ function refreshShellAuth(sessionToken, clientId) {
   const safeClientId = safeStr_(clientId);
 
   if (!safeSessionToken) {
+    logClockInDebug_({
+      event: "auth_refresh_failure",
+      context: "refreshShellAuth",
+      sessionPresent: false,
+      clientId: safeClientId,
+      result: "non_ok",
+      message: "Missing session token.",
+    });
     return { ok: false, message: "Missing session token." };
   }
 
   const session = getSession_(safeSessionToken);
   if (!session || !session.name) {
+    logClockInDebug_({
+      event: "auth_refresh_failure",
+      context: "refreshShellAuth",
+      sessionPresent: true,
+      clientId: safeClientId,
+      result: "non_ok",
+      message: "Session expired. Please log in again.",
+    });
     return { ok: false, message: "Session expired. Please log in again." };
   }
 
   const sessionPin = safeStr_(session.pin);
   if (!sessionPin) {
+    logClockInDebug_({
+      event: "auth_refresh_failure",
+      context: "refreshShellAuth",
+      cleanerName: safeStr_(session.name),
+      sessionPresent: true,
+      clientId: safeClientId,
+      result: "non_ok",
+      message: "Session expired. Please log in again.",
+    });
     return { ok: false, message: "Session expired. Please log in again." };
   }
 
   const cleaner = getCleanerRecordFromPin_(sessionPin);
   if (!cleaner) {
+    logClockInDebug_({
+      event: "auth_refresh_failure",
+      context: "refreshShellAuth",
+      cleanerName: safeStr_(session.name),
+      sessionPresent: true,
+      clientId: safeClientId,
+      result: "non_ok",
+      message: "Cleaner record not found. Please log in again.",
+    });
     return { ok: false, message: "Cleaner record not found. Please log in again." };
   }
 

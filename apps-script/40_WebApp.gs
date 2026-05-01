@@ -33,7 +33,33 @@ function doPost(e) {
     const body = JSON.parse(raw);
 
     if (body && body.mode === "submitShellQueueEntry") {
+      const queuePayload = body.payload || {};
+      logClockInDebug_({
+        event: "shell_queue_submit_attempt",
+        context: "doPost.submitShellQueueEntry",
+        property: queuePayload.property || "",
+        eventType: queuePayload.eventType || "",
+        syncSource: queuePayload.syncSource || "",
+        sessionPresent: !!queuePayload.sessionToken,
+        clientId: queuePayload.clientId || "",
+        result: "attempt",
+        message: "Received shell queue submit request.",
+      });
       const result = submitWebAppTimeEntry(body.payload || {});
+      if (!result || !result.ok) {
+        logClockInDebug_({
+          event: "shell_queue_submit_non_ok",
+          context: "doPost.submitShellQueueEntry",
+          cleanerName: (result && result.cleanerName) || "",
+          property: queuePayload.property || "",
+          eventType: queuePayload.eventType || "",
+          syncSource: queuePayload.syncSource || "",
+          sessionPresent: !!queuePayload.sessionToken,
+          clientId: queuePayload.clientId || "",
+          result: "non_ok",
+          message: (result && result.message) || "Non-ok shell queue result.",
+        });
+      }
       return ContentService
         .createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
@@ -71,6 +97,12 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    logClockInDebug_({
+      event: "unsupported_post_mode",
+      context: "doPost",
+      result: "non_ok",
+      message: "Unsupported POST mode: " + safeStr_(body && body.mode),
+    });
     return ContentService
       .createTextOutput(JSON.stringify({
         ok: false,
