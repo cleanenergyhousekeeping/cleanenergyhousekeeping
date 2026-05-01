@@ -114,6 +114,52 @@ function escapeForFindText_(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/* begin[clock_in_debug_log_helpers] */
+const CLOCK_IN_DEBUG_LOG_SHEET_NAME = "Clock In Debug Log";
+const CLOCK_IN_DEBUG_LOG_HEADERS = [
+  "Timestamp",
+  "Event",
+  "Context",
+  "Cleaner Name",
+  "Property",
+  "Event Type",
+  "Sync Source",
+  "Session Present",
+  "Client ID",
+  "Result",
+  "Message",
+];
+
+function logClockInDebug_(entry) {
+  try {
+    const payload = entry || {};
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) return;
+
+    let sheet = ss.getSheetByName(CLOCK_IN_DEBUG_LOG_SHEET_NAME);
+    if (!sheet) {
+      sheet = ss.insertSheet(CLOCK_IN_DEBUG_LOG_SHEET_NAME);
+    }
+
+    ensureHeaders_(sheet, CLOCK_IN_DEBUG_LOG_HEADERS);
+
+    sheet.appendRow([
+      new Date(),
+      safeStr_(payload.event),
+      safeStr_(payload.context),
+      safeStr_(payload.cleanerName),
+      safeStr_(payload.property),
+      safeStr_(payload.eventType),
+      safeStr_(payload.syncSource),
+      payload.sessionPresent ? "yes" : "no",
+      safeStr_(payload.clientId),
+      safeStr_(payload.result),
+      safeStr_(payload.message),
+    ]);
+  } catch (_) {}
+}
+/* end[clock_in_debug_log_helpers] */
+
 /* begin[seed_users_sheet] */
 /* begin[seed_users_sheet_from_config] */
 function seedUsersSheetFromConfig_() {

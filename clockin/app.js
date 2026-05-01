@@ -1184,6 +1184,7 @@ async function postShellQueueEntry_(queuedEntry) {
           eventType: queuedEntry.eventType || "",
           note: queuedEntry.note || "",
           submittedAtMs: queuedEntry.submittedAtMs || Date.now(),
+          syncSource: "shell_offline",
         },
       }),
       cache: "no-store",
@@ -2051,4 +2052,3 @@ document.addEventListener("DOMContentLoaded", async function () {
   syncShellQueue_();
 });
 /* end[clockin_shell_init] */
-
