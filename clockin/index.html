@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Clean Energy Clock In</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <link rel="apple-touch-icon" href="/clockin/icon.png">
+  <link rel="icon" type="image/png" href="/clockin/icon.png">
+  <link rel="manifest" href="/clockin/manifest.webmanifest">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Clock In">
+  <meta name="theme-color" content="#23343b">
+
+  <link rel="stylesheet" href="/clockin/style.css">
+</head>
+<body>
+  <div class="appShell">
+    <div class="card">
+      <!-- begin[shell_work_history_bar_markup] -->
+      <div id="shellBlueBar" class="shellBlueBar hidden">
+        <button type="button" id="shellWorkHistoryBtn" class="shellWorkHistoryBtn">
+          Work History
+        </button>
+      </div>
+      <!-- end[shell_work_history_bar_markup] -->
+
+     <div class="logoBannerWrap">
+  <img
+    class="logoBanner"
+    src="https://www.cleanenergyhousekeeping.com/logo.png"
+    alt="Clean Energy Housekeeping logo"
+  >
+</div>
+      <div class="shellTopSection">
+        <button id="offlineBtn" class="actionButton hidden" type="button">
+          Enter Offline Mode
+        </button>
+      </div>
+      <div id="shellUnlockSection" class="prepCard pinCard hidden">
+        <div class="prepSectionTitle">Enter Access Code</div>
+        <div class="prepSectionText">
+          Enter your 4-digit PIN to unlock this phone.
+        </div>
+
+        <div id="pinDots" class="pinDots" aria-label="PIN entry display">
+          <div class="pinDot" data-pin-slot="0"></div>
+          <div class="pinDot" data-pin-slot="1"></div>
+          <div class="pinDot" data-pin-slot="2"></div>
+          <div class="pinDot" data-pin-slot="3"></div>
+        </div>
+
+        <input
+          id="shellAccessCode"
+          type="password"
+          inputmode="numeric"
+          maxlength="4"
+          autocomplete="off"
+          class="visuallyHiddenInput"
+          aria-hidden="true"
+          tabindex="-1"
+        />
+
+        <div class="keypad" id="shellKeypad">
+          <button type="button" class="keypadBtn" data-key="1">1</button>
+          <button type="button" class="keypadBtn" data-key="2">2</button>
+          <button type="button" class="keypadBtn" data-key="3">3</button>
+          <button type="button" class="keypadBtn" data-key="4">4</button>
+          <button type="button" class="keypadBtn" data-key="5">5</button>
+          <button type="button" class="keypadBtn" data-key="6">6</button>
+          <button type="button" class="keypadBtn" data-key="7">7</button>
+          <button type="button" class="keypadBtn" data-key="8">8</button>
+          <button type="button" class="keypadBtn" data-key="9">9</button>
+          <button type="button" class="keypadBtn keypadBtnAlt" id="shellClearPinBtn">Clear</button>
+          <button type="button" class="keypadBtn" data-key="0">0</button>
+          <button type="button" class="keypadBtn keypadBtnAlt" id="shellBackspacePinBtn">⌫</button>
+        </div>
+      </div>
+      <div id="prepSection" class="prepCard hidden">
+        <div class="prepSectionTitle">Prepare This Phone</div>
+        <div class="prepSectionText">
+          While online, enter your 4-digit PIN once to prepare offline mode on this phone.
+        </div>
+
+        <div id="prepPinDots" class="pinDots" aria-label="Prep PIN entry display">
+          <div class="pinDot" data-prep-pin-slot="0"></div>
+          <div class="pinDot" data-prep-pin-slot="1"></div>
+          <div class="pinDot" data-prep-pin-slot="2"></div>
+          <div class="pinDot" data-prep-pin-slot="3"></div>
+        </div>
+
+        <input
+          id="prepAccessCode"
+          type="password"
+          inputmode="numeric"
+          maxlength="4"
+          autocomplete="off"
+          class="visuallyHiddenInput"
+          aria-hidden="true"
+          tabindex="-1"
+        />
+
+        <div class="keypad" id="prepKeypad">
+          <button type="button" class="keypadBtn" data-prep-key="1">1</button>
+          <button type="button" class="keypadBtn" data-prep-key="2">2</button>
+          <button type="button" class="keypadBtn" data-prep-key="3">3</button>
+          <button type="button" class="keypadBtn" data-prep-key="4">4</button>
+          <button type="button" class="keypadBtn" data-prep-key="5">5</button>
+          <button type="button" class="keypadBtn" data-prep-key="6">6</button>
+          <button type="button" class="keypadBtn" data-prep-key="7">7</button>
+          <button type="button" class="keypadBtn" data-prep-key="8">8</button>
+          <button type="button" class="keypadBtn" data-prep-key="9">9</button>
+          <button type="button" class="keypadBtn keypadBtnAlt" id="prepClearPinBtn">Clear</button>
+          <button type="button" class="keypadBtn" data-prep-key="0">0</button>
+          <button type="button" class="keypadBtn keypadBtnAlt" id="prepBackspacePinBtn">⌫</button>
+        </div>
+
+        <button id="loadPrepBtn" class="actionButton prepButton" type="button">
+          Prepare This Phone
+        </button>
+      </div>
+
+      <div id="offlineEntrySection" class="offlineEntrySection hidden">
+        <label for="offlineCleanerDisplay">Cleaner</label>
+        <input
+          id="offlineCleanerDisplay"
+          class="offlineInput offlineReadonlyInput"
+          type="text"
+          placeholder="Cleaner"
+          readonly
+        />
+
+        <!-- begin[offline_top_guidance_markup] -->
+        <div id="offlineGuidanceText" class="offlineGuidanceText hidden">
+          Select a property and action to begin.
+        </div>
+        <!-- end[offline_top_guidance_markup] -->
+
+        <label for="offlinePropertySearch">Property</label>
+        <input
+          id="offlinePropertySearch"
+          class="offlineInput"
+          type="text"
+          placeholder="Search address..."
+          autocomplete="off"
+        />
+
+        <div id="offlinePropertyResults" class="resultsBox hidden"></div>
+
+        <div id="offlineCurrentCleanStatusRow" class="offlineCurrentCleanStatusRow hidden">
+          <div class="offlineCurrentCleanLabel">Current Clean Status</div>
+          <div id="offlineCurrentCleanStatusText" class="offlineCurrentCleanStatusText"></div>
+          <div id="offlineCurrentCleanStartedText" class="offlineCurrentCleanStartedText"></div>
+        </div>
+
+        <div id="offlinePropertyInfoPanel" class="propertyInfoPanel hidden">
+          <div class="propertyInfoHeader">Current Property Info</div>
+
+          <div class="propertyInfoRow">
+            <a
+              id="offlineDirectionsBtn"
+              class="offlineDirectionsBtn hidden"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Google Map Directions
+            </a>
+          </div>
+
+          <div id="offlinePropertyInfoEntranceRow" class="propertyInfoRow">
+            <div class="propertyInfoLabel">Entrance</div>
+            <div id="offlinePropertyInfoEntrance" class="propertyInfoValue"></div>
+          </div>
+
+          <div id="offlinePropertyInfoAlarmRow" class="propertyInfoRow">
+            <div class="propertyInfoLabel">Alarm</div>
+            <div id="offlinePropertyInfoAlarm" class="propertyInfoValue"></div>
+          </div>
+
+          <div class="propertyInfoRow">
+            <div class="propertyInfoLabel">Wi-Fi</div>
+            <div id="offlinePropertyInfoWifi" class="propertyInfoValue"></div>
+          </div>
+
+          <div class="propertyInfoRow">
+            <div class="propertyInfoLabel">Wi-Fi Password</div>
+            <div id="offlinePropertyInfoWifiPassword" class="propertyInfoValue"></div>
+          </div>
+
+          <div class="propertyInfoRow">
+            <div class="propertyInfoLabel">Owner Names</div>
+            <div id="offlinePropertyInfoOwners" class="propertyInfoValue"></div>
+          </div>
+
+          <div class="propertyInfoRow">
+            <div class="propertyInfoLabel">House Notes</div>
+            <div id="offlinePropertyInfoNotes" class="propertyInfoValue"></div>
+          </div>
+        </div>
+
+        <label for="offlineActionSelect">Action</label>
+        <select id="offlineActionSelect" class="offlineSelect">
+          <option value="">Select...</option>
+          <option value="clock_in">Clock In</option>
+          <option value="add_note">Add Cleaning Note</option>
+          <option value="clock_out">Clock Out</option>
+        </select>
+
+        <div id="offlineNoteWrap" class="hidden">
+          <label for="offlineNoteInput">Cleaning Notes</label>
+          <textarea
+            id="offlineNoteInput"
+            class="offlineTextarea"
+            rows="4"
+            placeholder="Clock-in time corrections and extra tasks completed that added value or time (e.g., washed guest duvet cover)."
+          ></textarea>
+        </div>
+
+        <button id="saveOfflineEntryBtn" class="submitButton" type="button">
+          Submit
+        </button>
+
+        <!-- begin[offline_bottom_status_markup] -->
+        <div id="offlineReadyText" class="offlineReadyText"></div>
+        <div id="offlineQueueCount" class="offlineQueueCount hidden"></div>
+        <!-- end[offline_bottom_status_markup] -->
+      </div>
+      <!-- begin[shell_work_history_modal_markup] -->
+      <div id="shellWorkHistoryModal" class="shellWorkHistoryModal hidden" aria-hidden="true">
+        <div class="shellWorkHistoryModalInner">
+          <div class="shellWorkHistoryModalTopBar">
+            <div class="shellWorkHistoryTitleWrap">
+              <div class="shellWorkHistoryTitle">Work History</div>
+              <div id="shellWorkHistoryWeekLabel" class="shellWorkHistoryWeekLabel"></div>
+            </div>
+          </div>
+
+          <div id="shellWorkHistoryContent" class="shellWorkHistoryContent"></div>
+
+          <div class="shellWorkHistoryTotalWrap">
+            <div class="shellWorkHistoryTotalLabel">Total</div>
+            <div id="shellWorkHistoryTotalValue" class="shellWorkHistoryTotalValue">0:00 (0.00 hrs)</div>
+            <button type="button" id="shellWorkHistoryBackBtn" class="shellWorkHistoryBackBtn">← Back</button>
+          </div>
+        </div>
+      </div>
+      <!-- end[shell_work_history_modal_markup] -->
+
+      <div id="shellSyncHud" class="shellSyncHud hidden" aria-live="polite" aria-hidden="true">
+        <div id="shellSyncHudCard" class="shellSyncHudCard">
+          SYNCING
+          <span id="shellSyncHudDetail" class="shellSyncHudDetail">Please wait...</span>
+        </div>
+      </div>
+            <div id="shellFlashHud" class="shellFlashHud hidden" aria-live="polite" aria-hidden="true">
+        <div id="shellFlashHudCard" class="shellFlashHudCard">
+          <div id="shellFlashHudTitle" class="shellFlashHudTitle">SUCCESS</div>
+          <div id="shellFlashHudDetail" class="shellFlashHudDetail">Done.</div>
+        </div>
+      </div>
+      <div id="installHelp" class="installHelp hidden">
+        <div class="installHelpCard">
+          <div class="installHelpTitle">Install to Home Screen</div>
+          <p>
+            Tap the <strong>triple dots</strong> at the bottom right of Safari,
+            then tap <strong>Share</strong>, then <strong>View More</strong>,
+            then select <strong>Add to Home Screen</strong>.
+          </p>
+          <p class="installHelpSub">
+            Installing the icon lets the shell run full-screen and offline.
+          </p>
+        </div>
+      </div>
+
+      <div id="statusText" class="statusBox"></div>
+    </div>
+  </div>
+
+  <script src="/clockin/app.js"></script>
+</body>
+</html>
