@@ -17,6 +17,17 @@ Rules:
 • ALL edits must match existing structure exactly
 
 ----------------------------------------
+BACKUP REMINDER RULE (PRE-CHANGE)
+----------------------------------------
+
+Before making code changes, remind the user to create a Git backup tag.
+
+Suggest a tag name using this format:
+backup-pre-[feature-name]-YYYY-MM-DD-HHMM
+
+Wait for the user to confirm that the backup tag was created, or that they explicitly want to proceed without a backup, before editing code.
+
+----------------------------------------
 SERVICE WORKER RULE (MANDATORY)
 ----------------------------------------
 
