@@ -91,6 +91,7 @@ PR must include:
 • functions changed
 • whether service worker was bumped
 • confirmation of no changes to protected logic
+• MUST bump service worker when frontend changes are made
 
 ----------------------------------------
 DEBUGGING SUPPORT
