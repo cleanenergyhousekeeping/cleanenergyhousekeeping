@@ -129,3 +129,51 @@ function seedUsersSheetFromConfig() {
 
 
 /* end[seed_users_sheet] */
+
+/* begin[clock_in_debug_logging] */
+function getClockInDebugLogSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) return null;
+
+  let sheet = ss.getSheetByName("Clock In Debug Log");
+  if (!sheet) {
+    sheet = ss.insertSheet("Clock In Debug Log");
+  }
+
+  ensureHeaders_(sheet, [
+    "timestamp",
+    "event",
+    "cleanerName",
+    "eventType",
+    "property",
+    "syncSource",
+    "mode",
+    "status",
+    "message",
+  ]);
+
+  return sheet;
+}
+
+function logClockInDebug_(entry) {
+  try {
+    const payload = entry || {};
+    const sheet = getClockInDebugLogSheet_();
+    if (!sheet) return;
+
+    sheet.appendRow([
+      new Date(),
+      safeStr_(payload.event),
+      safeStr_(payload.cleanerName),
+      safeStr_(payload.eventType),
+      safeStr_(payload.property),
+      safeStr_(payload.syncSource),
+      safeStr_(payload.mode),
+      safeStr_(payload.status),
+      safeStr_(payload.message),
+    ]);
+  } catch (_) {
+    // Never block app behavior on debug log failures.
+  }
+}
+/* end[clock_in_debug_logging] */

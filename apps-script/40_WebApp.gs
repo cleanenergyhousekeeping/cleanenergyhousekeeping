@@ -34,6 +34,18 @@ function doPost(e) {
 
     if (body && body.mode === "submitShellQueueEntry") {
       const result = submitWebAppTimeEntry(body.payload || {});
+      if (!result || !result.ok) {
+        logClockInDebug_({
+          event: "shell_queue_submit_failure",
+          cleanerName: safeStr_((body.payload || {}).cleanerName) || safeStr_(result && result.cleanerName),
+          eventType: safeStr_((body.payload || {}).eventType),
+          property: safeStr_((body.payload || {}).property),
+          syncSource: "shell_offline",
+          mode: "submitShellQueueEntry",
+          status: "non_ok",
+          message: safeStr_(result && result.message),
+        });
+      }
       return ContentService
         .createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
@@ -45,6 +57,15 @@ function doPost(e) {
         payload.sessionToken || "",
         payload.clientId || ""
       );
+      if (!result || !result.ok) {
+        logClockInDebug_({
+          event: "auth_refresh_failure",
+          cleanerName: safeStr_(result && result.cleanerName),
+          mode: "refreshShellAuth",
+          status: "non_ok",
+          message: safeStr_(result && result.message),
+        });
+      }
       return ContentService
         .createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
@@ -70,6 +91,14 @@ function doPost(e) {
         .createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
     }
+
+    logClockInDebug_({
+      event: "unsupported_post_mode",
+      cleanerName: "",
+      mode: safeStr_(body && body.mode),
+      status: "rejected",
+      message: "Unsupported POST mode.",
+    });
 
     return ContentService
       .createTextOutput(JSON.stringify({
