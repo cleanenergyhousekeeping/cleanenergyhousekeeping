@@ -8,13 +8,13 @@ Primary source of truth:
 https://github.com/cleanenergyhousekeeping/cleanenergyhousekeeping
 
 Paths:
-• /clockin → frontend shell (app.js, UI)
-• /apps-script → backend Apps Script (.gs files)
+- /clockin → frontend shell (app.js, UI)
+- /apps-script → backend Apps Script (.gs files)
 
 Rules:
-• NEVER guess code
-• ALWAYS read current GitHub file before editing
-• ALL edits must match existing structure exactly
+- NEVER guess code
+- ALWAYS read current GitHub file before editing
+- ALL edits must match existing structure exactly
 
 ----------------------------------------
 BACKUP REMINDER RULE (PRE-CHANGE)
@@ -41,12 +41,12 @@ const CACHE_NAME = "ce-clockin-shell-v###";
 Increment by +1
 
 Applies to changes in:
-• app.js
-• index.html
-• style.css
-• manifest.webmanifest
-• seed.html
-• icon.png
+- app.js
+- index.html
+- style.css
+- manifest.webmanifest
+- seed.html
+- icon.png
 
 Failure to do this = stale app in production
 
@@ -56,13 +56,13 @@ CODE STYLE (REQUIRED)
 
 Follow modular architecture:
 
-• One function = one responsibility
+- One function = one responsibility
 
 Separate:
-• data retrieval
-• processing
-• formatting
-• output
+- data retrieval
+- processing
+- formatting
+- output
 
 ----------------------------------------
 COMMENTING STANDARD
@@ -75,9 +75,10 @@ Use section markers:
 /* end[feature_name] */
 
 Rules:
-• Always include both begin and end
-• Never leave mismatched markers
-• When editing a section → replace entire section
+- Always include both begin and end
+- Never leave mismatched markers
+- When editing a section → replace entire section
+- Never duplicate begin/end markers for the same section
 
 ----------------------------------------
 DO NOT MODIFY (HIGH RISK)
@@ -85,11 +86,11 @@ DO NOT MODIFY (HIGH RISK)
 
 Unless explicitly instructed, DO NOT change:
 
-• Time tracker reconciliation logic
-• Queue replay / sync logic
-• Row matching logic
-• Payroll calculation logic
-• Invoice calculation logic
+- Time tracker reconciliation logic
+- Queue replay / sync logic
+- Row matching logic
+- Payroll calculation logic
+- Invoice calculation logic
 
 ----------------------------------------
 PR RULES
@@ -98,20 +99,20 @@ PR RULES
 All changes must go through PR
 
 PR must include:
-• files changed
-• functions changed
-• whether service worker was bumped
-• confirmation of no changes to protected logic
-• MUST bump service worker when frontend changes are made
+- files changed
+- functions changed
+- whether service worker was bumped
+- confirmation of no changes to protected logic
+- MUST bump service worker when frontend changes are made
 
 Codex workflow:
-• Create a new branch for every code change
-• Make the requested changes only on that branch
-• Open a pull request
-• STOP after opening the PR
-• Do NOT merge the PR
-• Do NOT deploy
-• Do NOT push directly to main
+- Create a new branch for every code change
+- Make the requested changes only on that branch
+- Open a pull request
+- STOP after opening the PR
+- Do NOT merge the PR
+- Do NOT deploy
+- Do NOT push directly to main
 
 ----------------------------------------
 DEBUGGING SUPPORT
@@ -122,14 +123,14 @@ Use existing logging system:
 logClockInDebug_()
 
 Do NOT:
-• log sensitive data (PIN, wifi, codes)
-• block app execution on logging failure
+- log sensitive data (PIN, wifi, codes)
+- block app execution on logging failure
 
 ----------------------------------------
 GENERAL PRINCIPLES
 ----------------------------------------
 
-• Prefer small, focused changes
-• Avoid large rewrites
-• Preserve existing behavior unless instructed
-• Stability > cleverness
+- Prefer small, focused changes
+- Avoid large rewrites
+- Preserve existing behavior unless instructed
+- Stability > cleverness
