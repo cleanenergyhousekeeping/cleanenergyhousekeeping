@@ -104,6 +104,15 @@ PR must include:
 • confirmation of no changes to protected logic
 • MUST bump service worker when frontend changes are made
 
+Codex workflow:
+• Create a new branch for every code change.
+• Make the requested changes only on that branch.
+• Open a pull request.
+• STOP after opening the PR.
+• Do NOT merge the PR.
+• Do NOT deploy.
+• Do NOT push directly to main.
+
 ----------------------------------------
 DEBUGGING SUPPORT
 ----------------------------------------
