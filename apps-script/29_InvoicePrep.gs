@@ -38,10 +38,7 @@ function buildInvoicePrepId_(group) {
 }
 
 function buildInvoicePrepGroupValue_(group) {
-  return [
-    safeStr_(group.client),
-    formatYMD_(group.serviceDate)
-  ].join(" || ");
+  return safeStr_(group.client);
 }
 
 function buildInvoicePrepTimeTrackerKey_(row) {
@@ -73,6 +70,13 @@ function summarizeCleanerNames_(entries) {
 }
 
 /* begin[build_cleaner_details_summary] */
+function normalizeCleanerNoteLine_(line) {
+  return safeStr_(line)
+    .trim()
+    .replace(/^[•\-\*]+\s*/, "")
+    .trim();
+}
+
 function buildCleanerDetailsSummary_(entries) {
   const lines = [];
 
@@ -97,7 +101,7 @@ function buildCleanerDetailsSummary_(entries) {
 
     const splitLines = safeStr_(entry.clockOutNote)
       .split("\n")
-      .map(function (line) { return safeStr_(line).trim(); })
+      .map(normalizeCleanerNoteLine_)
       .filter(function (line) { return !!line; });
 
     if (splitLines.length) {
