@@ -1049,6 +1049,17 @@ function submitWebAppTimeEntry(payload) {
 
   try {
     if (isQueuedSync) {
+      logClockInDebug_({
+        event: "shell_queue_submit_attempt",
+        cleanerName: name,
+        eventType: eventType,
+        property: property,
+        syncSource: syncSource || "shell_offline",
+        mode: "submitShellQueueEntry",
+        status: "attempt",
+        message: "Submitting queued shell entry.",
+      });
+
       reconcileQueuedTimeTrackerEntry_({
         timestamp: timestamp,
         name: name,
@@ -1083,6 +1094,16 @@ function submitWebAppTimeEntry(payload) {
       const openShift = findOpenShiftForCleaner_(name);
 
       if (!openShift) {
+        logClockInDebug_({
+          event: "clock_out_rejection_no_open_shift",
+          cleanerName: name,
+          eventType: eventType,
+          property: property,
+          syncSource: syncSource,
+          mode: isQueuedSync ? "submitShellQueueEntry" : "live_webapp",
+          status: "rejected",
+          message: "No open shift found for clock-out/add-note.",
+        });
         return {
           ok: false,
           message: `${name}, you are not currently clocked in.`,
@@ -1090,6 +1111,16 @@ function submitWebAppTimeEntry(payload) {
       }
 
       if (safeStr_(openShift.property) !== property) {
+        logClockInDebug_({
+          event: "clock_out_rejection_property_mismatch",
+          cleanerName: name,
+          eventType: eventType,
+          property: property,
+          syncSource: syncSource,
+          mode: isQueuedSync ? "submitShellQueueEntry" : "live_webapp",
+          status: "rejected",
+          message: `Open shift property mismatch: ${safeStr_(openShift.property)}.`,
+        });
         return {
           ok: false,
           message: `${name}, you are currently clocked in at ${openShift.property}, not ${property}.`,

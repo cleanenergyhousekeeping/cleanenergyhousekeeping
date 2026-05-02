@@ -147,6 +147,7 @@ function appendShellPinDigit_(digit) {
     if (navigator.vibrate) {
       navigator.vibrate(35);
     }
+    setStatusText_(navigator.onLine ? "Checking access..." : "Logging in...");
     unlockShellWithPin_();
   }
 }
@@ -816,7 +817,7 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   if (navigator.onLine) {
-    showShellFlashHud_("Submitting entry...", true);
+    setStatusText_("Submitting entry...");
     syncShellQueue_();
   } else {
     const actionLabel =
@@ -1355,7 +1356,7 @@ async function unlockShellWithPin_() {
     return;
   }
 
-  setStatusText_(navigator.onLine ? "Checking live permissions..." : "Checking access code...");
+  setStatusText_(navigator.onLine ? "Checking access..." : "Checking access...");
 
   try {
     let usedSavedFallback = false;
@@ -1414,12 +1415,11 @@ async function unlockShellWithPin_() {
 
     if (usedSavedFallback && !navigator.onLine) {
       setStatusText_("Unlocked for " + cleanerName + " offline.");
-      showShellFlashHud_("Welcome back, " + cleanerName + ".", true);
       return;
     }
 
     setStatusText_("Unlocked for " + cleanerName + " with live permissions.");
-    showShellFlashHud_("Welcome back, " + cleanerName + ".", true);
+
   } catch (error) {
     clearShellPin_();
     setStatusText_(
