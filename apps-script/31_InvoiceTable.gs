@@ -39,7 +39,8 @@ function escapeForRegex_(s) {
 
 function setServiceTableColumnWidths_(table) {
   const totalPts = 540;
-  const pct = [0.12, 0.56, 0.10, 0.10, 0.12];
+  // Narrow Date, widen Amount
+  const pct = [0.08, 0.54, 0.10, 0.10, 0.18];
 
   for (let c = 0; c < pct.length; c++) {
     const w = Math.round(totalPts * pct[c]);
@@ -130,13 +131,11 @@ function styleServiceItemsTable_(table) {
 
           p.setAlignment(c >= 2 ? DocumentApp.HorizontalAlignment.RIGHT : DocumentApp.HorizontalAlignment.LEFT);
 
-          // Default body style
           t.setFontFamily("Courier New")
             .setFontSize(10)
             .setBold(false)
             .setForegroundColor("#000000");
 
-          // Special styling for the Details column only
           if (c === 1) {
             const trimmedLine = line.trim();
             const isNoteLine = /^\s+/.test(line);
@@ -152,12 +151,10 @@ function styleServiceItemsTable_(table) {
                 .setFontSize(10)
                 .setBold(false);
             } else if (i === 0) {
-              // First paragraph is the property/address
               t.setFontFamily("Courier New")
                 .setFontSize(11)
                 .setBold(true);
             } else {
-              // Cleaner + time lines
               t.setFontFamily("Courier New")
                 .setFontSize(10)
                 .setBold(false);
@@ -183,13 +180,11 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
 
   const table = body.insertTable(parentIndex + 1, [["", "", ""]]);
 
-  // Make footer width match the service table above
   const leftColWidth = 360;
   const middleColWidth = 110;
   const rightColWidth = 70;
   const colWidths = [leftColWidth, middleColWidth, rightColWidth];
 
-  // Border strategy: white border is more reliable in PDF than zero width
   try {
     table.setBorderWidth(1);
     table.setBorderColor("#ffffff");
@@ -208,7 +203,6 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
     try { cell.setBorderColor("#ffffff"); } catch (_) {}
   }
 
-  // LEFT COLUMN
   const leftCell = table.getCell(0, 0);
   leftCell.clear();
 
@@ -236,8 +230,6 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
   try { paymentTextCell.setBorderWidth(1); } catch (_) {}
   try { paymentTextCell.setBorderColor("#ffffff"); } catch (_) {}
 
-  /* begin[qr_alignment_with_payment_info_fix] */
-  // Optional QR image
   if (zelleQrFileId) {
     try {
       const qrBlob = DriveApp.getFileById(zelleQrFileId).getBlob();
@@ -253,7 +245,6 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
       Logger.log("Could not insert Zelle QR image: " + error);
     }
   }
-  /* end[qr_alignment_with_payment_info_fix] */
 
   const leftPaymentHeader = paymentTextCell.getChild(0).asParagraph();
   leftPaymentHeader.setText("Payment info:");
@@ -286,8 +277,6 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
     .setBold(true);
   leftLine2.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
 
-  
-
   const leftLine3 = paymentTextCell.appendParagraph("If needed, please email Kyle for more options.");
   leftLine3.setSpacingBefore(0);
   leftLine3.setSpacingAfter(0);
@@ -298,8 +287,6 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
     .setBold(false);
   leftLine3.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
 
-  /* begin[totals_section_support_adjustments_line] */
-  // MIDDLE COLUMN: labels
   const middleCell = table.getCell(0, 1);
   middleCell.clear();
 
@@ -329,7 +316,6 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
     p.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
   });
 
-  // RIGHT COLUMN: values
   const rightCell = table.getCell(0, 2);
   rightCell.clear();
 
@@ -354,5 +340,4 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
       .setBold(false);
     p.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
   });
-  /* end[totals_section_support_adjustments_line] */
 }
