@@ -32,12 +32,14 @@ if (e && e.parameter && e.parameter.mode === "getOfflineShellPrepByCode") {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-  logClockInDebugSafe_({
-    event: "shell_startup_health",
-    mode: "doGet",
-    status: "start",
-    message: "Shell startup request received.",
-  });
+  if (e && e.parameter && e.parameter.view === "prepareShell") {
+    logClockInDebugSafe_({
+      event: "shell_startup_health",
+      mode: "doGet",
+      status: "start",
+      message: "Prepare shell startup request received.",
+    });
+  }
 
   const template = HtmlService.createTemplateFromFile("WebApp");
   template.prepareShellMode =
@@ -181,16 +183,6 @@ function doPost(e) {
   }
 }
 /* end[webapp_post_routes] */
-/* begin[debug_shell_health_logging] */
-function logClockInDebugSafe_(entry) {
-  try {
-    logClockInDebug_(entry);
-  } catch (_) {
-    // Never block app behavior on debug log failures.
-  }
-}
-/* end[debug_shell_health_logging] */
-
 /**
  * Allows HTML partial includes.
  */

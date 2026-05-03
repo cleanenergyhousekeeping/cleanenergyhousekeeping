@@ -287,62 +287,53 @@ function loginWithPin(pin, clientId) {
 // begin[bootstrap_with_current_cleaner_access]
 function bootstrapFromSession(token) {
   /* begin[debug_shell_health_logging] */
-  logClockInDebug_({
+  logClockInDebugSafe_({
     event: "unlock_health_check",
     mode: "bootstrapFromSession",
     status: "start",
     message: "Unlock health check started.",
   });
-  /* end[debug_shell_health_logging] */
   const session = getSession_(token);
 
   if (!session) {
-    /* begin[debug_shell_health_logging] */
-    logClockInDebug_({
+    logClockInDebugSafe_({
       event: "unlock_health_check",
       mode: "bootstrapFromSession",
       status: "non_ok",
       message: "Missing or expired session.",
     });
-    /* end[debug_shell_health_logging] */
     return { ok: false };
   }
 
   const sessionPin = safeStr_(session.pin);
   if (!sessionPin) {
-    /* begin[debug_shell_health_logging] */
-    logClockInDebug_({
+    logClockInDebugSafe_({
       event: "unlock_health_check",
       mode: "bootstrapFromSession",
       status: "non_ok",
       message: "Session missing access code reference.",
     });
-    /* end[debug_shell_health_logging] */
     return { ok: false };
   }
 
   const cleaner = getCleanerRecordFromPin_(sessionPin);
   if (!cleaner) {
-    /* begin[debug_shell_health_logging] */
-    logClockInDebug_({
+    logClockInDebugSafe_({
       event: "unlock_health_check",
       mode: "bootstrapFromSession",
       status: "non_ok",
       message: "Cleaner record unavailable for unlock.",
     });
-    /* end[debug_shell_health_logging] */
     return { ok: false };
   }
 
   const currentShift = buildCurrentShiftStatusForWebApp_(cleaner.name);
-  /* begin[debug_shell_health_logging] */
-  logClockInDebug_({
+  logClockInDebugSafe_({
     event: "unlock_health_check",
     cleanerName: safeStr_(cleaner.name),
     mode: "bootstrapFromSession",
     status: "ok",
     message: "Unlock health check passed.",
-    hasCurrentShift: !!currentShift,
   });
   /* end[debug_shell_health_logging] */
 

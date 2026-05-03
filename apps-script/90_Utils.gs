@@ -177,3 +177,13 @@ function logClockInDebug_(entry) {
   }
 }
 /* end[clock_in_debug_logging] */
+
+/* begin[debug_shell_health_logging] */
+function logClockInDebugSafe_(entry) {
+  try {
+    logClockInDebug_(entry);
+  } catch (_) {
+    // Never block app behavior on debug log failures.
+  }
+}
+/* end[debug_shell_health_logging] */
