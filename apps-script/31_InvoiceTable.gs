@@ -39,8 +39,8 @@ function escapeForRegex_(s) {
 
 function setServiceTableColumnWidths_(table) {
   const totalPts = 540;
-  // Narrow Date, widen Amount
-  const pct = [0.08, 0.54, 0.10, 0.10, 0.18];
+  // Keep Date compact and Amount wide enough for adjustment totals without over-expanding.
+  const pct = [0.08, 0.57, 0.10, 0.10, 0.15];
 
   for (let c = 0; c < pct.length; c++) {
     const w = Math.round(totalPts * pct[c]);
