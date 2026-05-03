@@ -286,7 +286,6 @@ function loginWithPin(pin, clientId) {
 
 // begin[bootstrap_with_current_cleaner_access]
 function bootstrapFromSession(token) {
-  /* begin[debug_shell_health_logging] */
   logClockInDebugSafe_({
     event: "unlock_health_check",
     mode: "bootstrapFromSession",
@@ -335,7 +334,6 @@ function bootstrapFromSession(token) {
     status: "ok",
     message: "Unlock health check passed.",
   });
-  /* end[debug_shell_health_logging] */
 
   return {
     ok: true,

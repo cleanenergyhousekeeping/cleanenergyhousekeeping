@@ -82,16 +82,6 @@ function doPost(e) {
           status: "non_ok",
           message: safeStr_(result && result.message),
         });
-        logClockInDebug_({
-          event: "shell_queue_submit_failure",
-          cleanerName: safeStr_((body.payload || {}).cleanerName) || safeStr_(result && result.cleanerName),
-          eventType: safeStr_((body.payload || {}).eventType),
-          property: safeStr_((body.payload || {}).property),
-          syncSource: "shell_offline",
-          mode: "submitShellQueueEntry",
-          status: "non_ok",
-          message: safeStr_(result && result.message),
-        });
       } else {
         logClockInDebugSafe_({
           event: "queue_sync_success",
