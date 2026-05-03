@@ -39,8 +39,8 @@ function escapeForRegex_(s) {
 
 function setServiceTableColumnWidths_(table) {
   const totalPts = 540;
-  // Keep Date compact and Amount wide enough for adjustment totals without over-expanding.
-  const pct = [0.08, 0.57, 0.10, 0.10, 0.15];
+  // Keep Date wide enough for the month/day line while preserving Details width.
+  const pct = [0.10, 0.57, 0.09, 0.10, 0.14];
 
   for (let c = 0; c < pct.length; c++) {
     const w = Math.round(totalPts * pct[c]);
@@ -158,6 +158,20 @@ function styleServiceItemsTable_(table) {
               t.setFontFamily("Courier New")
                 .setFontSize(10)
                 .setBold(false);
+            }
+          }
+
+          if (c === 4) {
+            const trimmedLine = line.trim();
+            const previousLine = i > 0 && cell.getChild(i - 1).getType() === DocumentApp.ElementType.PARAGRAPH
+              ? cell.getChild(i - 1).asParagraph().getText().trim()
+              : "";
+            const isTotalLine = /^Total:?/.test(trimmedLine) || /^Total:?/.test(previousLine);
+
+            if (isTotalLine) {
+              t.setFontFamily("Courier New")
+                .setFontSize(10)
+                .setBold(true);
             }
           }
         }
