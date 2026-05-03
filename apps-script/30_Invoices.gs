@@ -722,21 +722,25 @@ function buildServiceRowsFromInvoicePrepRows_(prepRows) {
 
     if (row.cleanerDetailsSummary) {
       let isFirstCleanerLine = true;
+let previousLineWasCleaner = false;
 
 row.cleanerDetailsSummary.split("\n").forEach(function (line) {
   const cleanLine = formatCleanerNamesForInvoice_(safeStr_(line));
   if (!cleanLine) return;
 
-  // Detect cleaner line (Name + time pattern)
   const isCleanerLine = /^[A-Z][a-z]+ [A-Z]\./.test(cleanLine);
+  const isNotesHeader = cleanLine.trim() === "Notes/extras";
 
-  if (isCleanerLine && !isFirstCleanerLine) {
-    // Add blank line before new cleaner block
+  // Only add spacing if previous cleaner actually had notes
+  if (isCleanerLine && !isFirstCleanerLine && previousLineWasCleaner === false) {
     detailLines.push("");
   }
 
   if (isCleanerLine) {
     isFirstCleanerLine = false;
+    previousLineWasCleaner = true;
+  } else if (isNotesHeader) {
+    previousLineWasCleaner = false;
   }
 
   detailLines.push(cleanLine);
