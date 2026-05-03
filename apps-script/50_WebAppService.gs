@@ -1030,13 +1030,6 @@ function submitWebAppTimeEntry(payload) {
     });
   }
 
-  function failWebAppTimeEntry_(messageText, cleanerNameValue) {
-    logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", messageText, cleanerNameValue);
-    return {
-      ok: false,
-      message: messageText,
-    };
-  }
   /* end[debug_webapp_time_entry_logging] */
 
   const isQueuedSync =
@@ -1063,11 +1056,16 @@ function submitWebAppTimeEntry(payload) {
     cleanerName = session.name;
   } else {
     if (!accessCode) {
-      return failWebAppTimeEntry_("Please enter your access code.", cleanerName);
+      logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Please enter your access code.", cleanerName);
+      return { ok: false, message: "Please enter your access code." };
     }
 
     if (isLockedOut_(clientId)) {
-      return failWebAppTimeEntry_("Too many attempts. Please wait a minute and try again.", cleanerName);
+      logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Too many attempts. Please wait a minute and try again.", cleanerName);
+      return {
+        ok: false,
+        message: "Too many attempts. Please wait a minute and try again.",
+      };
     }
 
     const cleaner = getCleanerRecordFromPin_(accessCode);
@@ -1075,7 +1073,8 @@ function submitWebAppTimeEntry(payload) {
     if (!cleaner) {
       recordFailure_(clientId);
       Utilities.sleep(800);
-      return failWebAppTimeEntry_("Invalid access code.", cleanerName);
+      logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Invalid access code.", cleanerName);
+      return { ok: false, message: "Invalid access code." };
     }
 
     clearFailures_(clientId);
@@ -1085,15 +1084,24 @@ function submitWebAppTimeEntry(payload) {
   const name = cleanerName;
 
   if (!property) {
-    return failWebAppTimeEntry_("Please select a property.", name);
+    logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Please select a property.", name);
+    return { ok: false, message: "Please select a property." };
   }
 
   if (eventType !== "clock_in" && eventType !== "clock_out" && eventType !== "add_note") {
-    return failWebAppTimeEntry_("Please choose Clock In, Add Cleaning Note, or Clock Out.", name);
+    logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Please choose Clock In, Add Cleaning Note, or Clock Out.", name);
+    return {
+      ok: false,
+      message: "Please choose Clock In, Add Cleaning Note, or Clock Out.",
+    };
   }
 
   if (eventType === "add_note" && !note) {
-    return failWebAppTimeEntry_("Please enter a cleaning note before submitting.", name);
+    logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Please enter a cleaning note before submitting.", name);
+    return {
+      ok: false,
+      message: "Please enter a cleaning note before submitting.",
+    };
   }
 
   try {
@@ -1154,7 +1162,11 @@ function submitWebAppTimeEntry(payload) {
           status: "rejected",
           message: "No open shift found for clock-out/add-note.",
         });
-        return failWebAppTimeEntry_(`${name}, you are not currently clocked in.`, name);
+        logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", `${name}, you are not currently clocked in.`, name);
+        return {
+          ok: false,
+          message: `${name}, you are not currently clocked in.`,
+        };
       }
 
       if (safeStr_(openShift.property) !== property) {
@@ -1168,7 +1180,11 @@ function submitWebAppTimeEntry(payload) {
           status: "rejected",
           message: `Open shift property mismatch: ${safeStr_(openShift.property)}.`,
         });
-        return failWebAppTimeEntry_(`${name}, you are currently clocked in at ${openShift.property}, not ${property}.`, name);
+        logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", `${name}, you are currently clocked in at ${openShift.property}, not ${property}.`, name);
+        return {
+          ok: false,
+          message: `${name}, you are currently clocked in at ${openShift.property}, not ${property}.`,
+        };
       }
     }
 
@@ -1229,7 +1245,11 @@ function submitWebAppTimeEntry(payload) {
       reason: error && error.message ? error.message : "Unknown error",
     });
 
-    return failWebAppTimeEntry_(error.message || "Something went wrong while saving your entry.", name);
+    logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", error.message || "Something went wrong while saving your entry.", name);
+    return {
+      ok: false,
+      message: error.message || "Something went wrong while saving your entry.",
+    };
   }
 }
 /* end[submit_webapp_time_entry_with_client_timestamp] */
