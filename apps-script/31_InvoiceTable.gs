@@ -162,18 +162,28 @@ function styleServiceItemsTable_(table) {
           }
 
           if (c === 4) {
-            const trimmedLine = line.trim();
-            const previousLine = i > 0 && cell.getChild(i - 1).getType() === DocumentApp.ElementType.PARAGRAPH
-              ? cell.getChild(i - 1).asParagraph().getText().trim()
-              : "";
-            const isTotalLine = /^Total:?/.test(trimmedLine) || /^Total:?/.test(previousLine);
+  const trimmedLine = line.trim();
 
-            if (isTotalLine) {
-              t.setFontFamily("Courier New")
-                .setFontSize(10)
-                .setBold(true);
-            }
-          }
+  const isDiscountLine = /^Discount:/.test(trimmedLine);
+  const isTotalLine = /^Total:?/.test(trimmedLine);
+
+  const isSingleLineAmount = cell.getNumChildren() === 1;
+
+  // Case 1: Has discount → only bold the "Total"
+  if (isTotalLine) {
+    t.setBold(true);
+  }
+
+  // Case 2: No discount → single amount → bold it
+  else if (isSingleLineAmount && !isDiscountLine) {
+    t.setBold(true);
+  }
+
+  // Everything else stays normal
+  else {
+    t.setBold(false);
+  }
+}
         }
       }
     }
@@ -321,14 +331,17 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
   middleLines.push("Total amount:");
 
   middleLines.forEach(function (line) {
-    const p = middleCell.appendParagraph(line);
-    p.editAsText()
-      .setFontFamily("Courier New")
-      .setFontSize(10)
-      .setForegroundColor("#666666")
-      .setBold(false);
-    p.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
-  });
+  const isTotalAmount = line === "Total amount:";
+
+  const p = middleCell.appendParagraph(line);
+  p.editAsText()
+    .setFontFamily("Courier New")
+    .setFontSize(10)
+    .setForegroundColor("#666666")
+    .setBold(isTotalAmount);
+
+  p.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+});
 
   const rightCell = table.getCell(0, 2);
   rightCell.clear();
@@ -345,13 +358,16 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
   rightLines.push(money_(totals.tax));
   rightLines.push(money_(totals.total));
 
-  rightLines.forEach(function (line) {
-    const p = rightCell.appendParagraph(line);
-    p.editAsText()
-      .setFontFamily("Courier New")
-      .setFontSize(10)
-      .setForegroundColor("#666666")
-      .setBold(false);
-    p.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
-  });
+rightLines.forEach(function (line, index) {
+  const isTotalAmount = index === rightLines.length - 1;
+
+  const p = rightCell.appendParagraph(line);
+  p.editAsText()
+    .setFontFamily("Courier New")
+    .setFontSize(10)
+    .setForegroundColor("#666666")
+    .setBold(isTotalAmount);
+
+  p.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+});
 }
