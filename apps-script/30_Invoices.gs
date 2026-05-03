@@ -678,8 +678,36 @@ function formatCleanerNamesForInvoice_(value) {
 /* end[invoice_cleaner_name_privacy_helpers] */
 
 /* begin[build_service_rows_from_invoice_prep_rows] */
+function buildInvoicePrepBaseAmount_(row) {
+  if (row.billingMode === BILLING_TYPE_FLAT && row.flatRate > 0) {
+    return round2_(row.flatRate);
+  }
+
+  return round2_(Number(row.workedHours || 0) * Number(row.defaultHourlyRate || 0));
+}
+
+function buildInvoicePrepAmountDisplay_(row, baseAmount, finalAmount) {
+  const lines = [money_(baseAmount)];
+
+  if (row.rowDiscount > 0) {
+    lines.push("Discount: -" + money_(row.rowDiscount));
+  }
+
+  if (row.rowFee > 0) {
+    lines.push("Fee: +" + money_(row.rowFee));
+  }
+
+  if (row.rowDiscount > 0 || row.rowFee > 0) {
+    lines.push("Total: " + money_(finalAmount));
+  }
+
+  return lines.join("\n");
+}
+
 function buildServiceRowsFromInvoicePrepRows_(prepRows) {
   return prepRows.map(function (row) {
+    const baseAmount = buildInvoicePrepBaseAmount_(row);
+
     const finalAmount = calculateInvoicePrepFinalAmount_(
       row.workedHours,
       row.defaultHourlyRate,
@@ -689,7 +717,7 @@ function buildServiceRowsFromInvoicePrepRows_(prepRows) {
       row.rowFee
     );
 
-     const detailLines = [];
+    const detailLines = [];
     detailLines.push(row.property);
 
     if (row.cleanerDetailsSummary) {
@@ -716,16 +744,12 @@ function buildServiceRowsFromInvoicePrepRows_(prepRows) {
       detailLines.push("Billing note: " + row.billingNote);
     }
 
-    if (row.rowDiscount > 0) {
-      detailLines.push("Discount: -" + money_(row.rowDiscount));
+    if (row.adjustmentNote && row.rowDiscount > 0) {
+      detailLines.push("Discount reason: " + row.adjustmentNote);
     }
 
-    if (row.rowFee > 0) {
-      detailLines.push("Fee: +" + money_(row.rowFee));
-    }
-
-    if (row.adjustmentNote && (row.rowDiscount > 0 || row.rowFee > 0)) {
-      detailLines.push("   • " + row.adjustmentNote);
+    if (row.adjustmentNote && row.rowFee > 0) {
+      detailLines.push("Fee reason: " + row.adjustmentNote);
     }
 
     let rateDisplay = "";
@@ -745,6 +769,7 @@ function buildServiceRowsFromInvoicePrepRows_(prepRows) {
       rate: rateValue,
       rateDisplay: rateDisplay,
       amount: finalAmount,
+      amountDisplay: buildInvoicePrepAmountDisplay_(row, baseAmount, finalAmount),
     };
   });
 }

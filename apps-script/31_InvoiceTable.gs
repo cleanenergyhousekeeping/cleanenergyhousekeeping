@@ -74,7 +74,7 @@ function insertServiceItemsTable_(body, rows) {
       r.details || "",
       (r.hours != null && r.hours !== "") ? Number(r.hours).toFixed(2) : "",
       rateDisplay,
-      (r.amount != null && r.amount !== "") ? money_(r.amount) : "",
+      r.amountDisplay || ((r.amount != null && r.amount !== "") ? money_(r.amount) : ""),
     ]);
   }
   /* end[service_table_support_rate_display_text] */
@@ -138,10 +138,14 @@ function styleServiceItemsTable_(table) {
 
           // Special styling for the Details column only
           if (c === 1) {
+            const isAdjustmentReason = /^(Discount reason:|Fee reason:)/.test(trimmedLine);
             const trimmedLine = line.trim();
             const isNoteLine = /^\s+/.test(line);
             const isNotesHeader = trimmedLine === "Notes/extras";
-
+            if (isNotesHeader || isAdjustmentReason) {
+              t.setFontFamily("Courier New")
+                .setFontSize(10)
+                .setBold(true);
             if (isNotesHeader) {
               t.setFontFamily("Courier New")
                 .setFontSize(10)
