@@ -4,6 +4,14 @@
 function doGet(e) {
   if (e && e.parameter && e.parameter.mode === "getOfflineShellPrep") {
   const result = getOfflineShellPrepByToken(e.parameter.token || "");
+  if (!result || !result.ok) {
+    logClockInDebugSafe_({
+      event: "offline_ready_missing",
+      mode: "getOfflineShellPrep",
+      status: "missing",
+      message: safeStr_(result && result.message),
+    });
+  }
   return ContentService
     .createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
@@ -11,10 +19,25 @@ function doGet(e) {
 
 if (e && e.parameter && e.parameter.mode === "getOfflineShellPrepByCode") {
   const result = getOfflineShellPrepByCode(e.parameter.code || "");
+  if (!result || !result.ok) {
+    logClockInDebugSafe_({
+      event: "offline_ready_missing",
+      mode: "getOfflineShellPrepByCode",
+      status: "missing",
+      message: safeStr_(result && result.message),
+    });
+  }
   return ContentService
     .createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+  logClockInDebugSafe_({
+    event: "shell_startup_health",
+    mode: "doGet",
+    status: "start",
+    message: "Shell startup request received.",
+  });
 
   const template = HtmlService.createTemplateFromFile("WebApp");
   template.prepareShellMode =
@@ -33,8 +56,30 @@ function doPost(e) {
     const body = JSON.parse(raw);
 
     if (body && body.mode === "submitShellQueueEntry") {
-      const result = submitWebAppTimeEntry(body.payload || {});
+      const queuePayload = body.payload || {};
+      logClockInDebugSafe_({
+        event: "queue_sync_start",
+        cleanerName: safeStr_(queuePayload.cleanerName),
+        eventType: safeStr_(queuePayload.eventType),
+        property: safeStr_(queuePayload.property),
+        syncSource: safeStr_(queuePayload.syncSource) || "shell_offline",
+        mode: "submitShellQueueEntry",
+        status: "start",
+        message: "Queue sync started.",
+      });
+
+      const result = submitWebAppTimeEntry(queuePayload);
       if (!result || !result.ok) {
+        logClockInDebugSafe_({
+          event: "queue_sync_failure",
+          cleanerName: safeStr_(queuePayload.cleanerName) || safeStr_(result && result.cleanerName),
+          eventType: safeStr_(queuePayload.eventType),
+          property: safeStr_(queuePayload.property),
+          syncSource: safeStr_(queuePayload.syncSource) || "shell_offline",
+          mode: "submitShellQueueEntry",
+          status: "non_ok",
+          message: safeStr_(result && result.message),
+        });
         logClockInDebug_({
           event: "shell_queue_submit_failure",
           cleanerName: safeStr_((body.payload || {}).cleanerName) || safeStr_(result && result.cleanerName),
@@ -44,6 +89,17 @@ function doPost(e) {
           mode: "submitShellQueueEntry",
           status: "non_ok",
           message: safeStr_(result && result.message),
+        });
+      } else {
+        logClockInDebugSafe_({
+          event: "queue_sync_success",
+          cleanerName: safeStr_(result && result.cleanerName) || safeStr_(queuePayload.cleanerName),
+          eventType: safeStr_(queuePayload.eventType),
+          property: safeStr_(queuePayload.property),
+          syncSource: safeStr_(queuePayload.syncSource) || "shell_offline",
+          mode: "submitShellQueueEntry",
+          status: "ok",
+          message: safeStr_(result && result.message) || "Queue sync completed.",
         });
       }
       return ContentService
@@ -58,12 +114,20 @@ function doPost(e) {
         payload.clientId || ""
       );
       if (!result || !result.ok) {
-        logClockInDebug_({
+        logClockInDebugSafe_({
           event: "auth_refresh_failure",
           cleanerName: safeStr_(result && result.cleanerName),
           mode: "refreshShellAuth",
           status: "non_ok",
           message: safeStr_(result && result.message),
+        });
+      } else {
+        logClockInDebugSafe_({
+          event: "auth_refresh_success",
+          cleanerName: safeStr_(result && result.payload && result.payload.cleanerName),
+          mode: "refreshShellAuth",
+          status: "ok",
+          message: "Auth refresh succeeded.",
         });
       }
       return ContentService
@@ -117,6 +181,16 @@ function doPost(e) {
   }
 }
 /* end[webapp_post_routes] */
+/* begin[debug_shell_health_logging] */
+function logClockInDebugSafe_(entry) {
+  try {
+    logClockInDebug_(entry);
+  } catch (_) {
+    // Never block app behavior on debug log failures.
+  }
+}
+/* end[debug_shell_health_logging] */
+
 /**
  * Allows HTML partial includes.
  */
