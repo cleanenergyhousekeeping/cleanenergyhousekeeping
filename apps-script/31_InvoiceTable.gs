@@ -138,15 +138,12 @@ function styleServiceItemsTable_(table) {
 
           // Special styling for the Details column only
           if (c === 1) {
-            const isAdjustmentReason = /^(Discount reason:|Fee reason:)/.test(trimmedLine);
             const trimmedLine = line.trim();
             const isNoteLine = /^\s+/.test(line);
             const isNotesHeader = trimmedLine === "Notes/extras";
+            const isAdjustmentReason = /^(Discount reason:|Fee reason:)/.test(trimmedLine);
+
             if (isNotesHeader || isAdjustmentReason) {
-              t.setFontFamily("Courier New")
-                .setFontSize(10)
-                .setBold(true);
-            if (isNotesHeader) {
               t.setFontFamily("Courier New")
                 .setFontSize(10)
                 .setBold(true);
