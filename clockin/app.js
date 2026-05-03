@@ -1,7 +1,7 @@
 
 /* begin[clockin_shell_constants] */
 const LIVE_APP_URL =
-  "https://script.google.com/macros/s/AKfycbxDiNx-ab3J45CuljJ5QQ0cc1e-ZbFyWLqMfOCPa8I0niZX9A4OQNEZpWVzSkolYdCm/exec";
+  "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
 
 const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";
 
