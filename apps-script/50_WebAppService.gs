@@ -1016,6 +1016,22 @@ function submitWebAppTimeEntry(payload) {
   const submittedAtMs = Number(payload.submittedAtMs || 0);
   const syncSource = safeStr_(payload.syncSource).trim().toLowerCase();
 
+  /* begin[debug_webapp_time_entry_logging] */
+  function logWebAppTimeEntryDebug_(eventName, status, messageText, cleanerNameValue) {
+    logClockInDebugSafe_({
+      event: eventName,
+      cleanerName: safeStr_(cleanerNameValue),
+      eventType: eventType,
+      property: property,
+      syncSource: syncSource,
+      mode: "submitWebAppTimeEntry",
+      status: status,
+      message: messageText,
+    });
+  }
+
+  /* end[debug_webapp_time_entry_logging] */
+
   const isQueuedSync =
     syncSource === "live_queue" ||
     syncSource === "shell_queue" ||
@@ -1032,16 +1048,20 @@ function submitWebAppTimeEntry(payload) {
 
   let cleanerName = null;
 
+  logWebAppTimeEntryDebug_("webapp_time_entry_attempt", "start", "Submitting web app time entry.", cleanerName);
+
   const session = getSession_(sessionToken);
 
   if (session) {
     cleanerName = session.name;
   } else {
     if (!accessCode) {
+      logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Please enter your access code.", cleanerName);
       return { ok: false, message: "Please enter your access code." };
     }
 
     if (isLockedOut_(clientId)) {
+      logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Too many attempts. Please wait a minute and try again.", cleanerName);
       return {
         ok: false,
         message: "Too many attempts. Please wait a minute and try again.",
@@ -1053,6 +1073,7 @@ function submitWebAppTimeEntry(payload) {
     if (!cleaner) {
       recordFailure_(clientId);
       Utilities.sleep(800);
+      logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Invalid access code.", cleanerName);
       return { ok: false, message: "Invalid access code." };
     }
 
@@ -1063,10 +1084,12 @@ function submitWebAppTimeEntry(payload) {
   const name = cleanerName;
 
   if (!property) {
+    logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Please select a property.", name);
     return { ok: false, message: "Please select a property." };
   }
 
   if (eventType !== "clock_in" && eventType !== "clock_out" && eventType !== "add_note") {
+    logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Please choose Clock In, Add Cleaning Note, or Clock Out.", name);
     return {
       ok: false,
       message: "Please choose Clock In, Add Cleaning Note, or Clock Out.",
@@ -1074,6 +1097,7 @@ function submitWebAppTimeEntry(payload) {
   }
 
   if (eventType === "add_note" && !note) {
+    logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", "Please enter a cleaning note before submitting.", name);
     return {
       ok: false,
       message: "Please enter a cleaning note before submitting.",
@@ -1111,6 +1135,7 @@ function submitWebAppTimeEntry(payload) {
           ? "queued clock-out"
           : "queued cleaning note";
 
+      logWebAppTimeEntryDebug_("webapp_time_entry_success", "ok", `Synced ${queuedActionLabel} for ${property}.`, name);
       return {
         ok: true,
         cleanerName: name,
@@ -1137,6 +1162,7 @@ function submitWebAppTimeEntry(payload) {
           status: "rejected",
           message: "No open shift found for clock-out/add-note.",
         });
+        logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", `${name}, you are not currently clocked in.`, name);
         return {
           ok: false,
           message: `${name}, you are not currently clocked in.`,
@@ -1154,6 +1180,7 @@ function submitWebAppTimeEntry(payload) {
           status: "rejected",
           message: `Open shift property mismatch: ${safeStr_(openShift.property)}.`,
         });
+        logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", `${name}, you are currently clocked in at ${openShift.property}, not ${property}.`, name);
         return {
           ok: false,
           message: `${name}, you are currently clocked in at ${openShift.property}, not ${property}.`,
@@ -1200,6 +1227,7 @@ function submitWebAppTimeEntry(payload) {
       successMessage = `Cleaning note added for ${property}.`;
     }
 
+    logWebAppTimeEntryDebug_("webapp_time_entry_success", "ok", successMessage, name);
     return {
       ok: true,
       cleanerName: name,
@@ -1217,6 +1245,7 @@ function submitWebAppTimeEntry(payload) {
       reason: error && error.message ? error.message : "Unknown error",
     });
 
+    logWebAppTimeEntryDebug_("webapp_time_entry_failure", "non_ok", error.message || "Something went wrong while saving your entry.", name);
     return {
       ok: false,
       message: error.message || "Something went wrong while saving your entry.",
