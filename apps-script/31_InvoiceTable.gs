@@ -277,7 +277,7 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
   leftPaymentHeader.editAsText()
     .setFontFamily("Courier New")
     .setFontSize(10)
-    .setForegroundColor("#666666")
+    .setForegroundColor("#000000")
     .setBold(true);
   leftPaymentHeader.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
 
@@ -287,7 +287,7 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
   leftLine1.editAsText()
     .setFontFamily("Courier New")
     .setFontSize(10)
-    .setForegroundColor("#666666")
+    .setForegroundColor("#000000")
     .setBold(false);
   leftLine1.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
 
@@ -297,7 +297,7 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
   leftLine2.editAsText()
     .setFontFamily("Courier New")
     .setFontSize(10)
-    .setForegroundColor("#666666")
+    .setForegroundColor("#000000")
     .setBold(true);
   leftLine2.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
 
@@ -307,7 +307,7 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
   leftLine3.editAsText()
     .setFontFamily("Courier New")
     .setFontSize(10)
-    .setForegroundColor("#666666")
+    .setForegroundColor("#000000")
     .setBold(false);
   leftLine3.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
 
@@ -337,7 +337,7 @@ function insertTotalsSection_(body, totals, zelleQrFileId) {
   p.editAsText()
     .setFontFamily("Courier New")
     .setFontSize(10)
-    .setForegroundColor("#666666")
+    .setForegroundColor("#000000")
     .setBold(isTotalAmount);
 
   p.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
@@ -365,7 +365,7 @@ rightLines.forEach(function (line, index) {
   p.editAsText()
     .setFontFamily("Courier New")
     .setFontSize(10)
-    .setForegroundColor("#666666")
+    .setForegroundColor("#000000")
     .setBold(isTotalAmount);
 
   p.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
