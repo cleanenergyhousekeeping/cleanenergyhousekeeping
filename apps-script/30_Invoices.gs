@@ -721,12 +721,26 @@ function buildServiceRowsFromInvoicePrepRows_(prepRows) {
     detailLines.push(row.property);
 
     if (row.cleanerDetailsSummary) {
-      row.cleanerDetailsSummary.split("\n").forEach(function (line) {
-        const cleanLine = formatCleanerNamesForInvoice_(safeStr_(line));
-        if (cleanLine) {
-          detailLines.push(cleanLine);
-        }
-      });
+      let isFirstCleanerLine = true;
+
+row.cleanerDetailsSummary.split("\n").forEach(function (line) {
+  const cleanLine = formatCleanerNamesForInvoice_(safeStr_(line));
+  if (!cleanLine) return;
+
+  // Detect cleaner line (Name + time pattern)
+  const isCleanerLine = /^[A-Z][a-z]+ [A-Z]\./.test(cleanLine);
+
+  if (isCleanerLine && !isFirstCleanerLine) {
+    // Add blank line before new cleaner block
+    detailLines.push("");
+  }
+
+  if (isCleanerLine) {
+    isFirstCleanerLine = false;
+  }
+
+  detailLines.push(cleanLine);
+});
     } else {
       const fallbackLineParts = [];
       if (row.cleanerNames) {
