@@ -6,7 +6,7 @@ const LIVE_APP_URL =
 const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";
 
 const APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
+  "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOecsscsYMcQf62G5/exec";
 
 const SHELL_AUTH_KEY = "ce_shell_auth_v1";
 const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
