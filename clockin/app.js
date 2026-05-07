@@ -235,6 +235,7 @@ function setStatusText_(text) {
   statusText.textContent = text || "";
 }
 
+/* begin[shell_ready_status_helpers] */
 function setOfflineReadyStatusText_(text) {
   offlineReadyStatusOverride = text ? String(text) : "";
 
@@ -253,6 +254,7 @@ function setOfflineReadyStatusText_(text) {
 
   offlineReadyText.textContent = "";
 }
+/* end[shell_ready_status_helpers] */
 
 /* begin[shell_entry_lock_helper] */
 function setShellEntryLocked_(locked) {
@@ -844,7 +846,12 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   if (navigator.onLine) {
-    const submitStatusText = action === "clock_in" ? "Submitting clock in..." : "Submitting entry...";
+    const submitStatusText =
+      action === "clock_in"
+        ? "Submitting clock in..."
+        : action === "clock_out"
+        ? "Submitting clock out..."
+        : "Submitting note...";
     setStatusText_(submitStatusText);
     setOfflineReadyStatusText_(submitStatusText);
     syncShellQueue_();
@@ -861,7 +868,7 @@ function saveOfflineEntry_() {
         ? "Clock in saved on phone. Not synced yet."
         : action === "clock_out"
         ? "Clock out saved on phone. Not synced yet."
-        : "Note saved.";
+        : "Note saved on phone. Not synced yet.";
 
     setOfflineReadyStatusText_(offlineStatusLabel);
     showShellFlashHud_(actionLabel, true);
@@ -1516,11 +1523,15 @@ async function unlockShellWithPin_() {
 
   if (!shellAuth || !shellAuth.pinHash) {
     clearShellPin_();
+    hideShellSyncHud_();
+    setOfflineReadyStatusText_("");
     setStatusText_("This phone is not ready yet. Go online and prepare it first.");
     return;
   }
 
   if (!enteredPin) {
+    hideShellSyncHud_();
+    setOfflineReadyStatusText_("");
     setStatusText_("Please enter your access code.");
     return;
   }
@@ -1540,6 +1551,8 @@ async function unlockShellWithPin_() {
 
         if (!refreshGate.ok && refreshGate.requiresLogin) {
           clearShellPin_();
+          hideShellSyncHud_();
+          setOfflineReadyStatusText_("Session expired. Please log in again.");
           setStatusText_(refreshGate.message || "Session expired. Please log in again.");
           showShellFlashHud_(refreshGate.message || "Session expired. Please log in again.", false);
           return;
@@ -1554,6 +1567,8 @@ async function unlockShellWithPin_() {
 
     if (!shellAuth || !shellAuth.pinHash) {
       clearShellPin_();
+      hideShellSyncHud_();
+      setOfflineReadyStatusText_("This phone is no longer authorized.");
       setStatusText_("This phone is no longer authorized. Please prepare it again online.");
       showShellFlashHud_("This phone is no longer authorized.", false);
       return;
@@ -1563,6 +1578,8 @@ async function unlockShellWithPin_() {
 
     if (!enteredHash || enteredHash !== String(shellAuth.pinHash || "")) {
       clearShellPin_();
+      hideShellSyncHud_();
+      setOfflineReadyStatusText_("Invalid access code.");
       setStatusText_("Invalid access code.");
       showShellFlashHud_("Invalid access code.", false);
       return;
@@ -1593,6 +1610,8 @@ async function unlockShellWithPin_() {
 
   } catch (error) {
     clearShellPin_();
+    hideShellSyncHud_();
+    setOfflineReadyStatusText_("PIN check failed.");
     setStatusText_(
       "PIN check failed: " +
         ((error && error.message) || String(error) || "Unknown error")
