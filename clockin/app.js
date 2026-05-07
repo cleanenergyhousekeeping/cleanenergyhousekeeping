@@ -1337,6 +1337,7 @@ async function syncShellQueue_() {
   showShellSyncHud_("Please wait...");
 
   let finalStatusMessage = "";
+  let stoppedForNetworkFailure = false;
 
   try {
     logShellQueueSync_("sync_start", {
@@ -1397,6 +1398,20 @@ async function syncShellQueue_() {
 
       const response = await postShellQueueEntry_(nextEntry);
       const serverMessage = String(response && response.message || "");
+
+      if (!response && navigator.onLine) {
+        stoppedForNetworkFailure = true;
+        finalStatusMessage = "Network unstable. Entry is still saved on phone.";
+        logShellQueueSync_("item_sync_network_failure", {
+          queuedId: queuedId,
+          eventType: nextEntry.eventType || "",
+          property: nextEntry.property || "",
+          queueLengthAfter: getShellQueue_().length,
+        });
+        setStatusText_(finalStatusMessage);
+        setOfflineReadyStatusText_("Saved on phone. Will sync when online.");
+        break;
+      }
 
       if (!response || !response.ok) {
         const shouldDrop = shouldDropQueuedItemFromResponse_(nextEntry.eventType, serverMessage);
@@ -1486,6 +1501,10 @@ async function syncShellQueue_() {
       setStatusText_(finalStatusMessage);
     }
   } catch (error) {
+    if (navigator.onLine) {
+      stoppedForNetworkFailure = true;
+      setOfflineReadyStatusText_("Saved on phone. Will sync when online.");
+    }
     finalStatusMessage =
       (error && error.message) ||
       "Could not sync offline entries yet. They will stay queued.";
@@ -1514,7 +1533,7 @@ async function syncShellQueue_() {
       }
     }
 
-    if (queueRemaining > 0 && navigator.onLine) {
+    if (queueRemaining > 0 && navigator.onLine && !stoppedForNetworkFailure) {
       setTimeout(function () {
         retryQueuedSyncIfReady_();
       }, 1500);
