@@ -82,6 +82,7 @@ const SHELL_PIN_LENGTH = 4;
 let shellSyncInProgress = false;
 let shellSyncTimer = null;
 let shellLastForegroundRefreshMs = 0;
+let offlineReadyStatusOverride = "";
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -147,7 +148,9 @@ function appendShellPinDigit_(digit) {
     if (navigator.vibrate) {
       navigator.vibrate(35);
     }
-    setStatusText_(navigator.onLine ? "Checking access..." : "Logging in...");
+    setStatusText_("Checking access...");
+    setOfflineReadyStatusText_("Checking access...");
+    showShellSyncHud_("Checking access...");
     unlockShellWithPin_();
   }
 }
@@ -230,6 +233,25 @@ function saveShellQueue_(queue) {
 function setStatusText_(text) {
   if (!statusText) return;
   statusText.textContent = text || "";
+}
+
+function setOfflineReadyStatusText_(text) {
+  offlineReadyStatusOverride = text ? String(text) : "";
+
+  if (!offlineReadyText) return;
+
+  if (offlineReadyStatusOverride) {
+    offlineReadyText.textContent = offlineReadyStatusOverride;
+    return;
+  }
+
+  const shellAuth = getShellAuth_() || {};
+  if (shellAuth && shellAuth.cleanerName) {
+    offlineReadyText.textContent = "Welcome, " + shellAuth.cleanerName + ".";
+    return;
+  }
+
+  offlineReadyText.textContent = "";
 }
 
 /* begin[shell_entry_lock_helper] */
@@ -564,6 +586,11 @@ function updateOfflineReadyText_(shellAuth) {
 
   if (!offlineReadyText) return;
 
+  if (offlineReadyStatusOverride) {
+    offlineReadyText.textContent = offlineReadyStatusOverride;
+    return;
+  }
+
   if (shellAuth && shellAuth.cleanerName) {
     offlineReadyText.textContent = "Welcome, " + shellAuth.cleanerName + ".";
     return;
@@ -817,7 +844,9 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   if (navigator.onLine) {
-    setStatusText_("Submitting entry...");
+    const submitStatusText = action === "clock_in" ? "Submitting clock in..." : "Submitting entry...";
+    setStatusText_(submitStatusText);
+    setOfflineReadyStatusText_(submitStatusText);
     syncShellQueue_();
   } else {
     const actionLabel =
@@ -827,6 +856,14 @@ function saveOfflineEntry_() {
         ? "Clock out saved offline."
         : "Note saved offline.";
 
+    const offlineStatusLabel =
+      action === "clock_in"
+        ? "Clock in saved on phone. Not synced yet."
+        : action === "clock_out"
+        ? "Clock out saved on phone. Not synced yet."
+        : "Note saved.";
+
+    setOfflineReadyStatusText_(offlineStatusLabel);
     showShellFlashHud_(actionLabel, true);
   }
 }
@@ -1388,6 +1425,7 @@ async function syncShellQueue_() {
         });
 
         setStatusText_(finalStatusMessage);
+        setOfflineReadyStatusText_("Sync failed. Entry is still saved on phone.");
         break;
       }
 
@@ -1407,6 +1445,14 @@ async function syncShellQueue_() {
         queueLengthAfter: dropState.afterLength,
         serverMessage: serverMessage,
       });
+
+      if (nextEntry.eventType === "clock_in") {
+        setOfflineReadyStatusText_("Clock in successful.");
+      } else if (nextEntry.eventType === "clock_out") {
+        setOfflineReadyStatusText_("Clock out successful.");
+      } else if (nextEntry.eventType === "add_note") {
+        setOfflineReadyStatusText_("Note saved.");
+      }
 
       updateOfflineQueueCount_();
     }
@@ -1446,6 +1492,10 @@ async function syncShellQueue_() {
           ? " Queue remaining: " + queueRemaining
           : " Queue remaining: 0";
       setStatusText_(finalStatusMessage + suffix);
+
+      if (queueRemaining > 0) {
+        setOfflineReadyStatusText_("Sync failed. Entry is still saved on phone.");
+      }
     }
 
     if (queueRemaining > 0) {
@@ -1525,6 +1575,8 @@ async function unlockShellWithPin_() {
     resetOfflineEntryForm_(shellAuth);
 
     const cleanerName = shellAuth.cleanerName || "Cleaner";
+    setOfflineReadyStatusText_("");
+    hideShellSyncHud_();
 
     if (usedSavedFallback && navigator.onLine) {
       setStatusText_("Unlocked for " + cleanerName + " using saved phone data.");
@@ -2170,4 +2222,3 @@ document.addEventListener("DOMContentLoaded", async function () {
   syncShellQueue_();
 });
 /* end[clockin_shell_init] */
-
