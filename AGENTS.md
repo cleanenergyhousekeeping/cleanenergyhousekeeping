@@ -11,7 +11,13 @@ Paths:
 - /clockin → frontend shell (app.js, UI)
 - /apps-script → backend Apps Script (.gs files)
 
+Local repo copy:
+~/Documents/Clean\ Energy\ Housekeeping/GITHUB/cleanenergyhousekeeping
+
 Rules:
+- Use GitHub as the source of truth.
+- Use the local repo path only when Kyle is syncing, testing, pulling, pushing, or running local commands.
+- Do not assume local files are current until git status / pull / branch status has been checked.
 - NEVER guess code
 - ALWAYS read current GitHub file before editing
 - ALL edits must match existing structure exactly
@@ -20,12 +26,21 @@ Rules:
 BACKUP REMINDER RULE (PRE-CHANGE)
 ----------------------------------------
 
-Before making code changes, remind the user to create a Git backup tag.
+Before making code changes, ask the user whether to create a Git backup branch from current main.
 
-Suggest a tag name using this format:
+Suggest a backup branch name using this format:
+
 backup-pre-[feature-name]-YYYY-MM-DD-HHMM
 
-Wait for the user to confirm that the backup tag was created, or that they explicitly want to proceed without a backup, before editing code.
+If the user provides a backup branch name, use that exact name.
+
+Create the backup branch from the current main branch before creating the feature branch.
+
+After the backup branch is created, create a separate feature branch for the requested code change.
+
+Wait for the user to confirm the backup branch name, or that they explicitly want to proceed without a backup branch, before editing code.
+
+Do NOT use backup tags unless the user specifically asks for a tag.
 
 ----------------------------------------
 SERVICE WORKER RULE (MANDATORY)

@@ -82,6 +82,7 @@ const SHELL_PIN_LENGTH = 4;
 let shellSyncInProgress = false;
 let shellSyncTimer = null;
 let shellLastForegroundRefreshMs = 0;
+let offlineReadyStatusOverride = "";
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -147,7 +148,9 @@ function appendShellPinDigit_(digit) {
     if (navigator.vibrate) {
       navigator.vibrate(35);
     }
-    setStatusText_(navigator.onLine ? "Checking access..." : "Logging in...");
+    setStatusText_("Checking access...");
+    setOfflineReadyStatusText_("Checking access...");
+    showShellSyncHud_("Checking access...");
     unlockShellWithPin_();
   }
 }
@@ -231,6 +234,27 @@ function setStatusText_(text) {
   if (!statusText) return;
   statusText.textContent = text || "";
 }
+
+/* begin[shell_ready_status_helpers] */
+function setOfflineReadyStatusText_(text) {
+  offlineReadyStatusOverride = text ? String(text) : "";
+
+  if (!offlineReadyText) return;
+
+  if (offlineReadyStatusOverride) {
+    offlineReadyText.textContent = offlineReadyStatusOverride;
+    return;
+  }
+
+  const shellAuth = getShellAuth_() || {};
+  if (shellAuth && shellAuth.cleanerName) {
+    offlineReadyText.textContent = "Welcome, " + shellAuth.cleanerName + ".";
+    return;
+  }
+
+  offlineReadyText.textContent = "";
+}
+/* end[shell_ready_status_helpers] */
 
 /* begin[shell_entry_lock_helper] */
 function setShellEntryLocked_(locked) {
@@ -564,6 +588,11 @@ function updateOfflineReadyText_(shellAuth) {
 
   if (!offlineReadyText) return;
 
+  if (offlineReadyStatusOverride) {
+    offlineReadyText.textContent = offlineReadyStatusOverride;
+    return;
+  }
+
   if (shellAuth && shellAuth.cleanerName) {
     offlineReadyText.textContent = "Welcome, " + shellAuth.cleanerName + ".";
     return;
@@ -817,7 +846,14 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   if (navigator.onLine) {
-    setStatusText_("Submitting entry...");
+    const submitStatusText =
+      action === "clock_in"
+        ? "Submitting clock in..."
+        : action === "clock_out"
+        ? "Submitting clock out..."
+        : "Submitting note...";
+    setStatusText_(submitStatusText);
+    setOfflineReadyStatusText_(submitStatusText);
     syncShellQueue_();
   } else {
     const actionLabel =
@@ -827,6 +863,14 @@ function saveOfflineEntry_() {
         ? "Clock out saved offline."
         : "Note saved offline.";
 
+    const offlineStatusLabel =
+      action === "clock_in"
+        ? "Clock in saved on phone. Not synced yet."
+        : action === "clock_out"
+        ? "Clock out saved on phone. Not synced yet."
+        : "Note saved on phone. Not synced yet.";
+
+    setOfflineReadyStatusText_(offlineStatusLabel);
     showShellFlashHud_(actionLabel, true);
   }
 }
@@ -1388,6 +1432,7 @@ async function syncShellQueue_() {
         });
 
         setStatusText_(finalStatusMessage);
+        setOfflineReadyStatusText_("Sync failed. Entry is still saved on phone.");
         break;
       }
 
@@ -1407,6 +1452,14 @@ async function syncShellQueue_() {
         queueLengthAfter: dropState.afterLength,
         serverMessage: serverMessage,
       });
+
+      if (nextEntry.eventType === "clock_in") {
+        setOfflineReadyStatusText_("Clock in successful.");
+      } else if (nextEntry.eventType === "clock_out") {
+        setOfflineReadyStatusText_("Clock out successful.");
+      } else if (nextEntry.eventType === "add_note") {
+        setOfflineReadyStatusText_("Note saved.");
+      }
 
       updateOfflineQueueCount_();
     }
@@ -1446,6 +1499,10 @@ async function syncShellQueue_() {
           ? " Queue remaining: " + queueRemaining
           : " Queue remaining: 0";
       setStatusText_(finalStatusMessage + suffix);
+
+      if (queueRemaining > 0) {
+        setOfflineReadyStatusText_("Sync failed. Entry is still saved on phone.");
+      }
     }
 
     if (queueRemaining > 0) {
@@ -1466,11 +1523,15 @@ async function unlockShellWithPin_() {
 
   if (!shellAuth || !shellAuth.pinHash) {
     clearShellPin_();
+    hideShellSyncHud_();
+    setOfflineReadyStatusText_("");
     setStatusText_("This phone is not ready yet. Go online and prepare it first.");
     return;
   }
 
   if (!enteredPin) {
+    hideShellSyncHud_();
+    setOfflineReadyStatusText_("");
     setStatusText_("Please enter your access code.");
     return;
   }
@@ -1490,6 +1551,8 @@ async function unlockShellWithPin_() {
 
         if (!refreshGate.ok && refreshGate.requiresLogin) {
           clearShellPin_();
+          hideShellSyncHud_();
+          setOfflineReadyStatusText_("Session expired. Please log in again.");
           setStatusText_(refreshGate.message || "Session expired. Please log in again.");
           showShellFlashHud_(refreshGate.message || "Session expired. Please log in again.", false);
           return;
@@ -1504,6 +1567,8 @@ async function unlockShellWithPin_() {
 
     if (!shellAuth || !shellAuth.pinHash) {
       clearShellPin_();
+      hideShellSyncHud_();
+      setOfflineReadyStatusText_("This phone is no longer authorized.");
       setStatusText_("This phone is no longer authorized. Please prepare it again online.");
       showShellFlashHud_("This phone is no longer authorized.", false);
       return;
@@ -1513,6 +1578,8 @@ async function unlockShellWithPin_() {
 
     if (!enteredHash || enteredHash !== String(shellAuth.pinHash || "")) {
       clearShellPin_();
+      hideShellSyncHud_();
+      setOfflineReadyStatusText_("Invalid access code.");
       setStatusText_("Invalid access code.");
       showShellFlashHud_("Invalid access code.", false);
       return;
@@ -1525,6 +1592,8 @@ async function unlockShellWithPin_() {
     resetOfflineEntryForm_(shellAuth);
 
     const cleanerName = shellAuth.cleanerName || "Cleaner";
+    setOfflineReadyStatusText_("");
+    hideShellSyncHud_();
 
     if (usedSavedFallback && navigator.onLine) {
       setStatusText_("Unlocked for " + cleanerName + " using saved phone data.");
@@ -1541,6 +1610,8 @@ async function unlockShellWithPin_() {
 
   } catch (error) {
     clearShellPin_();
+    hideShellSyncHud_();
+    setOfflineReadyStatusText_("PIN check failed.");
     setStatusText_(
       "PIN check failed: " +
         ((error && error.message) || String(error) || "Unknown error")
@@ -2170,4 +2241,3 @@ document.addEventListener("DOMContentLoaded", async function () {
   syncShellQueue_();
 });
 /* end[clockin_shell_init] */
-
