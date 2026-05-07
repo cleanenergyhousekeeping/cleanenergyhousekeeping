@@ -1324,6 +1324,15 @@ async function syncShellQueue_() {
   const initialQueue = getShellQueue_();
   if (!initialQueue.length) return;
 
+  if (!navigator.onLine) {
+    shellSyncInProgress = false;
+    hideShellSyncHud_();
+    updateOfflineQueueCount_();
+    setStatusText_("Offline. Entry saved on phone.");
+    setOfflineReadyStatusText_("Saved on phone. Will sync when online.");
+    return;
+  }
+
   shellSyncInProgress = true;
   showShellSyncHud_("Please wait...");
 
@@ -2076,11 +2085,18 @@ async function registerServiceWorker_() {
 /* begin[clockin_shell_event_wiring] */
 window.addEventListener("online", function () {
   updateShellUi_();
+  setStatusText_("Back online. Syncing saved entries...");
   refreshShellAuthOnForegroundIfNeeded_();
   syncShellQueue_();
 });
 
-window.addEventListener("offline", updateShellUi_);
+window.addEventListener("offline", function () {
+  hideShellSyncHud_();
+  shellSyncInProgress = false;
+  updateShellUi_();
+  setStatusText_("Offline. Entries will be saved on phone and synced later.");
+  setOfflineReadyStatusText_("Saved on phone. Will sync when online.");
+});
 
 function retryQueuedSyncIfReady_() {
   updateShellUi_();
