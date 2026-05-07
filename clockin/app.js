@@ -1324,10 +1324,20 @@ async function syncShellQueue_() {
   const initialQueue = getShellQueue_();
   if (!initialQueue.length) return;
 
+  if (!navigator.onLine) {
+    shellSyncInProgress = false;
+    hideShellSyncHud_();
+    updateOfflineQueueCount_();
+    setStatusText_("Offline. Entry saved on phone.");
+    setOfflineReadyStatusText_("Saved on phone. Will sync when online.");
+    return;
+  }
+
   shellSyncInProgress = true;
   showShellSyncHud_("Please wait...");
 
   let finalStatusMessage = "";
+  let stoppedForNetworkFailure = false;
 
   try {
     logShellQueueSync_("sync_start", {
@@ -1388,6 +1398,20 @@ async function syncShellQueue_() {
 
       const response = await postShellQueueEntry_(nextEntry);
       const serverMessage = String(response && response.message || "");
+
+      if (!response && navigator.onLine) {
+        stoppedForNetworkFailure = true;
+        finalStatusMessage = "Network unstable. Entry is still saved on phone.";
+        logShellQueueSync_("item_sync_network_failure", {
+          queuedId: queuedId,
+          eventType: nextEntry.eventType || "",
+          property: nextEntry.property || "",
+          queueLengthAfter: getShellQueue_().length,
+        });
+        setStatusText_(finalStatusMessage);
+        setOfflineReadyStatusText_("Saved on phone. Will sync when online.");
+        break;
+      }
 
       if (!response || !response.ok) {
         const shouldDrop = shouldDropQueuedItemFromResponse_(nextEntry.eventType, serverMessage);
@@ -1477,6 +1501,10 @@ async function syncShellQueue_() {
       setStatusText_(finalStatusMessage);
     }
   } catch (error) {
+    if (navigator.onLine) {
+      stoppedForNetworkFailure = true;
+      setOfflineReadyStatusText_("Saved on phone. Will sync when online.");
+    }
     finalStatusMessage =
       (error && error.message) ||
       "Could not sync offline entries yet. They will stay queued.";
@@ -1505,7 +1533,7 @@ async function syncShellQueue_() {
       }
     }
 
-    if (queueRemaining > 0) {
+    if (queueRemaining > 0 && navigator.onLine && !stoppedForNetworkFailure) {
       setTimeout(function () {
         retryQueuedSyncIfReady_();
       }, 1500);
@@ -2076,14 +2104,25 @@ async function registerServiceWorker_() {
 /* begin[clockin_shell_event_wiring] */
 window.addEventListener("online", function () {
   updateShellUi_();
+  setStatusText_("Back online. Syncing saved entries...");
   refreshShellAuthOnForegroundIfNeeded_();
   syncShellQueue_();
 });
 
-window.addEventListener("offline", updateShellUi_);
+window.addEventListener("offline", function () {
+  hideShellSyncHud_();
+  shellSyncInProgress = false;
+  updateShellUi_();
+  setStatusText_("Offline. Entries will be saved on phone and synced later.");
+  setOfflineReadyStatusText_("Saved on phone. Will sync when online.");
+});
 
 function retryQueuedSyncIfReady_() {
   updateShellUi_();
+
+  if (!navigator.onLine) {
+    return;
+  }
 
   if (shellSyncInProgress) {
     return;
