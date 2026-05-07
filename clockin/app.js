@@ -1226,17 +1226,38 @@ function logShellQueueSync_(stage, details) {
   console.debug("[shellQueueSync]", stage, safeDetails);
 }
 
-function shouldDropQueuedItemFromResponse_(message) {
+function shouldDropQueuedItemFromResponse_(eventType, message) {
   const msg = String(message || "").toLowerCase();
+  const normalizedEventType = String(eventType || "").toLowerCase();
 
-  return /already\s+(clocked|submitted|exists|recorded)|duplicate|already\s+processed|invalid\s+event|unknown\s+event|missing\s+property|property\s+not\s+found/.test(msg);
+  const isAlreadyClockedIn = /already\s+clocked\s+in/.test(msg);
+  if (isAlreadyClockedIn && normalizedEventType !== "clock_in") {
+    return false;
+  }
+
+  return /already\s+(submitted|exists|recorded)|duplicate|already\s+processed|invalid\s+event|unknown\s+event|missing\s+property|property\s+not\s+found|already\s+clocked\s+in/.test(msg);
 }
 
 function removeQueuedEntryById_(queuedId) {
   const queue = getShellQueue_();
   const beforeLength = queue.length;
+  const normalizedQueuedId = String(queuedId || "").trim();
+
+  if (!normalizedQueuedId) {
+    logShellQueueSync_("item_remove_skip_missing_queued_id", {
+      queueLengthBefore: beforeLength,
+      queueLengthAfter: beforeLength,
+    });
+
+    return {
+      beforeLength: beforeLength,
+      afterLength: beforeLength,
+      removed: false,
+    };
+  }
+
   const nextQueue = queue.filter(function (item) {
-    return String(item && item.queuedId || "") !== String(queuedId || "");
+    return String(item && item.queuedId || "") !== normalizedQueuedId;
   });
 
   saveShellQueue_(nextQueue);
@@ -1244,6 +1265,7 @@ function removeQueuedEntryById_(queuedId) {
   return {
     beforeLength: beforeLength,
     afterLength: nextQueue.length,
+    removed: nextQueue.length !== beforeLength,
   };
 }
 
@@ -1324,7 +1346,7 @@ async function syncShellQueue_() {
       const serverMessage = String(response && response.message || "");
 
       if (!response || !response.ok) {
-        const shouldDrop = shouldDropQueuedItemFromResponse_(serverMessage);
+        const shouldDrop = shouldDropQueuedItemFromResponse_(nextEntry.eventType, serverMessage);
 
         if (shouldDrop) {
           const dropState = removeQueuedEntryById_(queuedId);
@@ -1337,6 +1359,14 @@ async function syncShellQueue_() {
             serverMessage: serverMessage,
           });
           updateOfflineQueueCount_();
+
+          await refreshShellAuthWithRetry_({
+            maxAttempts: 2,
+            retryDelayMs: 600,
+            statusPrefix: "Refreshing sync state",
+            showStatus: false,
+          });
+
           continue;
         }
 
