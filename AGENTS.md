@@ -11,7 +11,13 @@ Paths:
 - /clockin → frontend shell (app.js, UI)
 - /apps-script → backend Apps Script (.gs files)
 
+Local repo copy:
+~/Documents/Clean\ Energy\ Housekeeping/GITHUB/cleanenergyhousekeeping
+
 Rules:
+- Use GitHub as the source of truth.
+- Use the local repo path only when Kyle is syncing, testing, pulling, pushing, or running local commands.
+- Do not assume local files are current until git status / pull / branch status has been checked.
 - NEVER guess code
 - ALWAYS read current GitHub file before editing
 - ALL edits must match existing structure exactly
