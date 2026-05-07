@@ -1514,7 +1514,7 @@ async function syncShellQueue_() {
       }
     }
 
-    if (queueRemaining > 0) {
+    if (queueRemaining > 0 && navigator.onLine) {
       setTimeout(function () {
         retryQueuedSyncIfReady_();
       }, 1500);
@@ -2100,6 +2100,10 @@ window.addEventListener("offline", function () {
 
 function retryQueuedSyncIfReady_() {
   updateShellUi_();
+
+  if (!navigator.onLine) {
+    return;
+  }
 
   if (shellSyncInProgress) {
     return;
