@@ -1220,8 +1220,62 @@ async function postShellQueueEntry_(queuedEntry) {
   }
 }
 
+/* begin[shell_queue_sync_safety_and_logging] */
+function logShellQueueSync_(stage, details) {
+  const safeDetails = details && typeof details === "object" ? details : {};
+  console.debug("[shellQueueSync]", stage, safeDetails);
+}
+
+function shouldDropQueuedItemFromResponse_(eventType, message) {
+  const msg = String(message || "").toLowerCase();
+  const normalizedEventType = String(eventType || "").toLowerCase();
+
+  const isAlreadyClockedIn = /already\s+clocked\s+in/.test(msg);
+  if (isAlreadyClockedIn && normalizedEventType !== "clock_in") {
+    return false;
+  }
+
+  return /already\s+(submitted|exists|recorded)|duplicate|already\s+processed|invalid\s+event|unknown\s+event|missing\s+property|property\s+not\s+found|already\s+clocked\s+in/.test(msg);
+}
+
+function removeQueuedEntryById_(queuedId) {
+  const queue = getShellQueue_();
+  const beforeLength = queue.length;
+  const normalizedQueuedId = String(queuedId || "").trim();
+
+  if (!normalizedQueuedId) {
+    logShellQueueSync_("item_remove_skip_missing_queued_id", {
+      queueLengthBefore: beforeLength,
+      queueLengthAfter: beforeLength,
+    });
+
+    return {
+      beforeLength: beforeLength,
+      afterLength: beforeLength,
+      removed: false,
+    };
+  }
+
+  const nextQueue = queue.filter(function (item) {
+    return String(item && item.queuedId || "") !== normalizedQueuedId;
+  });
+
+  saveShellQueue_(nextQueue);
+
+  return {
+    beforeLength: beforeLength,
+    afterLength: nextQueue.length,
+    removed: nextQueue.length !== beforeLength,
+  };
+}
+
 async function syncShellQueue_() {
-  if (shellSyncInProgress) return;
+  if (shellSyncInProgress) {
+    logShellQueueSync_("skip_in_progress", {
+      queueLengthBefore: getShellQueue_().length,
+    });
+    return;
+  }
 
   const initialQueue = getShellQueue_();
   if (!initialQueue.length) return;
@@ -1232,6 +1286,10 @@ async function syncShellQueue_() {
   let finalStatusMessage = "";
 
   try {
+    logShellQueueSync_("sync_start", {
+      queueLengthBefore: initialQueue.length,
+    });
+
     const refreshResult = await refreshShellAuthWithRetry_({
       maxAttempts: 4,
       retryDelayMs: 900,
@@ -1249,6 +1307,10 @@ async function syncShellQueue_() {
           "Offline entries are waiting. Open the live app and log in online.";
       }
 
+      logShellQueueSync_("sync_failure", {
+        serverMessage: finalStatusMessage,
+        queueLengthAfter: getShellQueue_().length,
+      });
       setStatusText_(finalStatusMessage);
       return;
     }
@@ -1260,6 +1322,7 @@ async function syncShellQueue_() {
       }
 
       const nextEntry = queue[0];
+      const queuedId = String(nextEntry && nextEntry.queuedId || "");
       finalStatusMessage =
         "Syncing queued entry: " +
         (nextEntry.eventType || "?") +
@@ -1272,11 +1335,43 @@ async function syncShellQueue_() {
           (nextEntry.property || "Property")
       );
 
+      logShellQueueSync_("item_sync_start", {
+        queuedId: queuedId,
+        eventType: nextEntry.eventType || "",
+        property: nextEntry.property || "",
+        queueLengthBefore: queue.length,
+      });
+
       const response = await postShellQueueEntry_(nextEntry);
+      const serverMessage = String(response && response.message || "");
 
       if (!response || !response.ok) {
+        const shouldDrop = shouldDropQueuedItemFromResponse_(nextEntry.eventType, serverMessage);
+
+        if (shouldDrop) {
+          const dropState = removeQueuedEntryById_(queuedId);
+          logShellQueueSync_("item_sync_drop", {
+            queuedId: queuedId,
+            eventType: nextEntry.eventType || "",
+            property: nextEntry.property || "",
+            queueLengthBefore: dropState.beforeLength,
+            queueLengthAfter: dropState.afterLength,
+            serverMessage: serverMessage,
+          });
+          updateOfflineQueueCount_();
+
+          await refreshShellAuthWithRetry_({
+            maxAttempts: 2,
+            retryDelayMs: 600,
+            statusPrefix: "Refreshing sync state",
+            showStatus: false,
+          });
+
+          continue;
+        }
+
         finalStatusMessage =
-          (response && response.message) ||
+          serverMessage ||
           "Could not sync a queued shell entry yet.";
 
         if (/session expired|log in again/i.test(finalStatusMessage)) {
@@ -1284,12 +1379,19 @@ async function syncShellQueue_() {
             "Offline entries are waiting. Open the live app and log in online.";
         }
 
+        logShellQueueSync_("item_sync_failure", {
+          queuedId: queuedId,
+          eventType: nextEntry.eventType || "",
+          property: nextEntry.property || "",
+          queueLengthAfter: getShellQueue_().length,
+          serverMessage: finalStatusMessage,
+        });
+
         setStatusText_(finalStatusMessage);
         break;
       }
 
-      const trimmedQueue = queue.slice(1);
-      saveShellQueue_(trimmedQueue);
+      const dropState = removeQueuedEntryById_(queuedId);
 
       const shellAuth = getShellAuth_();
       if (shellAuth) {
@@ -1297,12 +1399,24 @@ async function syncShellQueue_() {
         saveShellAuth_(shellAuth);
       }
 
+      logShellQueueSync_("item_sync_success", {
+        queuedId: queuedId,
+        eventType: nextEntry.eventType || "",
+        property: nextEntry.property || "",
+        queueLengthBefore: dropState.beforeLength,
+        queueLengthAfter: dropState.afterLength,
+        serverMessage: serverMessage,
+      });
+
       updateOfflineQueueCount_();
     }
 
     const remainingQueue = getShellQueue_();
     if (!remainingQueue.length) {
       finalStatusMessage = "Offline entries synced.";
+      logShellQueueSync_("sync_success", {
+        queueLengthAfter: 0,
+      });
       setStatusText_(finalStatusMessage);
     } else if (!finalStatusMessage) {
       finalStatusMessage =
@@ -1313,6 +1427,10 @@ async function syncShellQueue_() {
     finalStatusMessage =
       (error && error.message) ||
       "Could not sync offline entries yet. They will stay queued.";
+    logShellQueueSync_("sync_failure", {
+      queueLengthAfter: getShellQueue_().length,
+      serverMessage: finalStatusMessage,
+    });
     setStatusText_(finalStatusMessage);
   } finally {
     shellSyncInProgress = false;
@@ -1337,6 +1455,7 @@ async function syncShellQueue_() {
     }
   }
 }
+/* end[shell_queue_sync_safety_and_logging] */
 /* end[shell_refresh_and_sync_helpers] */
 /* end[shell_refresh_and_sync_helpers] */
 
