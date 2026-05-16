@@ -812,6 +812,19 @@ function saveOfflineEntry_() {
   }
 
   const queue = getShellQueue_();
+  const hasDuplicatePendingItem = hasDuplicatePendingQueueItem_(
+    queue,
+    shellAuth.cleanerName,
+    action,
+    selectedOfflineProperty.name
+  );
+  if (hasDuplicatePendingItem) {
+    updateOfflineQueueCount_();
+    setOfflineReadyStatusText_("Clock out already saved on phone. Not synced yet.");
+    showShellFlashHud_("Clock out is already saved on this phone and waiting to sync.", false);
+    return;
+  }
+
   queue.push({
     queuedId: "shell_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
     cleanerName: shellAuth.cleanerName,
@@ -873,6 +886,24 @@ function saveOfflineEntry_() {
     setOfflineReadyStatusText_(offlineStatusLabel);
     showShellFlashHud_(actionLabel, true);
   }
+}
+
+function hasDuplicatePendingQueueItem_(queue, cleanerName, eventType, propertyName) {
+  const normalizedEventType = String(eventType || "").trim().toLowerCase();
+  if (normalizedEventType !== "clock_out") {
+    return false;
+  }
+
+  const normalizedCleanerName = String(cleanerName || "").trim().toLowerCase();
+  const normalizedPropertyName = String(propertyName || "").trim().toLowerCase();
+
+  return (queue || []).some(function (item) {
+    return (
+      String(item && item.eventType || "").trim().toLowerCase() === "clock_out" &&
+      String(item && item.cleanerName || "").trim().toLowerCase() === normalizedCleanerName &&
+      String(item && item.property || "").trim().toLowerCase() === normalizedPropertyName
+    );
+  });
 }
 
 /* begin[shell_refresh_and_sync_helpers] */
@@ -1229,6 +1260,7 @@ async function postShellQueueEntry_(queuedEntry) {
           eventType: queuedEntry.eventType || "",
           note: queuedEntry.note || "",
           submittedAtMs: queuedEntry.submittedAtMs || Date.now(),
+          syncSource: "shell_offline",
         },
       }),
       cache: "no-store",
@@ -1277,6 +1309,17 @@ function shouldDropQueuedItemFromResponse_(eventType, message) {
   const isAlreadyClockedIn = /already\s+clocked\s+in/.test(msg);
   if (isAlreadyClockedIn && normalizedEventType !== "clock_in") {
     return false;
+  }
+
+  if (normalizedEventType === "clock_out") {
+    const isNoOpenShiftClockOut =
+      /not\s+currently\s+clocked\s+in/.test(msg) ||
+      /no\s+open\s+shift/.test(msg) ||
+      /no\s+matching\s+.+\s+shift/.test(msg) ||
+      /has\s+no\s+open\s+shift/.test(msg);
+    if (isNoOpenShiftClockOut) {
+      return true;
+    }
   }
 
   return /already\s+(submitted|exists|recorded)|duplicate|already\s+processed|invalid\s+event|unknown\s+event|missing\s+property|property\s+not\s+found|already\s+clocked\s+in/.test(msg);
