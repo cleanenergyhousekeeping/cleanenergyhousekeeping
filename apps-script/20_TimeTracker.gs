@@ -523,10 +523,15 @@ function reconcileQueuedTimeTrackerEntry_({
     });
 
     if (duplicateClockIn) {
-      logClockInDebug_("queued_clock_in_duplicate", {
-        name: name,
+      logClockInDebug_({
+        event: "queued_clock_in_duplicate",
+        cleanerName: name,
+        eventType: eventType,
         property: property,
-        rowNumber: duplicateClockIn.rowNumber,
+        syncSource: "shell_offline",
+        mode: "reconcileQueuedTimeTrackerEntry_",
+        status: "duplicate",
+        message: "Queued clock-in matched an existing exact timestamp and was ignored.",
       });
       return {
         action: "duplicate_clock_in",
@@ -539,10 +544,15 @@ function reconcileQueuedTimeTrackerEntry_({
       const openProperty = safeStr_(openShift.property);
 
       if (openProperty === property) {
-        logClockInDebug_("queued_clock_in_ignored_already_open", {
-          name: name,
+        logClockInDebug_({
+          event: "queued_clock_in_ignored_already_open",
+          cleanerName: name,
+          eventType: eventType,
           property: property,
-          rowNumber: openShift.rowNumber,
+          syncSource: "shell_offline",
+          mode: "reconcileQueuedTimeTrackerEntry_",
+          status: "ignored",
+          message: "Queued clock-in was ignored because an open shift already exists at the same property.",
         });
         return {
           action: "ignored_clock_in_already_open",
@@ -550,11 +560,15 @@ function reconcileQueuedTimeTrackerEntry_({
         };
       }
 
-      logClockInDebug_("queued_clock_in_blocked_different_property", {
-        name: name,
+      logClockInDebug_({
+        event: "queued_clock_in_blocked_different_property",
+        cleanerName: name,
+        eventType: eventType,
         property: property,
-        openProperty: openProperty,
-        rowNumber: openShift.rowNumber,
+        syncSource: "shell_offline",
+        mode: "reconcileQueuedTimeTrackerEntry_",
+        status: "blocked",
+        message: `Queued clock-in was blocked because ${name} has an open shift at ${openProperty}.`,
       });
       throw new Error(
         `${name} has an open shift at ${openProperty}. Queued clock-in at ${property} was blocked.`
@@ -582,10 +596,15 @@ function reconcileQueuedTimeTrackerEntry_({
 
     sheet.getRange(targetRow, 1, 1, TIME_TRACKER_COLUMNS.length).setValues([rowValues]);
 
-    logClockInDebug_("queued_clock_in_inserted", {
-      name: name,
+    logClockInDebug_({
+      event: "queued_clock_in_inserted",
+      cleanerName: name,
+      eventType: eventType,
       property: property,
-      rowNumber: targetRow,
+      syncSource: "shell_offline",
+      mode: "reconcileQueuedTimeTrackerEntry_",
+      status: "inserted",
+      message: "Queued clock-in inserted as a new row.",
     });
 
     updateTimeTrackerFlagsForRow_(sheet, targetRow, idx);
