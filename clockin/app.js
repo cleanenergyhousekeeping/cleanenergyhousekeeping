@@ -811,6 +811,12 @@ function saveOfflineEntry_() {
     return;
   }
 
+  if (action === "clock_in" && shellAuth.currentShift) {
+    setOfflineReadyStatusText_("You are already clocked in. Add a note or clock out first.");
+    showShellFlashHud_("You are already clocked in. Add a note or clock out first.", false);
+    return;
+  }
+
   const queue = getShellQueue_();
   const hasDuplicatePendingItem = hasDuplicatePendingQueueItem_(
     queue,
@@ -838,6 +844,13 @@ function saveOfflineEntry_() {
     source: "shell_offline",
   });
 
+  console.debug("[shell_queue] push", {
+    eventType: action,
+    property: selectedOfflineProperty.name,
+    cleanerName: shellAuth.cleanerName,
+    queueLengthAfterPush: queue.length,
+  });
+
   saveShellQueue_(queue);
 
   if (action === "clock_in") {
@@ -859,38 +872,19 @@ function saveOfflineEntry_() {
   resetOfflineEntryForm_(shellAuth);
 
   if (navigator.onLine) {
-    const submitStatusText =
-      action === "clock_in"
-        ? "Submitting clock in..."
-        : action === "clock_out"
-        ? "Submitting clock out..."
-        : "Submitting note...";
-    setStatusText_(submitStatusText);
-    setOfflineReadyStatusText_(submitStatusText);
+    setStatusText_("Saved on phone. Syncing now...");
+    setOfflineReadyStatusText_("Saved on phone. Syncing now...");
     syncShellQueue_();
   } else {
-    const actionLabel =
-      action === "clock_in"
-        ? "Clock in saved offline."
-        : action === "clock_out"
-        ? "Clock out saved offline."
-        : "Note saved offline.";
-
-    const offlineStatusLabel =
-      action === "clock_in"
-        ? "Clock in saved on phone. Not synced yet."
-        : action === "clock_out"
-        ? "Clock out saved on phone. Not synced yet."
-        : "Note saved on phone. Not synced yet.";
-
-    setOfflineReadyStatusText_(offlineStatusLabel);
-    showShellFlashHud_(actionLabel, true);
+    setStatusText_("Saved on phone. Not synced yet.");
+    setOfflineReadyStatusText_("Saved on phone. Not synced yet.");
+    showShellFlashHud_("Saved on phone. Not synced yet.", true);
   }
 }
 
 function hasDuplicatePendingQueueItem_(queue, cleanerName, eventType, propertyName) {
   const normalizedEventType = String(eventType || "").trim().toLowerCase();
-  if (normalizedEventType !== "clock_out") {
+  if (normalizedEventType !== "clock_out" && normalizedEventType !== "clock_in") {
     return false;
   }
 
@@ -898,8 +892,9 @@ function hasDuplicatePendingQueueItem_(queue, cleanerName, eventType, propertyNa
   const normalizedPropertyName = String(propertyName || "").trim().toLowerCase();
 
   return (queue || []).some(function (item) {
+    const queuedEventType = String(item && item.eventType || "").trim().toLowerCase();
     return (
-      String(item && item.eventType || "").trim().toLowerCase() === "clock_out" &&
+      queuedEventType === normalizedEventType &&
       String(item && item.cleanerName || "").trim().toLowerCase() === normalizedCleanerName &&
       String(item && item.property || "").trim().toLowerCase() === normalizedPropertyName
     );
@@ -1383,6 +1378,9 @@ async function syncShellQueue_() {
   let stoppedForNetworkFailure = false;
 
   try {
+    console.debug("[shell_queue] sync start", {
+      queueLengthBefore: initialQueue.length,
+    });
     logShellQueueSync_("sync_start", {
       queueLengthBefore: initialQueue.length,
     });
@@ -1507,9 +1505,32 @@ async function syncShellQueue_() {
 
       const shellAuth = getShellAuth_();
       if (shellAuth) {
-        shellAuth.currentShift = response.currentShift || null;
+        console.debug("[shell_queue] response.currentShift", {
+          eventType: nextEntry.eventType || "",
+          currentShift: response.currentShift || null,
+        });
+        if (nextEntry.eventType === "clock_in") {
+          if (response.currentShift) {
+            shellAuth.currentShift = response.currentShift;
+          }
+        } else if (nextEntry.eventType === "clock_out") {
+          shellAuth.currentShift = response.currentShift || null;
+        } else if (nextEntry.eventType === "add_note") {
+          if (response.currentShift) {
+            shellAuth.currentShift = response.currentShift;
+          }
+        }
         saveShellAuth_(shellAuth);
+        console.debug("[shell_queue] final shellAuth.currentShift", {
+          eventType: nextEntry.eventType || "",
+          currentShift: shellAuth.currentShift || null,
+        });
       }
+      console.debug("[shell_queue] sync success", {
+        eventType: nextEntry.eventType || "",
+        property: nextEntry.property || "",
+        queueLengthAfter: dropState.afterLength,
+      });
 
       logShellQueueSync_("item_sync_success", {
         queuedId: queuedId,
@@ -1533,6 +1554,13 @@ async function syncShellQueue_() {
 
     const remainingQueue = getShellQueue_();
     if (!remainingQueue.length) {
+      await refreshShellAuthWithRetry_({
+        maxAttempts: 2,
+        retryDelayMs: 600,
+        statusPrefix: "Refreshing sync state",
+        showStatus: false,
+      });
+      updateShellUi_();
       finalStatusMessage = "Offline entries synced.";
       logShellQueueSync_("sync_success", {
         queueLengthAfter: 0,
