@@ -261,18 +261,26 @@ function upsertTimeTrackerRow_({
 
   // ===== BEGIN clock_in block =====
   if (eventType === "clock_in") {
-    const targetRow = openRowNumber || nextSafeRow;
-    if (!openRowNumber) sheet.appendRow(Array(headers.length).fill(""));
-
+    sheet.appendRow(Array(headers.length).fill(""));
+    const targetRow = sheet.getLastRow();
     const clientName = getPropertyClientByName_(property);
+    const rowValues = Array(TIME_TRACKER_COLUMNS.length).fill("");
 
-    sheet.getRange(targetRow, idx["Name"] + 1).setValue(name);
-    sheet.getRange(targetRow, idx["Property"] + 1).setValue(property);
-    sheet.getRange(targetRow, idx["Date"] + 1).setValue(dateOnly);
-    sheet.getRange(targetRow, idx["Clock In"] + 1).setValue(timestamp);
-    sheet.getRange(targetRow, idx["Clock In Note"] + 1).setValue(clockInNote || "");
-    sheet.getRange(targetRow, idx["Client"] + 1).setValue(clientName);
-    sheet.getRange(targetRow, idx["Flags"] + 1).setValue("");
+    rowValues[idx["Name"]] = name;
+    rowValues[idx["Property"]] = property;
+    rowValues[idx["Date"]] = dateOnly;
+    rowValues[idx["Clock In"]] = timestamp;
+    rowValues[idx["Clock In Note"]] = clockInNote || "";
+    rowValues[idx["Clock Out"]] = "";
+    rowValues[idx["Total Hours"]] = "";
+    rowValues[idx["Clock Out Note"]] = "";
+    rowValues[idx["Client"]] = clientName;
+    rowValues[idx["Flags"]] = "";
+    rowValues[idx["Transit Hours"]] = "";
+    rowValues[idx["Transit Alert Sent"]] = "";
+    rowValues[idx["Transit Minutes"]] = "";
+
+    sheet.getRange(targetRow, 1, 1, TIME_TRACKER_COLUMNS.length).setValues([rowValues]);
 
     updateTransitForCleanerDay_(name, dateOnly);
     return;
@@ -515,23 +523,89 @@ function reconcileQueuedTimeTrackerEntry_({
     });
 
     if (duplicateClockIn) {
+      logClockInDebug_({
+        event: "queued_clock_in_duplicate",
+        cleanerName: name,
+        eventType: eventType,
+        property: property,
+        syncSource: "shell_offline",
+        mode: "reconcileQueuedTimeTrackerEntry_",
+        status: "duplicate",
+        message: "Queued clock-in matched an existing exact timestamp and was ignored.",
+      });
       return {
         action: "duplicate_clock_in",
         rowNumber: duplicateClockIn.rowNumber,
       };
     }
 
+    const openShift = findOpenShiftForCleaner_(name);
+    if (openShift) {
+      const openProperty = safeStr_(openShift.property);
+
+      if (openProperty === property) {
+        logClockInDebug_({
+          event: "queued_clock_in_ignored_already_open",
+          cleanerName: name,
+          eventType: eventType,
+          property: property,
+          syncSource: "shell_offline",
+          mode: "reconcileQueuedTimeTrackerEntry_",
+          status: "ignored",
+          message: "Queued clock-in was ignored because an open shift already exists at the same property.",
+        });
+        return {
+          action: "ignored_clock_in_already_open",
+          rowNumber: openShift.rowNumber,
+        };
+      }
+
+      logClockInDebug_({
+        event: "queued_clock_in_blocked_different_property",
+        cleanerName: name,
+        eventType: eventType,
+        property: property,
+        syncSource: "shell_offline",
+        mode: "reconcileQueuedTimeTrackerEntry_",
+        status: "blocked",
+        message: `Queued clock-in was blocked because ${name} has an open shift at ${openProperty}.`,
+      });
+      throw new Error(
+        `${name} has an open shift at ${openProperty}. Queued clock-in at ${property} was blocked.`
+      );
+    }
+
     sheet.appendRow(Array(headers.length).fill(""));
     const targetRow = sheet.getLastRow();
     const clientName = getPropertyClientByName_(property);
+    const rowValues = Array(TIME_TRACKER_COLUMNS.length).fill("");
 
-    sheet.getRange(targetRow, idx["Name"] + 1).setValue(name);
-    sheet.getRange(targetRow, idx["Property"] + 1).setValue(property);
-    sheet.getRange(targetRow, idx["Date"] + 1).setValue(dateOnly);
-    sheet.getRange(targetRow, idx["Clock In"] + 1).setValue(timestamp);
-    sheet.getRange(targetRow, idx["Clock In Note"] + 1).setValue(clockInNote || "");
-    sheet.getRange(targetRow, idx["Client"] + 1).setValue(clientName);
-    sheet.getRange(targetRow, idx["Flags"] + 1).setValue("");
+    rowValues[idx["Name"]] = name;
+    rowValues[idx["Property"]] = property;
+    rowValues[idx["Date"]] = dateOnly;
+    rowValues[idx["Clock In"]] = timestamp;
+    rowValues[idx["Clock In Note"]] = clockInNote || "";
+    rowValues[idx["Clock Out"]] = "";
+    rowValues[idx["Total Hours"]] = "";
+    rowValues[idx["Clock Out Note"]] = "";
+    rowValues[idx["Client"]] = clientName;
+    rowValues[idx["Flags"]] = "";
+    rowValues[idx["Transit Hours"]] = "";
+    rowValues[idx["Transit Alert Sent"]] = "";
+    rowValues[idx["Transit Minutes"]] = "";
+
+    sheet.getRange(targetRow, 1, 1, TIME_TRACKER_COLUMNS.length).setValues([rowValues]);
+
+    logClockInDebug_({
+      event: "queued_clock_in_inserted",
+      cleanerName: name,
+      eventType: eventType,
+      property: property,
+      syncSource: "shell_offline",
+      mode: "reconcileQueuedTimeTrackerEntry_",
+      status: "inserted",
+      message: "Queued clock-in inserted as a new row.",
+    });
 
     updateTimeTrackerFlagsForRow_(sheet, targetRow, idx);
     updateTransitForCleanerDay_(name, dateOnly);
