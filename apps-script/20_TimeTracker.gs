@@ -256,13 +256,10 @@ function upsertTimeTrackerRow_({
     }
   }
 
-  // HARD SAFETY: never write into row 1
-  const nextSafeRow = Math.max(sheet.getLastRow() + 1, 2);
-
   // ===== BEGIN clock_in block =====
   if (eventType === "clock_in") {
-    sheet.appendRow(Array(headers.length).fill(""));
-    const targetRow = sheet.getLastRow();
+    const insertedRowInfo = insertBlankTimeTrackerRowAfterLastData_(sheet, idx);
+    const targetRow = insertedRowInfo.targetRow;
     const clientName = getPropertyClientByName_(property);
     const rowValues = Array(TIME_TRACKER_COLUMNS.length).fill("");
 
@@ -281,6 +278,17 @@ function upsertTimeTrackerRow_({
     rowValues[idx["Transit Minutes"]] = "";
 
     sheet.getRange(targetRow, 1, 1, TIME_TRACKER_COLUMNS.length).setValues([rowValues]);
+
+    logClockInDebug_({
+      event: "clock_in_insert_row_target",
+      cleanerName: name,
+      eventType: eventType,
+      property: property,
+      syncSource: "shell_online",
+      mode: "upsertTimeTrackerRow_",
+      status: "inserted",
+      message: `Clock-in inserted at row ${targetRow} after last data row ${insertedRowInfo.lastDataRow}.`,
+    });
 
     updateTransitForCleanerDay_(name, dateOnly);
     return;
@@ -486,6 +494,39 @@ function findQueuedShiftRowForTimestamp_({
   return bestMatch;
 }
 
+function findLastTimeTrackerDataRow_(sheet, idx) {
+  const data = sheet.getDataRange().getValues();
+
+  for (let r = data.length - 1; r >= 1; r--) {
+    const row = data[r];
+    const hasMeaningfulValue = [
+      "Name",
+      "Property",
+      "Date",
+      "Clock In",
+      "Clock Out",
+      "Clock In Note",
+      "Clock Out Note",
+      "Client",
+    ].some(function (columnName) {
+      return safeStr_(row[idx[columnName]]) !== "";
+    });
+
+    if (hasMeaningfulValue) return r + 1;
+  }
+
+  return 1;
+}
+
+function insertBlankTimeTrackerRowAfterLastData_(sheet, idx) {
+  const lastDataRow = findLastTimeTrackerDataRow_(sheet, idx);
+  sheet.insertRowsAfter(lastDataRow, 1);
+  return {
+    targetRow: lastDataRow + 1,
+    lastDataRow: lastDataRow,
+  };
+}
+
 function reconcileQueuedTimeTrackerEntry_({
   timestamp,
   name,
@@ -575,8 +616,8 @@ function reconcileQueuedTimeTrackerEntry_({
       );
     }
 
-    sheet.appendRow(Array(headers.length).fill(""));
-    const targetRow = sheet.getLastRow();
+    const insertedRowInfo = insertBlankTimeTrackerRowAfterLastData_(sheet, idx);
+    const targetRow = insertedRowInfo.targetRow;
     const clientName = getPropertyClientByName_(property);
     const rowValues = Array(TIME_TRACKER_COLUMNS.length).fill("");
 
@@ -595,6 +636,17 @@ function reconcileQueuedTimeTrackerEntry_({
     rowValues[idx["Transit Minutes"]] = "";
 
     sheet.getRange(targetRow, 1, 1, TIME_TRACKER_COLUMNS.length).setValues([rowValues]);
+
+    logClockInDebug_({
+      event: "clock_in_insert_row_target",
+      cleanerName: name,
+      eventType: eventType,
+      property: property,
+      syncSource: "shell_offline",
+      mode: "reconcileQueuedTimeTrackerEntry_",
+      status: "inserted",
+      message: `Queued clock-in inserted at row ${targetRow} after last data row ${insertedRowInfo.lastDataRow}.`,
+    });
 
     logClockInDebug_({
       event: "queued_clock_in_inserted",
