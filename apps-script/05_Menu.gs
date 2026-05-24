@@ -8,9 +8,14 @@ function onOpen() {
         .addItem("1. Open Time Tracker", "openTimeTrackerSheet")
         .addItem("2. Open Invoice Control", "openInvoiceControlSheet")
         .addItem("3. Rebuild Invoice Prep", "generateInvoicePrepFromTimeTracker")
-       .addItem("4. Open Invoice Prep", "openInvoicePrepSheet")
-.addSeparator()
-.addItem("5. Create Invoices", "createInvoicesFromInvoicePrep")
+        .addItem("4. Open Invoice Prep", "openInvoicePrepSheet")
+        .addSeparator()
+        .addItem("5. Create Invoices", "createInvoicesFromInvoicePrep")
+    )
+    .addSubMenu(
+      ui.createMenu("Receipt Flow")
+        .addItem("1. Open Receipt Control", "openReceiptControlSheet")
+        .addItem("2. Create Receipts", "createReceiptsFromReceiptControl")
     )
     .addSubMenu(
       ui.createMenu("Payroll Flow")
@@ -57,6 +62,10 @@ function openInvoicePrepSheet() {
 
 function openInvoiceAdjustmentsSheet() {
   openSheetByName_(INVOICE_ADJUSTMENTS_SHEET_NAME);
+}
+
+function openReceiptControlSheet() {
+  openSheetByName_(RECEIPT_CONTROL_SHEET_NAME);
 }
 
 function openPayrollPrepSheet() {
