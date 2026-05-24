@@ -40,6 +40,8 @@ function readInvoicePrepRowsFromSheetByInvoiceNumber_(sheet, invoiceNumber) {
 
   return values
     .map(function (row, offset) {
+      const serviceDate = coerceToDate_(row[idx["Service Date"]]);
+
       return {
         sheetRow: offset + 2,
         prepId: safeStr_(row[idx["Prep ID"]]),
@@ -49,7 +51,7 @@ function readInvoicePrepRowsFromSheetByInvoiceNumber_(sheet, invoiceNumber) {
         client: safeStr_(row[idx["Client"]]),
         invoiceGroup: safeStr_(row[idx["Invoice Group"]]),
         property: safeStr_(row[idx["Property"]]),
-        serviceDate: startOfDay_(coerceToDate_(row[idx["Service Date"]])),
+        serviceDate: serviceDate ? startOfDay_(serviceDate) : null,
         cleanerNames: safeStr_(row[idx["Cleaner Names"]]),
         workedHours: Number(row[idx["Worked Hours"]] || 0),
         defaultHourlyRate: Number(row[idx["Default Hourly Rate"]] || 0),
