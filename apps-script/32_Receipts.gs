@@ -177,6 +177,92 @@ function setReceiptServiceTableColumnWidths_(table) {
   }
 }
 
+function styleReceiptServiceItemsTable_(table) {
+  const headerBg = "#333b42";
+  const headerText = "#ffffff";
+  const borderColor = "#666666";
+  const altRow = "#f5f5f5";
+
+  const numRows = table.getNumRows();
+  const numCols = table.getRow(0).getNumCells();
+
+  for (let r = 0; r < numRows; r++) {
+    for (let c = 0; c < numCols; c++) {
+      const cell = table.getCell(r, c);
+      cell.setPaddingTop(4).setPaddingBottom(4).setPaddingLeft(6).setPaddingRight(6);
+
+      try { cell.setBorderWidth(1); cell.setBorderColor(borderColor); } catch (_) {}
+
+      if (r === 0) {
+        cell.setBackgroundColor(headerBg);
+
+        for (let i = 0; i < cell.getNumChildren(); i++) {
+          const child = cell.getChild(i);
+          if (child.getType() !== DocumentApp.ElementType.PARAGRAPH) continue;
+
+          const p = child.asParagraph();
+          const t = p.editAsText();
+
+          t.setFontFamily("Courier New")
+            .setFontSize(10)
+            .setForegroundColor(headerText)
+            .setBold(true);
+
+          p.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
+        }
+
+        continue;
+      }
+
+      cell.setBackgroundColor((r % 2 === 0) ? altRow : "#ffffff");
+
+      for (let i = 0; i < cell.getNumChildren(); i++) {
+        const child = cell.getChild(i);
+        if (child.getType() !== DocumentApp.ElementType.PARAGRAPH) continue;
+
+        const p = child.asParagraph();
+        const t = p.editAsText();
+        const line = t.getText() || "";
+
+        p.setAlignment(c === 2 ? DocumentApp.HorizontalAlignment.RIGHT : DocumentApp.HorizontalAlignment.LEFT);
+
+        t.setFontFamily("Courier New")
+          .setFontSize(10)
+          .setBold(false)
+          .setForegroundColor("#000000");
+
+        if (c === 1) {
+          const trimmedLine = line.trim();
+          const isNoteLine = /^\s+/.test(line);
+          const isNotesHeader = trimmedLine === "Notes/extras";
+          const isAdjustmentReason = /^(Discount reason:|Fee reason:|Billing note:)/.test(trimmedLine);
+
+          if (isNotesHeader || isAdjustmentReason) {
+            t.setBold(true);
+          } else if (isNoteLine) {
+            t.setBold(false);
+          } else if (i === 0) {
+            t.setFontSize(11).setBold(true);
+          }
+        }
+
+        if (c === 2) {
+          const trimmedLine = line.trim();
+          const isDiscountLine = /^Discount:/.test(trimmedLine);
+          const isTotalLine = /^Total:?/.test(trimmedLine);
+          const isSingleLineAmount = cell.getNumChildren() === 1;
+
+          if (isTotalLine || (isSingleLineAmount && !isDiscountLine)) {
+            t.setBold(true);
+          } else {
+            t.setBold(false);
+          }
+        }
+      }
+    }
+  }
+}
+
 function insertReceiptServiceItemsTable_(body, rows) {
   const found = body.findText(escapeForRegex_("{{INV_SERVICE_ITEMS}}"));
   if (!found) throw new Error("Could not find {{INV_SERVICE_ITEMS}} in the receipt document.");
@@ -201,7 +287,7 @@ function insertReceiptServiceItemsTable_(body, rows) {
 
   const table = body.insertTable(parentIndex + 1, tableData);
   setReceiptServiceTableColumnWidths_(table);
-  styleServiceItemsTable_(table);
+  styleReceiptServiceItemsTable_(table);
 }
 
 function insertReceiptTotalsSection_(body, totals) {
