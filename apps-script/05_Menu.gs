@@ -65,7 +65,8 @@ function openInvoiceAdjustmentsSheet() {
 }
 
 function openReceiptControlSheet() {
-  openSheetByName_(RECEIPT_CONTROL_SHEET_NAME);
+  const sheet = ensureReceiptControlSheet_();
+  SpreadsheetApp.getActiveSpreadsheet().setActiveSheet(sheet);
 }
 
 function openPayrollPrepSheet() {
