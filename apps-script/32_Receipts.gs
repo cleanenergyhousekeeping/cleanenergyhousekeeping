@@ -73,6 +73,46 @@ function readInvoicePrepRowsFromSheetByInvoiceNumber_(sheet, invoiceNumber) {
     });
 }
 
+function buildReceiptPrepRowDedupeKey_(row) {
+  const prepId = safeStr_(row && row.prepId);
+  if (prepId) {
+    return "prepId::" + prepId;
+  }
+
+  const timeTrackerRowKeys = safeStr_(row && row.timeTrackerRowKeys);
+  if (timeTrackerRowKeys) {
+    return "timeTrackerRowKeys::" + timeTrackerRowKeys;
+  }
+
+  const serviceDate = row && row.serviceDate ? formatYMD_(row.serviceDate) : "";
+  const finalBilledAmount = Number(row && row.finalBilledAmount || 0).toFixed(2);
+
+  return [
+    "fallback",
+    serviceDate,
+    safeStr_(row && row.client),
+    safeStr_(row && row.property),
+    finalBilledAmount,
+  ].join("::");
+}
+
+function dedupeReceiptInvoicePrepRows_(rows) {
+  const seen = {};
+  const dedupedRows = [];
+
+  rows.forEach(function (row) {
+    const key = buildReceiptPrepRowDedupeKey_(row);
+    if (seen[key]) {
+      return;
+    }
+
+    seen[key] = true;
+    dedupedRows.push(row);
+  });
+
+  return dedupedRows;
+}
+
 function getInvoicePrepRowsByInvoiceNumber_(invoiceNumber) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const rows = [];
@@ -83,7 +123,7 @@ function getInvoicePrepRowsByInvoiceNumber_(invoiceNumber) {
   const archiveSheet = ss.getSheetByName(INVOICE_PREP_ARCHIVE_SHEET_NAME);
   rows.push.apply(rows, readInvoicePrepRowsFromSheetByInvoiceNumber_(archiveSheet, invoiceNumber));
 
-  return rows.sort(function (a, b) {
+  return dedupeReceiptInvoicePrepRows_(rows).sort(function (a, b) {
     const dateDiff = a.serviceDate.getTime() - b.serviceDate.getTime();
     if (dateDiff !== 0) return dateDiff;
     return a.property.localeCompare(b.property);
@@ -99,6 +139,36 @@ function buildReceiptNumber_(invoiceNumber, requestedReceiptNumber) {
   }
 
   return "R-" + safeStr_(invoiceNumber);
+}
+
+function coerceReceiptCurrencyNumber_(value) {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+
+  if (typeof value === "number" && isFinite(value)) {
+    return value;
+  }
+
+  const raw = safeStr_(value);
+  if (!raw) {
+    return 0;
+  }
+
+  const cleaned = raw.replace(/[$,\s]/g, "");
+  if (!cleaned) {
+    return 0;
+  }
+
+  const isParenthesizedNegative = /^\(.+\)$/.test(cleaned);
+  const numericText = isParenthesizedNegative ? cleaned.slice(1, -1) : cleaned;
+  const parsed = Number(numericText);
+
+  if (!isFinite(parsed) || Number.isNaN(parsed)) {
+    return 0;
+  }
+
+  return isParenthesizedNegative ? -Math.abs(parsed) : parsed;
 }
 
 function getReceiptInvoiceDate_(prepRows) {
@@ -123,8 +193,25 @@ function getReceiptTotalAmount_(prepRows) {
   );
 }
 
+function getReceiptTemplateFile_() {
+  const templateDocId = safeStr_(typeof RECEIPT_TEMPLATE_DOC_ID !== "undefined" ? RECEIPT_TEMPLATE_DOC_ID : "");
+
+  if (!templateDocId) {
+    throw new Error("Missing RECEIPT_TEMPLATE_DOC_ID. Update 00_Config.gs with the receipt template Google Doc ID.");
+  }
+
+  try {
+    return DriveApp.getFileById(templateDocId);
+  } catch (error) {
+    throw new Error(
+      "Missing/invalid RECEIPT_TEMPLATE_DOC_ID. Update 00_Config.gs with a valid receipt template Google Doc ID. " +
+      safeStr_(error && error.message ? error.message : error)
+    );
+  }
+}
+
 function copyReceiptTemplate_({ receiptNumber, invoiceNumber, periodStart, periodEnd, clientName }) {
-  const templateFile = DriveApp.getFileById(RECEIPT_TEMPLATE_DOC_ID);
+  const templateFile = getReceiptTemplateFile_();
 
   const name =
     `Clean Energy Housekeeping Receipt ${receiptNumber} ` +
@@ -376,7 +463,7 @@ function createReceiptFromInvoicePrepRows_({ invoiceNumber, receiptNumber, payme
   const invoiceDate = getReceiptInvoiceDate_(sortedRows);
   const invoiceTotal = getReceiptTotalAmount_(sortedRows);
   const effectiveAmountPaid = amountPaid > 0 ? round2_(amountPaid) : invoiceTotal;
-  const balanceDue = round2_(invoiceTotal - effectiveAmountPaid);
+  const balanceDue = Math.max(0, round2_(invoiceTotal - effectiveAmountPaid));
   const effectiveReceiptNumber = buildReceiptNumber_(invoiceNumber, receiptNumber);
   const effectivePaymentDate = paymentDate || new Date();
   const effectivePaymentMethod = safeStr_(paymentMethod) || "Payment received";
@@ -425,6 +512,12 @@ function createReceiptFromInvoicePrepRows_({ invoiceNumber, receiptNumber, payme
   };
 }
 
+function writeReceiptControlRowFailure_(sheet, idx, sheetRow, error) {
+  const message = safeStr_(error && error.message ? error.message : error);
+  sheet.getRange(sheetRow, idx["Receipt Created"] + 1).setValue(false);
+  sheet.getRange(sheetRow, idx["Notes"] + 1).setValue("Receipt error: " + message);
+}
+
 function createReceiptsFromReceiptControl_() {
   const controlSheet = ensureReceiptControlSheet_();
   const idx = getReceiptControlIndexMap_(controlSheet);
@@ -436,6 +529,7 @@ function createReceiptsFromReceiptControl_() {
 
   const values = controlSheet.getRange(2, 1, lastRow - 1, controlSheet.getLastColumn()).getValues();
   const created = [];
+  const failures = [];
 
   values.forEach(function (row, offset) {
     const sheetRow = offset + 2;
@@ -446,33 +540,47 @@ function createReceiptsFromReceiptControl_() {
       return;
     }
 
-    const prepRows = getInvoicePrepRowsByInvoiceNumber_(invoiceNumber);
-    const receiptNumber = safeStr_(row[idx["Receipt Number"]]);
-    const paymentDate = coerceToDate_(row[idx["Payment Date"]]) || new Date();
-    const paymentMethod = safeStr_(row[idx["Payment Method"]]);
-    const amountPaid = Number(row[idx["Amount Paid"]] || 0);
+    try {
+      const prepRows = getInvoicePrepRowsByInvoiceNumber_(invoiceNumber);
+      const receiptNumber = safeStr_(row[idx["Receipt Number"]]);
+      const paymentDate = coerceToDate_(row[idx["Payment Date"]]) || new Date();
+      const paymentMethod = safeStr_(row[idx["Payment Method"]]);
+      const amountPaid = coerceReceiptCurrencyNumber_(row[idx["Amount Paid"]]);
 
-    const result = createReceiptFromInvoicePrepRows_({
-      invoiceNumber: invoiceNumber,
-      receiptNumber: receiptNumber,
-      paymentDate: paymentDate,
-      paymentMethod: paymentMethod,
-      amountPaid: amountPaid,
-      prepRows: prepRows,
-    });
+      const result = createReceiptFromInvoicePrepRows_({
+        invoiceNumber: invoiceNumber,
+        receiptNumber: receiptNumber,
+        paymentDate: paymentDate,
+        paymentMethod: paymentMethod,
+        amountPaid: amountPaid,
+        prepRows: prepRows,
+      });
 
-    controlSheet.getRange(sheetRow, idx["Receipt Number"] + 1).setValue(result.receiptNumber);
-    controlSheet.getRange(sheetRow, idx["Payment Date"] + 1).setValue(paymentDate);
-    controlSheet.getRange(sheetRow, idx["Amount Paid"] + 1).setValue(result.amountPaid);
-    controlSheet.getRange(sheetRow, idx["Receipt Created"] + 1).setValue("TRUE");
-    controlSheet.getRange(sheetRow, idx["Receipt PDF Link"] + 1).setValue(result.pdfUrl);
-    controlSheet.getRange(sheetRow, idx["Receipt Doc Link"] + 1).setValue(result.docUrl);
-    controlSheet.getRange(sheetRow, idx["Receipt Created At"] + 1).setValue(new Date());
+      controlSheet.getRange(sheetRow, idx["Receipt Number"] + 1).setValue(result.receiptNumber);
+      controlSheet.getRange(sheetRow, idx["Payment Date"] + 1).setValue(paymentDate);
+      controlSheet.getRange(sheetRow, idx["Amount Paid"] + 1).setValue(result.amountPaid);
+      controlSheet.getRange(sheetRow, idx["Receipt Created"] + 1).setValue(true);
+      controlSheet.getRange(sheetRow, idx["Receipt PDF Link"] + 1).setValue(result.pdfUrl);
+      controlSheet.getRange(sheetRow, idx["Receipt Doc Link"] + 1).setValue(result.docUrl);
+      controlSheet.getRange(sheetRow, idx["Receipt Created At"] + 1).setValue(new Date());
+      controlSheet.getRange(sheetRow, idx["Notes"] + 1).setValue("");
 
-    created.push(result);
+      created.push(result);
+    } catch (error) {
+      writeReceiptControlRowFailure_(controlSheet, idx, sheetRow, error);
+      failures.push("Row " + sheetRow + ": " + safeStr_(error && error.message ? error.message : error));
+    }
   });
 
   ensureReceiptControlSheet_();
+
+  if (failures.length) {
+    Logger.log("Receipt creation failures: " + JSON.stringify(failures, null, 2));
+  }
+
+  if (!created.length && failures.length) {
+    throw new Error("No receipts created. " + failures.join(" | "));
+  }
 
   if (!created.length) {
     throw new Error("No receipts created. Add an Invoice Number or clear Receipt Created for a row you want to rerun.");
