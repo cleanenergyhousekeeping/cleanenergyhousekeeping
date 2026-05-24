@@ -1,7 +1,9 @@
 const TEMPLATE_DOC_ID = "1R9dXwNwg96dxsW5E04-3IQLheIHenBcPimofD3252y4";
+const RECEIPT_TEMPLATE_DOC_ID = "1HvnC48WNJ1NBFOpxkpnU6JSmjJUt5UeS7rT6rd7fXgM";
 const TIME_SHEET_NAME = "Time Tracker";
 const DEFAULT_RATE = 50;
 const INVOICE_FOLDER_ID = "";
+const RECEIPT_FOLDER_ID = "";
 const NOTIFY_EMAIL = "kyle@cleanenergyhousekeeping.com";
 
 const TIME_TRACKER_COLUMNS = [
@@ -90,6 +92,22 @@ const INVOICE_PREP_HEADERS = [
 ];
 /* end[invoice_prep_config] */
 
+/* begin[receipt_config] */
+const RECEIPT_CONTROL_SHEET_NAME = "Receipt Control";
+const RECEIPT_CONTROL_HEADERS = [
+  "Invoice Number",
+  "Receipt Number",
+  "Payment Date",
+  "Payment Method",
+  "Amount Paid",
+  "Receipt Created",
+  "Receipt PDF Link",
+  "Receipt Doc Link",
+  "Receipt Created At",
+  "Notes"
+];
+/* end[receipt_config] */
+
 // begin[webapp_access_levels]
 const ACCESS_LEVEL_FULL = "FULL";
 const ACCESS_LEVEL_LIMITED = "LIMITED";
@@ -97,4 +115,3 @@ const ACCESS_LEVEL_LIMITED = "LIMITED";
 
 const WEBAPP_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const WEBAPP_SESSION_PREFIX = "ce_session_";
-
