@@ -1260,13 +1260,9 @@ function generatePayrollPdfs_() {
       SpreadsheetApp.flush();
       Utilities.sleep(1200);
 
-      const pdfBlob = exportSingleSheetToPdfBlob_(
-        tempSheet,
-        buildPayrollPdfFileName_(cleanerBlock, controlValues)
-      );
-
-      const file = folder.createFile(pdfBlob);
-      createdFiles.push(file);
+      const fileName = buildPayrollPdfFileName_(cleanerBlock, controlValues);
+      const createdFile = createPayrollOutputFile_(tempSheet, folder, fileName);
+      createdFiles.push(createdFile);
     });
   } finally {
     if (wasHidden && !tempSheet.isSheetHidden()) {
@@ -1624,7 +1620,36 @@ function buildPayrollPdfFileName_(cleanerBlock, controlValues) {
     .replace(/[\\\/:*?"<>|#]+/g, "")
     .trim();
 
-  return "Payroll - " + cleanerSafe + " - " + periodStartText + " to " + periodEndText + ".pdf";
+  return "Payroll - " + cleanerSafe + " - " + periodStartText + " to " + periodEndText;
+}
+
+
+function createPayrollOutputFile_(tempSheet, folder, fileNameBase) {
+  if (CREATE_PAYROLL_PDFS) {
+    const pdfBlob = exportSingleSheetToPdfBlob_(tempSheet, fileNameBase + ".pdf");
+    return folder.createFile(pdfBlob);
+  }
+
+  return createPayrollEditableSheetFile_(tempSheet, folder, fileNameBase);
+}
+
+function createPayrollEditableSheetFile_(tempSheet, folder, fileNameBase) {
+  const newSpreadsheet = SpreadsheetApp.create(fileNameBase);
+  const destinationSheet = tempSheet.copyTo(newSpreadsheet).setName(PAYROLL_PDF_TEMP_SHEET_NAME);
+
+  const defaultSheet = newSpreadsheet.getSheets()[0];
+  if (defaultSheet.getSheetId() !== destinationSheet.getSheetId()) {
+    newSpreadsheet.deleteSheet(defaultSheet);
+  }
+
+  const file = DriveApp.getFileById(newSpreadsheet.getId());
+  const existingParents = file.getParents();
+  while (existingParents.hasNext()) {
+    existingParents.next().removeFile(file);
+  }
+  folder.addFile(file);
+
+  return file;
 }
 
 function exportSingleSheetToPdfBlob_(sheet, fileName) {
