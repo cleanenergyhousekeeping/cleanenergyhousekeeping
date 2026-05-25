@@ -152,6 +152,47 @@ function openInvoiceRecordsSheet() {
   SpreadsheetApp.getActiveSpreadsheet().setActiveSheet(sheet);
 }
 
+
+function buildInvoiceRecordsBackfillDedupeKey_(row) {
+  const prepId = safeStr_(row && row.prepId);
+  if (prepId) {
+    return "prepId::" + prepId;
+  }
+
+  const timeTrackerRowKeys = safeStr_(row && row.timeTrackerRowKeys);
+  if (timeTrackerRowKeys) {
+    return "timeTrackerRowKeys::" + timeTrackerRowKeys;
+  }
+
+  const serviceDate = row && row.serviceDate ? formatYMD_(row.serviceDate) : "";
+  const finalBilledAmount = Number(row && row.finalBilledAmount || 0).toFixed(2);
+
+  return [
+    "fallback",
+    serviceDate,
+    safeStr_(row && row.client),
+    safeStr_(row && row.property),
+    finalBilledAmount,
+  ].join("::");
+}
+
+function dedupeInvoiceRecordsBackfillRows_(rows) {
+  const seen = {};
+  const dedupedRows = [];
+
+  rows.forEach(function (row) {
+    const key = buildInvoiceRecordsBackfillDedupeKey_(row);
+    if (seen[key]) {
+      return;
+    }
+
+    seen[key] = true;
+    dedupedRows.push(row);
+  });
+
+  return dedupedRows;
+}
+
 function backfillInvoiceRecordsFromInvoicePrepArchive() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const archiveSheet = ss.getSheetByName(INVOICE_PREP_ARCHIVE_SHEET_NAME);
@@ -177,6 +218,7 @@ function backfillInvoiceRecordsFromInvoicePrepArchive() {
       client: safeStr_(row[idx["Client"]]),
       property: safeStr_(row[idx["Property"]]),
       serviceDate: coerceToDate_(row[idx["Service Date"]]),
+      prepId: safeStr_(row[idx["Prep ID"]]),
       cleanerNames: safeStr_(row[idx["Cleaner Names"]]),
       workedHours: Number(row[idx["Worked Hours"]] || 0),
       defaultHourlyRate: Number(row[idx["Default Hourly Rate"]] || 0),
@@ -187,6 +229,7 @@ function backfillInvoiceRecordsFromInvoicePrepArchive() {
       finalBilledAmount: Number(row[idx["Final Billed Amount"]] || 0),
       billingNote: safeStr_(row[idx["Billing Note"]]),
       cleanerDetailsSummary: safeStr_(row[idx["Cleaner Details Summary"]]),
+      timeTrackerRowKeys: safeStr_(row[idx["Time Tracker Row Keys"]]),
       adjustmentNote: safeStr_(row[idx["Adjustment Note"]]),
       createdAt: coerceToDate_(row[idx["Created At"]]),
       invoicedAt: coerceToDate_(row[idx["Invoiced At"]]),
@@ -197,7 +240,7 @@ function backfillInvoiceRecordsFromInvoicePrepArchive() {
   let createdOrUpdated = 0;
 
   invoiceNumbers.forEach(function (invoiceNumber) {
-    const prepRows = grouped[invoiceNumber].filter(function (row) {
+    const prepRows = dedupeInvoiceRecordsBackfillRows_(grouped[invoiceNumber]).filter(function (row) {
       return row.client && row.property && row.serviceDate;
     });
 

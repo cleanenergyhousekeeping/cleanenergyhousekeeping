@@ -513,6 +513,25 @@ function createReceiptFromInvoicePrepRows_({ invoiceNumber, receiptNumber, payme
 }
 
 /* begin[receipt_creation_from_invoice_records] */
+
+function hasUsableInvoiceRecordForReceipt_(invoiceRecord) {
+  if (!invoiceRecord) {
+    return false;
+  }
+
+  if (Number(invoiceRecord.invoiceTotal || 0) <= 0) {
+    return false;
+  }
+
+  try {
+    const parsed = parseInvoiceRecordServiceRows_(invoiceRecord);
+    return Array.isArray(parsed) && parsed.length > 0;
+  } catch (error) {
+    return false;
+  }
+}
+
+
 function createReceiptFromInvoiceRecord_({ invoiceRecord, invoiceNumber, receiptNumber, paymentDate, paymentMethod, amountPaid }) {
   if (!invoiceRecord) {
     throw new Error("Invoice Record not found for invoice " + invoiceNumber + ".");
@@ -603,13 +622,14 @@ function createReceiptsFromReceiptControl_() {
 
     try {
       const invoiceRecord = getInvoiceRecordByInvoiceNumber_(invoiceNumber);
-      const prepRows = invoiceRecord ? [] : getInvoicePrepRowsByInvoiceNumber_(invoiceNumber);
+      const useInvoiceRecord = hasUsableInvoiceRecordForReceipt_(invoiceRecord);
+      const prepRows = useInvoiceRecord ? [] : getInvoicePrepRowsByInvoiceNumber_(invoiceNumber);
       const receiptNumber = safeStr_(row[idx["Receipt Number"]]);
       const paymentDate = coerceToDate_(row[idx["Payment Date"]]) || new Date();
       const paymentMethod = safeStr_(row[idx["Payment Method"]]);
       const amountPaid = coerceReceiptCurrencyNumber_(row[idx["Amount Paid"]]);
 
-      const result = invoiceRecord
+      const result = useInvoiceRecord
         ? createReceiptFromInvoiceRecord_({
           invoiceRecord: invoiceRecord,
           invoiceNumber: invoiceNumber,
