@@ -5,6 +5,7 @@ const PAYROLL_PREP_SHEET_NAME = "Payroll Prep";
 const PAYROLL_DEFAULTS_SHEET_NAME = "Payroll Defaults";
 const PAYROLL_PDF_TEMP_SHEET_NAME = "Payroll PDF Temp";
 const PAYROLL_PDF_FOLDER_NAME = "Clean Energy Payroll PDFs";
+const PAYROLL_EDITABLE_SHEET_NAME = "Payroll Summary";
 const DEFAULT_PAYROLL_DAILY_MIN_HOURS = 5;
 
 const PAYROLL_PREP_HEADERS = [
@@ -1635,7 +1636,7 @@ function createPayrollOutputFile_(tempSheet, folder, fileNameBase) {
 
 function createPayrollEditableSheetFile_(tempSheet, folder, fileNameBase) {
   const newSpreadsheet = SpreadsheetApp.create(fileNameBase);
-  const destinationSheet = tempSheet.copyTo(newSpreadsheet).setName(PAYROLL_PDF_TEMP_SHEET_NAME);
+  const destinationSheet = tempSheet.copyTo(newSpreadsheet).setName(PAYROLL_EDITABLE_SHEET_NAME);
 
   const defaultSheet = newSpreadsheet.getSheets()[0];
   if (defaultSheet.getSheetId() !== destinationSheet.getSheetId()) {
