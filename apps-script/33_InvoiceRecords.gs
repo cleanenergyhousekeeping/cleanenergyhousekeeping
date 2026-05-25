@@ -149,8 +149,209 @@ function parseInvoiceRecordServiceRows_(invoiceRecord) {
 
 function openInvoiceRecordsSheet() {
   const sheet = ensureInvoiceRecordsSheet_();
+  if (sheet.isSheetHidden()) {
+    sheet.showSheet();
+  }
   SpreadsheetApp.getActiveSpreadsheet().setActiveSheet(sheet);
 }
+
+/* begin[invoice_records_manual_time_tracker_backfill] */
+const MANUAL_BACKFILL_INVOICE_NUMBER = "";
+const MANUAL_BACKFILL_CLIENT_NAME = "";
+const MANUAL_BACKFILL_PERIOD_START = "";
+const MANUAL_BACKFILL_PERIOD_END = "";
+const MANUAL_BACKFILL_INVOICE_DATE = "";
+const MANUAL_BACKFILL_INVOICE_TOTAL_OVERRIDE = "";
+
+function parseManualBackfillDateRequired_(value, label) {
+  const date = coerceToDate_(value);
+  if (!date) {
+    throw new Error("Manual backfill requires a valid " + label + ".");
+  }
+  return date;
+}
+
+function parseManualBackfillOptionalDate_(value) {
+  return value ? coerceToDate_(value) : null;
+}
+
+function buildManualBackfillCleanerDetailsSummary_(cleanerNames) {
+  const names = Object.keys(cleanerNames).sort();
+  return names.map(function (name) {
+    return name + " (" + Number(cleanerNames[name]).toFixed(2) + " hrs)";
+  }).join("\n");
+}
+
+function groupManualBackfillRowsByServiceDateProperty_(rows) {
+  const groups = {};
+
+  rows.forEach(function (row) {
+    const key = formatYMD_(row.serviceDate) + "::" + row.property;
+    if (!groups[key]) {
+      groups[key] = {
+        client: row.client,
+        property: row.property,
+        serviceDate: row.serviceDate,
+        workedHours: 0,
+        cleanerNamesMap: {},
+      };
+    }
+
+    groups[key].workedHours += Number(row.workedHours || 0);
+    const cleanerName = safeStr_(row.cleanerName);
+    if (cleanerName) {
+      if (!groups[key].cleanerNamesMap[cleanerName]) {
+        groups[key].cleanerNamesMap[cleanerName] = 0;
+      }
+      groups[key].cleanerNamesMap[cleanerName] += Number(row.workedHours || 0);
+    }
+  });
+
+  return Object.keys(groups).map(function (key) {
+    const group = groups[key];
+    const groupedHours = round2_(group.workedHours);
+    const hourlyRate = Number(DEFAULT_RATE || 0);
+    return {
+      client: group.client,
+      property: group.property,
+      serviceDate: group.serviceDate,
+      workedHours: groupedHours,
+      defaultHourlyRate: hourlyRate,
+      billingMode: BILLING_TYPE_HOURLY,
+      flatRate: 0,
+      rowDiscount: 0,
+      rowFee: 0,
+      finalBilledAmount: round2_(groupedHours * hourlyRate),
+      cleanerNames: Object.keys(group.cleanerNamesMap).sort().join(", "),
+      cleanerDetailsSummary: buildManualBackfillCleanerDetailsSummary_(group.cleanerNamesMap),
+      billingNote: "",
+      adjustmentNote: "",
+    };
+  });
+}
+
+function buildManualBackfillOverrideAdjustmentRow_(difference) {
+  const roundedDiff = round2_(difference);
+  const sign = roundedDiff >= 0 ? "+" : "-";
+  return {
+    date: "",
+    details: "Manual invoice total override",
+    hours: "",
+    rate: "",
+    rateDisplay: "",
+    amount: roundedDiff,
+    amountDisplay: "Adjustment: " + sign + money_(Math.abs(roundedDiff)),
+  };
+}
+
+function collectManualBackfillMatchingRows_(config) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TIME_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) {
+    return [];
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+  const idx = indexMap_(headers, TIME_TRACKER_COLUMNS);
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const startMs = config.periodStart.getTime();
+  const endMs = config.periodEnd.getTime();
+
+  return values.reduce(function (rows, row) {
+    const client = safeStr_(row[idx["Client"]]);
+    const property = safeStr_(row[idx["Property"]]);
+    const serviceDate = coerceToDate_(row[idx["Date"]]);
+    const totalHours = Number(row[idx["Total Hours"]] || 0);
+    if (!serviceDate) return rows;
+    if (client !== config.clientName) return rows;
+    if (!property) return rows;
+    if (totalHours <= 0) return rows;
+
+    const serviceMs = serviceDate.getTime();
+    if (serviceMs < startMs || serviceMs > endMs) return rows;
+
+    rows.push({
+      client: client,
+      property: property,
+      serviceDate: serviceDate,
+      workedHours: totalHours,
+      cleanerName: safeStr_(row[idx["Name"]]),
+    });
+    return rows;
+  }, []);
+}
+
+function backfillInvoiceRecordFromTimeTrackerManual() {
+  const invoiceNumber = safeStr_(MANUAL_BACKFILL_INVOICE_NUMBER);
+  const clientName = safeStr_(MANUAL_BACKFILL_CLIENT_NAME);
+  const periodStart = startOfDay_(parseManualBackfillDateRequired_(MANUAL_BACKFILL_PERIOD_START, "period start date"));
+  const periodEnd = endOfDay_(parseManualBackfillDateRequired_(MANUAL_BACKFILL_PERIOD_END, "period end date"));
+
+  if (!invoiceNumber) throw new Error("Manual backfill requires invoice number.");
+  if (!clientName) throw new Error("Manual backfill requires client name.");
+  if (periodEnd.getTime() < periodStart.getTime()) throw new Error("Manual backfill period end cannot be before period start.");
+
+  const matchingRows = collectManualBackfillMatchingRows_({
+    clientName: clientName,
+    periodStart: periodStart,
+    periodEnd: periodEnd,
+  });
+
+  if (!matchingRows.length) {
+    throw new Error("No matching Time Tracker rows found for manual backfill criteria.");
+  }
+
+  const groupedRows = groupManualBackfillRowsByServiceDateProperty_(matchingRows).sort(function (a, b) {
+    const dateDiff = a.serviceDate.getTime() - b.serviceDate.getTime();
+    if (dateDiff !== 0) return dateDiff;
+    return a.property.localeCompare(b.property);
+  });
+
+  const serviceRows = buildServiceRowsFromInvoicePrepRows_(groupedRows);
+  const totalHours = round2_(groupedRows.reduce(function (sum, row) { return sum + Number(row.workedHours || 0); }, 0));
+  const computedTotal = round2_(serviceRows.reduce(function (sum, row) { return sum + Number(row.amount || 0); }, 0));
+  const totalOverride = safeStr_(MANUAL_BACKFILL_INVOICE_TOTAL_OVERRIDE);
+  const parsedOverride = totalOverride ? coerceReceiptCurrencyNumber_(totalOverride) : null;
+  const invoiceTotal = parsedOverride !== null ? round2_(parsedOverride) : computedTotal;
+
+  if (parsedOverride !== null && isNaN(invoiceTotal)) {
+    throw new Error("Manual backfill invoice total override must be numeric when provided.");
+  }
+
+  const overrideDifference = round2_(invoiceTotal - computedTotal);
+  if (parsedOverride !== null && Math.abs(overrideDifference) > 0.000001) {
+    serviceRows.push(buildManualBackfillOverrideAdjustmentRow_(overrideDifference));
+  }
+
+  const existing = getInvoiceRecordByInvoiceNumber_(invoiceNumber);
+  const invoiceDate = parseManualBackfillOptionalDate_(MANUAL_BACKFILL_INVOICE_DATE) || (existing && existing.invoiceDate) || periodEnd;
+  const invoiceDocLink = existing && existing.invoiceDocLink ? existing.invoiceDocLink : "";
+
+  const targetRow = upsertInvoiceRecord_(
+    buildInvoiceRecordFromPrepInvoice_({
+      invoiceNumber: invoiceNumber,
+      clientName: clientName,
+      periodStart: periodStart,
+      periodEnd: periodEnd,
+      invoiceDate: invoiceDate,
+      totalHours: totalHours,
+      invoiceTotal: round2_(invoiceTotal),
+      invoiceDocLink: invoiceDocLink,
+      invoiceSource: "Time Tracker Manual Backfill",
+      serviceRows: serviceRows,
+    })
+  );
+
+  Logger.log(
+    "Invoice Records manual backfill complete. Invoice: " + invoiceNumber +
+    "; Client: " + clientName +
+    "; Period: " + formatDateShort_(periodStart) + " - " + formatDateShort_(periodEnd) +
+    "; Matching Time Tracker rows: " + matchingRows.length +
+    "; Service rows: " + serviceRows.length +
+    "; Invoice total: " + money_(round2_(invoiceTotal)) +
+    "; Invoice Records row: " + targetRow + "."
+  );
+}
+/* end[invoice_records_manual_time_tracker_backfill] */
 
 
 function buildInvoiceRecordsBackfillDedupeKey_(row) {
