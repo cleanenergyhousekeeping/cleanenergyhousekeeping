@@ -512,6 +512,67 @@ function createReceiptFromInvoicePrepRows_({ invoiceNumber, receiptNumber, payme
   };
 }
 
+/* begin[receipt_creation_from_invoice_records] */
+function createReceiptFromInvoiceRecord_({ invoiceRecord, invoiceNumber, receiptNumber, paymentDate, paymentMethod, amountPaid }) {
+  if (!invoiceRecord) {
+    throw new Error("Invoice Record not found for invoice " + invoiceNumber + ".");
+  }
+
+  const serviceRows = parseInvoiceRecordServiceRows_(invoiceRecord);
+  const periodStart = invoiceRecord.periodStart || new Date();
+  const periodEnd = invoiceRecord.periodEnd || periodStart;
+  const invoiceDate = invoiceRecord.invoiceDate || periodEnd;
+  const invoiceTotal = round2_(Number(invoiceRecord.invoiceTotal || 0));
+  const effectiveAmountPaid = amountPaid > 0 ? round2_(amountPaid) : invoiceTotal;
+  const balanceDue = Math.max(0, round2_(invoiceTotal - effectiveAmountPaid));
+  const effectiveReceiptNumber = buildReceiptNumber_(invoiceNumber, receiptNumber);
+  const effectivePaymentDate = paymentDate || new Date();
+  const effectivePaymentMethod = safeStr_(paymentMethod) || "Payment received";
+
+  const docId = copyReceiptTemplate_({
+    receiptNumber: effectiveReceiptNumber,
+    invoiceNumber: invoiceNumber,
+    periodStart: periodStart,
+    periodEnd: periodEnd,
+    clientName: invoiceRecord.client,
+  });
+
+  const doc = DocumentApp.openById(docId);
+  const body = doc.getBody();
+
+  replaceAll_(body, "{{RECEIPT_NUMBER}}", effectiveReceiptNumber);
+  replaceAll_(body, "{{INVOICE_NUMBER}}", safeStr_(invoiceNumber));
+  replaceAll_(body, "{{DATE_RANGE}}", `${formatDateShort_(periodStart)} - ${formatDateShort_(periodEnd)}`);
+  replaceAll_(body, "{{INV_DATE}}", formatDateShort_(invoiceDate));
+  replaceAll_(body, "{{PAY_DATE}}", formatDateShort_(effectivePaymentDate));
+  replaceAll_(body, "{{PAYMENT_METHOD}}", effectivePaymentMethod);
+  replaceAll_(body, "{{CLIENT_NAME}}", invoiceRecord.client || "");
+
+  insertReceiptServiceItemsTable_(body, serviceRows);
+  insertReceiptTotalsSection_(body, {
+    invoiceTotal: invoiceTotal,
+    amountPaid: effectiveAmountPaid,
+    balanceDue: balanceDue,
+  });
+
+  doc.saveAndClose();
+
+  const pdfFile = createPdfCopyForReceipt_(docId);
+
+  return {
+    receiptNumber: effectiveReceiptNumber,
+    invoiceNumber: safeStr_(invoiceNumber),
+    docId: docId,
+    docUrl: DriveApp.getFileById(docId).getUrl(),
+    pdfId: pdfFile.getId(),
+    pdfUrl: pdfFile.getUrl(),
+    amountPaid: effectiveAmountPaid,
+    balanceDue: balanceDue,
+  };
+}
+
+/* end[receipt_creation_from_invoice_records] */
+
 function writeReceiptControlRowFailure_(sheet, idx, sheetRow, error) {
   const message = safeStr_(error && error.message ? error.message : error);
   sheet.getRange(sheetRow, idx["Receipt Created"] + 1).setValue(false);
@@ -541,20 +602,30 @@ function createReceiptsFromReceiptControl_() {
     }
 
     try {
-      const prepRows = getInvoicePrepRowsByInvoiceNumber_(invoiceNumber);
+      const invoiceRecord = getInvoiceRecordByInvoiceNumber_(invoiceNumber);
+      const prepRows = invoiceRecord ? [] : getInvoicePrepRowsByInvoiceNumber_(invoiceNumber);
       const receiptNumber = safeStr_(row[idx["Receipt Number"]]);
       const paymentDate = coerceToDate_(row[idx["Payment Date"]]) || new Date();
       const paymentMethod = safeStr_(row[idx["Payment Method"]]);
       const amountPaid = coerceReceiptCurrencyNumber_(row[idx["Amount Paid"]]);
 
-      const result = createReceiptFromInvoicePrepRows_({
-        invoiceNumber: invoiceNumber,
-        receiptNumber: receiptNumber,
-        paymentDate: paymentDate,
-        paymentMethod: paymentMethod,
-        amountPaid: amountPaid,
-        prepRows: prepRows,
-      });
+      const result = invoiceRecord
+        ? createReceiptFromInvoiceRecord_({
+          invoiceRecord: invoiceRecord,
+          invoiceNumber: invoiceNumber,
+          receiptNumber: receiptNumber,
+          paymentDate: paymentDate,
+          paymentMethod: paymentMethod,
+          amountPaid: amountPaid,
+        })
+        : createReceiptFromInvoicePrepRows_({
+          invoiceNumber: invoiceNumber,
+          receiptNumber: receiptNumber,
+          paymentDate: paymentDate,
+          paymentMethod: paymentMethod,
+          amountPaid: amountPaid,
+          prepRows: prepRows,
+        });
 
       controlSheet.getRange(sheetRow, idx["Receipt Number"] + 1).setValue(result.receiptNumber);
       controlSheet.getRange(sheetRow, idx["Payment Date"] + 1).setValue(paymentDate);

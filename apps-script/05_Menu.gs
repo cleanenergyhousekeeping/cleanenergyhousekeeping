@@ -9,8 +9,9 @@ function onOpen() {
         .addItem("2. Open Invoice Control", "openInvoiceControlSheet")
         .addItem("3. Rebuild Invoice Prep", "generateInvoicePrepFromTimeTracker")
         .addItem("4. Open Invoice Prep", "openInvoicePrepSheet")
+        .addItem("5. Open Invoice Records", "openInvoiceRecordsSheet")
         .addSeparator()
-        .addItem("5. Create Invoices", "createInvoicesFromInvoicePrep")
+        .addItem("6. Create Invoices", "createInvoicesFromInvoicePrep")
     )
     .addSubMenu(
       ui.createMenu("Receipt Flow")
