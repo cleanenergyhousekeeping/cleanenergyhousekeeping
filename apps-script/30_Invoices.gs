@@ -878,7 +878,25 @@ function createInvoiceFromInvoicePrepGroup_({ invoiceNumber, clientName, prepRow
   }, zelleQrFileId);
 
   doc.saveAndClose();
-  Logger.log("Invoice created from Invoice Prep: " + doc.getUrl());
+  const docUrl = doc.getUrl();
+  Logger.log("Invoice created from Invoice Prep: " + docUrl);
+
+  /* begin[invoice_records_write_on_invoice_create] */
+  upsertInvoiceRecord_(
+    buildInvoiceRecordFromPrepInvoice_({
+      invoiceNumber: invoiceNumber,
+      clientName: clientName,
+      periodStart: periodStart,
+      periodEnd: periodEnd,
+      invoiceDate: new Date(),
+      totalHours: totalHoursForInvoice,
+      invoiceTotal: totalAmount,
+      invoiceDocLink: docUrl,
+      invoiceSource: "Invoice Prep",
+      serviceRows: serviceRows,
+    })
+  );
+  /* end[invoice_records_write_on_invoice_create] */
 
   markInvoicePrepRowsInvoiced_(sortedRows, invoiceNumber);
 }

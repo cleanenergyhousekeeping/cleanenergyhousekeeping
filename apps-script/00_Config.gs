@@ -66,6 +66,22 @@ const ADJUSTMENT_TYPE_FEE = "FEE";
 const INVOICE_PREP_SHEET_NAME = "Invoice Prep";
 const INVOICE_PREP_ARCHIVE_SHEET_NAME = "Invoice Prep Archive";
 
+const INVOICE_RECORDS_SHEET_NAME = "Invoice Records";
+const INVOICE_RECORDS_HEADERS = [
+  "Invoice Number",
+  "Client",
+  "Period Start",
+  "Period End",
+  "Invoice Date",
+  "Total Hours",
+  "Invoice Total",
+  "Invoice Doc Link",
+  "Invoice Source",
+  "Service Rows JSON",
+  "Recorded At",
+  "Updated At",
+];
+
 const INVOICE_PREP_HEADERS = [
   "Prep ID",
   "Ready",
