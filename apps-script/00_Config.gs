@@ -4,6 +4,8 @@ const TIME_SHEET_NAME = "Time Tracker";
 const DEFAULT_RATE = 50;
 const INVOICE_FOLDER_ID = "";
 const RECEIPT_FOLDER_ID = "";
+const CREATE_RECEIPT_PDFS = false;
+const CREATE_PAYROLL_PDFS = false;
 const NOTIFY_EMAIL = "kyle@cleanenergyhousekeeping.com";
 
 const TIME_TRACKER_COLUMNS = [

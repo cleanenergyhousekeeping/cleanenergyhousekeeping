@@ -498,15 +498,15 @@ function createReceiptFromInvoicePrepRows_({ invoiceNumber, receiptNumber, payme
 
   doc.saveAndClose();
 
-  const pdfFile = createPdfCopyForReceipt_(docId);
+  const receiptFileResult = buildReceiptFileResult_(docId);
 
   return {
     receiptNumber: effectiveReceiptNumber,
     invoiceNumber: safeStr_(invoiceNumber),
     docId: docId,
     docUrl: DriveApp.getFileById(docId).getUrl(),
-    pdfId: pdfFile.getId(),
-    pdfUrl: pdfFile.getUrl(),
+    pdfId: receiptFileResult.pdfId,
+    pdfUrl: receiptFileResult.pdfUrl,
     amountPaid: effectiveAmountPaid,
     balanceDue: balanceDue,
   };
@@ -576,19 +576,38 @@ function createReceiptFromInvoiceRecord_({ invoiceRecord, invoiceNumber, receipt
 
   doc.saveAndClose();
 
-  const pdfFile = createPdfCopyForReceipt_(docId);
+  const receiptFileResult = buildReceiptFileResult_(docId);
 
   return {
     receiptNumber: effectiveReceiptNumber,
     invoiceNumber: safeStr_(invoiceNumber),
     docId: docId,
     docUrl: DriveApp.getFileById(docId).getUrl(),
-    pdfId: pdfFile.getId(),
-    pdfUrl: pdfFile.getUrl(),
+    pdfId: receiptFileResult.pdfId,
+    pdfUrl: receiptFileResult.pdfUrl,
     amountPaid: effectiveAmountPaid,
     balanceDue: balanceDue,
   };
 }
+
+
+/* begin[receipt_pdf_output_mode] */
+function buildReceiptFileResult_(docId) {
+  if (!CREATE_RECEIPT_PDFS) {
+    return {
+      pdfId: "",
+      pdfUrl: "",
+    };
+  }
+
+  const pdfFile = createPdfCopyForReceipt_(docId);
+
+  return {
+    pdfId: pdfFile.getId(),
+    pdfUrl: pdfFile.getUrl(),
+  };
+}
+/* end[receipt_pdf_output_mode] */
 
 /* end[receipt_creation_from_invoice_records] */
 

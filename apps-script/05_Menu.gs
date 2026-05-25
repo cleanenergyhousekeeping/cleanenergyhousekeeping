@@ -27,7 +27,7 @@ function onOpen() {
         .addItem("5. Generate Payroll Preview", "runGeneratePayroll")
         .addItem("6. Open Payroll Preview", "openPayrollPreviewSheet")
         .addSeparator()
-        .addItem("7. Generate Payroll PDFs", "runGeneratePayrollPdfs")
+        .addItem("7. Create Payroll Files", "runGeneratePayrollPdfs")
     )
     .addSeparator()
     .addItem("Open Properties", "openPropertiesSheet")
