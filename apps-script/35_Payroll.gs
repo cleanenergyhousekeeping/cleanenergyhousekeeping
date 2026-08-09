@@ -1594,7 +1594,7 @@ function formatPayrollPdfSheet_(sheet, tableHeaderRow, detailStartRow, summarySt
   }
 
   let groupStartOffset = 0;
-  let shadeToggle = false;
+  let shadeToggle = true;
 
   while (groupStartOffset < detailRowCount) {
     const groupKey = effectiveDayKeys[groupStartOffset];
