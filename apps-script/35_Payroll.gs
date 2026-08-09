@@ -53,12 +53,10 @@ const PAYROLL_PREVIEW_HEADERS = [
 /* end[payroll_constants] */
 
 /* begin[payroll_prep_reader] */
-function getPayrollPrepForCleaner_(cleanerName, startDate, endDate) {
-  const ss = SpreadsheetApp.getActive();
-  const sheet = ss.getSheetByName(PAYROLL_PREP_SHEET_NAME);
-  if (!sheet) return null;
-
-  const values = sheet.getDataRange().getValues();
+function getPayrollPrepForCleaner_(cleanerName, startDate, endDate, lookupData) {
+  const values = lookupData
+    ? lookupData.prepValues
+    : getPayrollSheetValues_(PAYROLL_PREP_SHEET_NAME);
   if (values.length < 2) return null;
 
   const headers = values[0];
@@ -75,12 +73,15 @@ function getPayrollPrepForCleaner_(cleanerName, startDate, endDate) {
     notes: headers.indexOf("Notes"),
   };
 
-  const targetCleaner = normalizePayrollCleanerName_(cleanerName);
+  const canonicalNames = lookupData ? lookupData.canonicalNames : null;
+  const targetCleaner = normalizePayrollCleanerName_(cleanerName, canonicalNames);
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
 
-    if (normalizePayrollCleanerName_(row[idx.cleaner]) !== targetCleaner) continue;
+    if (
+      normalizePayrollCleanerName_(row[idx.cleaner], canonicalNames) !== targetCleaner
+    ) continue;
 
     const rowStart = coerceToDate_(row[idx.start]);
     const rowEnd = coerceToDate_(row[idx.end]);
@@ -133,7 +134,7 @@ function generatePayrollPreview_() {
 
 
 /* begin[payroll_sheet_setup_helpers] */
-function ensurePayrollControlSheet_() {
+function ensurePayrollControlSheet_(shouldFormat) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(PAYROLL_CONTROL_SHEET_NAME);
 
@@ -152,11 +153,13 @@ function ensurePayrollControlSheet_() {
       .setValues(PAYROLL_CONTROL_FIELDS);
   }
 
-  formatPayrollControlSheet_(sheet);
+  if (shouldFormat !== false) {
+    formatPayrollControlSheet_(sheet);
+  }
   return sheet;
 }
 
-function ensurePayrollPreviewSheet_() {
+function ensurePayrollPreviewSheet_(shouldFormat) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(PAYROLL_PREVIEW_SHEET_NAME);
 
@@ -169,7 +172,9 @@ function ensurePayrollPreviewSheet_() {
       .setValues([PAYROLL_PREVIEW_HEADERS]);
   }
 
-  formatPayrollPreviewSheet_(sheet);
+  if (shouldFormat !== false) {
+    formatPayrollPreviewSheet_(sheet);
+  }
   return sheet;
 }
 
@@ -227,7 +232,7 @@ function ensurePayrollDefaultsSheet_() {
 function formatPayrollControlSheet_(sheet) {
   sheet.setColumnWidths(1, 2, 170);
   sheet.getRange("A1:B1").setFontWeight("bold");
-  sheet.getRange("A:A").setFontWeight("bold");
+  sheet.getRange(1, 1, PAYROLL_CONTROL_FIELDS.length, 1).setFontWeight("bold");
   sheet.getRange("B2:B3").setNumberFormat("m/d/yyyy");
 }
 
@@ -409,7 +414,7 @@ function refreshPayrollCleanerDropdown_() {
 }
 
 function stampPayrollGeneratedAt_() {
-  const sheet = ensurePayrollControlSheet_();
+  const sheet = ensurePayrollControlSheet_(false);
   sheet.getRange("B5").setValue(new Date());
   sheet.getRange("B5").setNumberFormat("m/d/yyyy h:mm am/pm");
 }
@@ -499,13 +504,15 @@ function normalizePayrollCleanerToken_(text) {
     .trim();
 }
 
-function normalizePayrollCleanerName_(name) {
+function normalizePayrollCleanerName_(name, canonicalNames) {
   const raw = safeStr_(name).trim();
   if (!raw) return "";
 
-  const canonicalNames = getPayrollCanonicalCleanerNames_();
+  const availableCanonicalNames = Array.isArray(canonicalNames)
+    ? canonicalNames
+    : getPayrollCanonicalCleanerNames_();
 
-  const exactMatch = canonicalNames.find(function (candidate) {
+  const exactMatch = availableCanonicalNames.find(function (candidate) {
     return normalizePayrollCleanerToken_(candidate) === normalizePayrollCleanerToken_(raw);
   });
 
@@ -518,7 +525,7 @@ function normalizePayrollCleanerName_(name) {
     const firstName = parts[0].toLowerCase();
     const lastInitial = parts[1].charAt(0).toLowerCase();
 
-    const initialMatch = canonicalNames.find(function (candidate) {
+    const initialMatch = availableCanonicalNames.find(function (candidate) {
       const candidateParts = safeStr_(candidate).replace(/\./g, "").split(/\s+/).filter(Boolean);
       if (candidateParts.length < 2) return false;
 
@@ -538,19 +545,32 @@ function normalizePayrollCleanerName_(name) {
 /* end[payroll_cleaner_name_normalization_helpers] */
 
 /* begin[payroll_rate_helpers] */
-function getPayrollDefaultsForCleaner_(cleanerName) {
-  const normalizedCleaner = normalizePayrollCleanerName_(cleanerName);
+function getPayrollSheetValues_(sheetName) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  return sheet ? sheet.getDataRange().getValues() : [];
+}
+
+function getPayrollLookupData_() {
+  return {
+    canonicalNames: getPayrollCanonicalCleanerNames_(),
+    prepValues: getPayrollSheetValues_(PAYROLL_PREP_SHEET_NAME),
+    defaultsValues: getPayrollSheetValues_(PAYROLL_DEFAULTS_SHEET_NAME),
+  };
+}
+
+function getPayrollDefaultsForCleaner_(cleanerName, lookupData) {
+  const canonicalNames = lookupData ? lookupData.canonicalNames : null;
+  const normalizedCleaner = normalizePayrollCleanerName_(
+    cleanerName,
+    canonicalNames
+  );
   if (!normalizedCleaner) {
     return { rate: null, minHours: null };
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(PAYROLL_DEFAULTS_SHEET_NAME);
-  if (!sheet) {
-    return { rate: null, minHours: null };
-  }
-
-  const values = sheet.getDataRange().getValues();
+  const values = lookupData
+    ? lookupData.defaultsValues
+    : getPayrollSheetValues_(PAYROLL_DEFAULTS_SHEET_NAME);
   if (values.length < 2) {
     return { rate: null, minHours: null };
   }
@@ -568,7 +588,10 @@ function getPayrollDefaultsForCleaner_(cleanerName) {
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
-    const rowCleaner = normalizePayrollCleanerName_(row[idx.cleaner]);
+    const rowCleaner = normalizePayrollCleanerName_(
+      row[idx.cleaner],
+      canonicalNames
+    );
 
     if (rowCleaner !== normalizedCleaner) continue;
 
@@ -581,13 +604,18 @@ function getPayrollDefaultsForCleaner_(cleanerName) {
   return { rate: null, minHours: null };
 }
 
-function getPayrollRateForCleaner_(cleanerName, startDate, endDate) {
-  const prep = getPayrollPrepForCleaner_(cleanerName, startDate, endDate);
+function getPayrollRateForCleaner_(cleanerName, startDate, endDate, lookupData) {
+  const prep = getPayrollPrepForCleaner_(
+    cleanerName,
+    startDate,
+    endDate,
+    lookupData
+  );
   if (prep && prep.rate != null) {
     return prep.rate;
   }
 
-  const defaults = getPayrollDefaultsForCleaner_(cleanerName);
+  const defaults = getPayrollDefaultsForCleaner_(cleanerName, lookupData);
   if (defaults.rate != null) {
     return defaults.rate;
   }
@@ -600,13 +628,18 @@ function calculatePayrollAmount_(hours, rate) {
 }
 /* end[payroll_rate_helpers] */
 
-function getPayrollDailyMinimumHoursForCleaner_(cleanerName, startDate, endDate) {
-  const prep = getPayrollPrepForCleaner_(cleanerName, startDate, endDate);
+function getPayrollDailyMinimumHoursForCleaner_(cleanerName, startDate, endDate, lookupData) {
+  const prep = getPayrollPrepForCleaner_(
+    cleanerName,
+    startDate,
+    endDate,
+    lookupData
+  );
   if (prep && prep.minHours != null) {
     return prep.minHours;
   }
 
-  const defaults = getPayrollDefaultsForCleaner_(cleanerName);
+  const defaults = getPayrollDefaultsForCleaner_(cleanerName, lookupData);
   if (defaults.minHours != null) {
     return defaults.minHours;
   }
@@ -680,11 +713,12 @@ function groupPayrollShiftsByWorkDate_(cleanerShifts) {
     });
 }
 
-function buildPayrollDailySummaries_(cleanerShifts, hourlyRate, cleanerName, startDate, endDate) {
+function buildPayrollDailySummaries_(cleanerShifts, hourlyRate, cleanerName, startDate, endDate, lookupData) {
   const dailyMinimumHours = getPayrollDailyMinimumHoursForCleaner_(
     cleanerName,
     startDate,
-    endDate
+    endDate,
+    lookupData
   );
 
   return groupPayrollShiftsByWorkDate_(cleanerShifts).map(function (dayGroup) {
@@ -721,7 +755,8 @@ function buildPayrollDailySummaries_(cleanerShifts, hourlyRate, cleanerName, sta
 
 /* begin[payroll_data_builders] */
 function buildPayrollPreviewData_(controlValues) {
-  const shifts = getPayrollCompletedShifts_(controlValues);
+  const lookupData = getPayrollLookupData_();
+  const shifts = getPayrollCompletedShifts_(controlValues, lookupData);
   const grouped = groupPayrollShiftsByCleaner_(shifts);
 
   return Object.keys(grouped).sort().map(function (cleanerName) {
@@ -729,14 +764,21 @@ function buildPayrollPreviewData_(controlValues) {
     const hourlyRate = getPayrollRateForCleaner_(
       cleanerName,
       controlValues.startDate,
-      controlValues.endDate
+      controlValues.endDate,
+      lookupData
     );
-    const rows = buildPayrollRowsForCleaner_(cleanerShifts, controlValues, hourlyRate);
+    const rows = buildPayrollRowsForCleaner_(
+      cleanerShifts,
+      controlValues,
+      hourlyRate,
+      lookupData
+    );
     const totals = buildPayrollTotalsForCleaner_(
       cleanerShifts,
       hourlyRate,
       controlValues.startDate,
-      controlValues.endDate
+      controlValues.endDate,
+      lookupData
     );
 
     return {
@@ -748,7 +790,7 @@ function buildPayrollPreviewData_(controlValues) {
   });
 }
 
-function getPayrollCompletedShifts_(controlValues) {
+function getPayrollCompletedShifts_(controlValues, lookupData) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(TIME_SHEET_NAME);
 
@@ -767,10 +809,22 @@ function getPayrollCompletedShifts_(controlValues) {
   const headers = data[0].map(String);
   const idx = indexMap_(headers, TIME_TRACKER_COLUMNS);
   const transitIdx = getTransitColumnIndexes_(headers);
+  const canonicalCleanerNames = lookupData
+    ? lookupData.canonicalNames
+    : getPayrollCanonicalCleanerNames_();
+  const selectedCleaner = controlValues.cleanerName === "All Cleaners"
+    ? ""
+    : normalizePayrollCleanerName_(
+      controlValues.cleanerName,
+      canonicalCleanerNames
+    );
 
   return data.slice(1)
     .map(function (row) {
-      const name = normalizePayrollCleanerName_(row[idx["Name"]]);
+      const name = normalizePayrollCleanerName_(
+        row[idx["Name"]],
+        canonicalCleanerNames
+      );
       const property = safeStr_(row[idx["Property"]]);
       const dateValue = coerceToDate_(row[idx["Date"]]);
       const clockIn = coerceToDate_(row[idx["Clock In"]]);
@@ -792,11 +846,11 @@ function getPayrollCompletedShifts_(controlValues) {
       }
 
       if (
-  controlValues.cleanerName !== "All Cleaners" &&
-  name !== normalizePayrollCleanerName_(controlValues.cleanerName)
-) {
-  return null;
-}
+        selectedCleaner &&
+        name !== selectedCleaner
+      ) {
+        return null;
+      }
 
       const shiftHours = round2_(computeHours_(clockIn, clockOut, totalHoursCell));
       const transitMinutes = Math.round(Number(row[transitIdx.minutes] || 0));
@@ -850,7 +904,7 @@ function groupPayrollShiftsByCleaner_(shifts) {
   return grouped;
 }
 
-function buildPayrollRowsForCleaner_(cleanerShifts, controlValues, hourlyRate) {
+function buildPayrollRowsForCleaner_(cleanerShifts, controlValues, hourlyRate, lookupData) {
   const rows = [];
   const cleanerName = cleanerShifts.length ? cleanerShifts[0].cleanerName : "";
   const dailySummaries = buildPayrollDailySummaries_(
@@ -858,7 +912,8 @@ function buildPayrollRowsForCleaner_(cleanerShifts, controlValues, hourlyRate) {
   hourlyRate,
   cleanerName,
   controlValues.startDate,
-  controlValues.endDate
+  controlValues.endDate,
+  lookupData
 );
   const periodStartText = Utilities.formatDate(
     controlValues.startDate,
@@ -958,14 +1013,15 @@ function buildPayrollRowsForCleaner_(cleanerShifts, controlValues, hourlyRate) {
   return rows;
 }
 
-function buildPayrollTotalsForCleaner_(cleanerShifts, hourlyRate, startDate, endDate) {
+function buildPayrollTotalsForCleaner_(cleanerShifts, hourlyRate, startDate, endDate, lookupData) {
   const cleanerName = cleanerShifts.length ? cleanerShifts[0].cleanerName : "";
 const dailySummaries = buildPayrollDailySummaries_(
   cleanerShifts,
   hourlyRate,
   cleanerName,
   startDate,
-  endDate
+  endDate,
+  lookupData
 );
 
   const shiftHours = round2_(dailySummaries.reduce(function (sum, daySummary) {
@@ -986,7 +1042,12 @@ const dailySummaries = buildPayrollDailySummaries_(
 
   const minimumGuaranteeHours = round2_(paidHours - actualHours);
 
-  const prep = getPayrollPrepForCleaner_(cleanerName, startDate, endDate);
+  const prep = getPayrollPrepForCleaner_(
+    cleanerName,
+    startDate,
+    endDate,
+    lookupData
+  );
   const gas = prep ? prep.gas : 0;
   const bonus = prep ? prep.bonus : 0;
   const adjustment = prep ? prep.adjustment : 0;
@@ -999,7 +1060,12 @@ const dailySummaries = buildPayrollDailySummaries_(
 
   return {
     hourlyRate: round2_(hourlyRate),
-    dailyMinimumHours: getPayrollDailyMinimumHoursForCleaner_(cleanerName, startDate, endDate),
+    dailyMinimumHours: getPayrollDailyMinimumHoursForCleaner_(
+      cleanerName,
+      startDate,
+      endDate,
+      lookupData
+    ),
     shiftHours: shiftHours,
     transitHours: transitHours,
     actualHours: actualHours,
@@ -1025,8 +1091,10 @@ const dailySummaries = buildPayrollDailySummaries_(
 
 /* begin[payroll_preview_writer] */
 function writePayrollPreview_(payrollData, controlValues) {
-  const sheet = ensurePayrollPreviewSheet_();
-  sheet.clearContents();
+  const sheet = ensurePayrollPreviewSheet_(false);
+  const previousRowCount = Math.max(sheet.getLastRow(), 1);
+  sheet.getRange(1, 1, previousRowCount, PAYROLL_PREVIEW_HEADERS.length)
+    .clearContent();
 
   let outputRows = [];
   outputRows.push(PAYROLL_PREVIEW_HEADERS);
@@ -1052,7 +1120,7 @@ function writePayrollPreview_(payrollData, controlValues) {
     sheet.getRange(1, 1, outputRows.length, PAYROLL_PREVIEW_HEADERS.length)
       .setValues(outputRows);
 
-    formatWrittenPayrollPreviewSheet_(sheet);
+    formatWrittenPayrollPreviewSheet_(sheet, outputRows.length);
     return;
   }
 
@@ -1222,16 +1290,19 @@ function writePayrollPreview_(payrollData, controlValues) {
   sheet.getRange(1, 1, outputRows.length, PAYROLL_PREVIEW_HEADERS.length)
     .setValues(outputRows);
 
-  formatWrittenPayrollPreviewSheet_(sheet);
+  formatWrittenPayrollPreviewSheet_(sheet, outputRows.length);
 }
 
-function formatWrittenPayrollPreviewSheet_(sheet) {
+function formatWrittenPayrollPreviewSheet_(sheet, rowCount) {
   sheet.setFrozenRows(1);
 
   sheet.getRange(1, 1, 1, PAYROLL_PREVIEW_HEADERS.length).setFontWeight("bold");
-  sheet.getRange("B:C").setNumberFormat("m/d/yyyy");
-  sheet.getRange("L:M").setNumberFormat("$0.00");
-  sheet.getRange("J:M").setHorizontalAlignment("right");
+  if (rowCount > 1) {
+    const dataRowCount = rowCount - 1;
+    sheet.getRange(2, 2, dataRowCount, 2).setNumberFormat("m/d/yyyy");
+    sheet.getRange(2, 12, dataRowCount, 2).setNumberFormat("$0.00");
+    sheet.getRange(2, 10, dataRowCount, 4).setHorizontalAlignment("right");
+  }
   sheet.autoResizeColumns(1, PAYROLL_PREVIEW_HEADERS.length);
 }
 /* end[payroll_preview_writer] */
@@ -1523,7 +1594,7 @@ function formatPayrollPdfSheet_(sheet, tableHeaderRow, detailStartRow, summarySt
   }
 
   let groupStartOffset = 0;
-  let shadeToggle = false;
+  let shadeToggle = true;
 
   while (groupStartOffset < detailRowCount) {
     const groupKey = effectiveDayKeys[groupStartOffset];
