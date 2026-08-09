@@ -499,13 +499,15 @@ function normalizePayrollCleanerToken_(text) {
     .trim();
 }
 
-function normalizePayrollCleanerName_(name) {
+function normalizePayrollCleanerName_(name, canonicalNames) {
   const raw = safeStr_(name).trim();
   if (!raw) return "";
 
-  const canonicalNames = getPayrollCanonicalCleanerNames_();
+  const availableCanonicalNames = Array.isArray(canonicalNames)
+    ? canonicalNames
+    : getPayrollCanonicalCleanerNames_();
 
-  const exactMatch = canonicalNames.find(function (candidate) {
+  const exactMatch = availableCanonicalNames.find(function (candidate) {
     return normalizePayrollCleanerToken_(candidate) === normalizePayrollCleanerToken_(raw);
   });
 
@@ -518,7 +520,7 @@ function normalizePayrollCleanerName_(name) {
     const firstName = parts[0].toLowerCase();
     const lastInitial = parts[1].charAt(0).toLowerCase();
 
-    const initialMatch = canonicalNames.find(function (candidate) {
+    const initialMatch = availableCanonicalNames.find(function (candidate) {
       const candidateParts = safeStr_(candidate).replace(/\./g, "").split(/\s+/).filter(Boolean);
       if (candidateParts.length < 2) return false;
 
@@ -767,10 +769,20 @@ function getPayrollCompletedShifts_(controlValues) {
   const headers = data[0].map(String);
   const idx = indexMap_(headers, TIME_TRACKER_COLUMNS);
   const transitIdx = getTransitColumnIndexes_(headers);
+  const canonicalCleanerNames = getPayrollCanonicalCleanerNames_();
+  const selectedCleaner = controlValues.cleanerName === "All Cleaners"
+    ? ""
+    : normalizePayrollCleanerName_(
+      controlValues.cleanerName,
+      canonicalCleanerNames
+    );
 
   return data.slice(1)
     .map(function (row) {
-      const name = normalizePayrollCleanerName_(row[idx["Name"]]);
+      const name = normalizePayrollCleanerName_(
+        row[idx["Name"]],
+        canonicalCleanerNames
+      );
       const property = safeStr_(row[idx["Property"]]);
       const dateValue = coerceToDate_(row[idx["Date"]]);
       const clockIn = coerceToDate_(row[idx["Clock In"]]);
@@ -792,11 +804,11 @@ function getPayrollCompletedShifts_(controlValues) {
       }
 
       if (
-  controlValues.cleanerName !== "All Cleaners" &&
-  name !== normalizePayrollCleanerName_(controlValues.cleanerName)
-) {
-  return null;
-}
+        selectedCleaner &&
+        name !== selectedCleaner
+      ) {
+        return null;
+      }
 
       const shiftHours = round2_(computeHours_(clockIn, clockOut, totalHoursCell));
       const transitMinutes = Math.round(Number(row[transitIdx.minutes] || 0));
