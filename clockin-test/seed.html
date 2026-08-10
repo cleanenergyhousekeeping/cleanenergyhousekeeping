@@ -7,11 +7,12 @@
   <style>
     html { -webkit-text-size-adjust: 100%; }
     body { margin: 0; font-family: Arial, sans-serif; background: #f7f7f7; display: flex; align-items: center; justify-content: center; min-height: 100vh; min-height: 100dvh; color: #23343b; }
-    .wrap { text-align: center; padding: 24px; max-width: 520px; width: 92vw; box-sizing: border-box; }
+    .wrap { text-align: center; padding: 24px; max-width: 420px; width: 92vw; box-sizing: border-box; }
     .testBanner { margin-bottom: 18px; padding: 8px 12px; border: 1px solid #e0b84f; border-radius: 10px; background: #fff3cd; color: #5f4700; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
-    h1 { margin: 0 0 16px; font-size: 34px; }
+    h1 { margin: 0 0 10px; font-size: 30px; }
     .statusText { margin-bottom: 16px; font-size: 17px; color: #4d6474; line-height: 1.45; }
-    .btn { display: inline-block; margin-top: 16px; padding: 16px 22px; border-radius: 14px; background: #649fca; color: #fff; border: none; text-decoration: none; font-weight: 700; font-size: 20px; width: 100%; box-sizing: border-box; }
+    .pinInput { width: 100%; box-sizing: border-box; border: 1px solid #cfd8dc; border-radius: 14px; padding: 16px 18px; font-size: 24px; text-align: center; letter-spacing: 0.35em; color: #23343b; background: #fff; }
+    .btn { display: inline-block; margin-top: 16px; padding: 16px 22px; border-radius: 14px; background: #649fca; color: #fff; border: none; text-decoration: none; font-weight: 700; font-size: 20px; width: 100%; box-sizing: border-box; cursor: pointer; }
     .btnSecondary { background: #23343b; }
     .hidden { display: none !important; }
   </style>
@@ -19,8 +20,11 @@
 <body>
   <div class="wrap">
     <div class="testBanner">TEST ENVIRONMENT • TEST DATA ONLY</div>
-    <h1>Prepare Offline Mode</h1>
-    <p id="statusText" class="statusText">Preparing this phone for offline mode...</p>
+    <h1>Prepare This Phone</h1>
+    <p id="statusText" class="statusText">Enter your 4-digit TEST access code.</p>
+
+    <input id="pinInput" class="pinInput" type="password" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="4-digit access code" />
+    <button id="prepareBtn" class="btn" type="button">Prepare TEST Phone</button>
     <a id="openShellBtn" class="btn btnSecondary hidden" href="/clockin-test/">Open Clock In TEST Shell</a>
   </div>
 
@@ -33,60 +37,94 @@
         "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
 
       const statusText = document.getElementById("statusText");
+      const pinInput = document.getElementById("pinInput");
+      const prepareBtn = document.getElementById("prepareBtn");
       const openShellBtn = document.getElementById("openShellBtn");
 
-      function parseHashParams_() {
-        const raw = window.location.hash.replace(/^#/, "");
-        return new URLSearchParams(raw);
+      async function hashPin_(pin) {
+        const encoder = new TextEncoder();
+        const digest = await crypto.subtle.digest("SHA-256", encoder.encode(pin));
+        return Array.from(new Uint8Array(digest))
+          .map(function (b) { return b.toString(16).padStart(2, "0"); })
+          .join("");
       }
 
-      async function fetchPrepPayload_(token) {
-        const url = APPS_SCRIPT_URL + "?mode=getOfflineShellPrep&token=" + encodeURIComponent(token);
-        const response = await fetch(url, { method: "GET", cache: "no-store" });
-        if (!response.ok) throw new Error("Prep request failed.");
-        return response.json();
+      async function preparePhone_() {
+        const pin = String(pinInput.value || "").replace(/\D/g, "").slice(0, 4);
+        pinInput.value = pin;
+
+        if (pin.length !== 4) {
+          statusText.textContent = "Enter the 4-digit TEST access code.";
+          return;
+        }
+
+        prepareBtn.disabled = true;
+        pinInput.disabled = true;
+        statusText.textContent = "Preparing TEST phone...";
+
+        try {
+          const response = await fetch(APPS_SCRIPT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              mode: "loginWithPin",
+              payload: {
+                accessCode: pin,
+                clientId: "",
+              },
+            }),
+            cache: "no-store",
+          });
+
+          const rawText = await response.text();
+          const parsed = rawText ? JSON.parse(rawText) : null;
+
+          if (!response.ok || !parsed || !parsed.ok) {
+            throw new Error((parsed && parsed.message) || "TEST phone prep failed.");
+          }
+
+          const payload = {
+            cleanerName: String(parsed.cleanerName || ""),
+            accessLevel: String(parsed.accessLevel || "LIMITED"),
+            currentShift: parsed.currentShift || null,
+            properties: Array.isArray(parsed.properties) ? parsed.properties : [],
+            sessionToken: String(parsed.sessionToken || ""),
+            clientId: String(parsed.clientId || ""),
+            pinHash: await hashPin_(pin),
+            seededAtMs: Date.now(),
+          };
+
+          localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(payload));
+          statusText.textContent = "TEST phone prepared for " + (payload.cleanerName || "this cleaner") + ".";
+          prepareBtn.classList.add("hidden");
+          pinInput.classList.add("hidden");
+          openShellBtn.classList.remove("hidden");
+        } catch (error) {
+          statusText.textContent = (error && error.message) || "TEST phone prep failed.";
+          prepareBtn.disabled = false;
+          pinInput.disabled = false;
+          pinInput.focus();
+        }
       }
 
-      const params = parseHashParams_();
-      openShellBtn.classList.remove("hidden");
-
+      const params = new URLSearchParams(window.location.search);
       if (params.get("clear") === "1") {
         localStorage.removeItem(SHELL_AUTH_KEY);
         localStorage.removeItem(SHELL_QUEUE_KEY);
         statusText.textContent = "TEST offline mode and queued entries were cleared on this phone.";
-        return;
       }
 
-      const token = params.get("token");
-      if (!token) {
-        statusText.textContent = "No offline prep token was received.";
-        return;
-      }
+      pinInput.addEventListener("input", function () {
+        pinInput.value = String(pinInput.value || "").replace(/\D/g, "").slice(0, 4);
+      });
 
-      fetchPrepPayload_(token)
-        .then(function (res) {
-          if (!res || !res.ok || !res.payload) {
-            statusText.textContent = (res && res.message) || "Offline prep failed.";
-            return;
-          }
+      pinInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          preparePhone_();
+        }
+      });
 
-          localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(res.payload));
-          try {
-            if (window.opener) {
-              window.opener.postMessage({ type: "shell-seed-saved" }, "*");
-            }
-          } catch (_) {}
-
-          const cleanerName = res.payload.cleanerName || "this cleaner";
-          const currentShiftText = res.payload.currentShift && res.payload.currentShift.property
-            ? ` Current shift: ${res.payload.currentShift.property}.`
-            : "";
-
-          statusText.textContent = `TEST offline mode is ready for ${cleanerName} on this phone.` + currentShiftText;
-        })
-        .catch(function () {
-          statusText.textContent = "TEST offline prep failed. Please go back and try again while online.";
-        });
+      prepareBtn.addEventListener("click", preparePhone_);
     })();
     /* end[clockin_test_seed] */
   </script>
