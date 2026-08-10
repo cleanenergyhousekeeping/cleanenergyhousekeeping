@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Clean Energy Clock In – TEST</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+</head>
+<body>
+  <div style="font-family:Arial,sans-serif;padding:24px;text-align:center;color:#23343b;">Loading TEST shell…</div>
+
+  <script>
+    /* begin[clockin_test_shell_bootstrap] */
+    (async function () {
+      const response = await fetch("/clockin/index.html", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("Unable to load the production shell baseline.");
+      }
+
+      let html = await response.text();
+      html = html.replaceAll("/clockin/", "/clockin-test/");
+      html = html.replace(
+        "<title>Clean Energy Clock In</title>",
+        "<title>Clean Energy Clock In – TEST</title>"
+      );
+      html = html.replace(
+        "<body>",
+        '<body><div id="ceTestEnvironmentBanner">TEST ENVIRONMENT • TEST DATA ONLY</div>'
+      );
+
+      document.open();
+      document.write(html);
+      document.close();
+    })().catch(function (error) {
+      document.body.innerHTML =
+        '<div style="font-family:Arial,sans-serif;padding:24px;text-align:center;color:#9b1c1c;">TEST shell failed to load.<br><small>' +
+        String(error && error.message ? error.message : error) +
+        "</small></div>";
+    });
+    /* end[clockin_test_shell_bootstrap] */
+  </script>
+</body>
+</html>
