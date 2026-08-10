@@ -12,6 +12,10 @@
 
   let source = await response.text();
   source = source.replaceAll(LIVE_BACKEND_URL, TEST_BACKEND_URL);
+  source = source.replace(
+    'const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";',
+    'const LIVE_APP_PREP_URL = "/clockin-test/seed.html";'
+  );
   source = source.replaceAll('"ce_shell_auth_v1"', '"ce_shell_test_auth_v1"');
   source = source.replaceAll('"ce_shell_queue_v1"', '"ce_shell_test_queue_v1"');
   source = source.replaceAll("/clockin/", "/clockin-test/");
