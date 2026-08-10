@@ -10,6 +10,7 @@ const APPS_SCRIPT_URL =
 
 const SHELL_AUTH_KEY = "ce_shell_test_auth_v1";
 const SHELL_QUEUE_KEY = "ce_shell_test_queue_v1";
+const SHELL_ENTRY_DRAFT_KEY = "ce_shell_test_entry_draft_v1";
 /* end[clockin_test_shell_constants] */
 
 
@@ -208,6 +209,77 @@ function getShellQueue_() {
 function saveShellQueue_(queue) {
   localStorage.setItem(SHELL_QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
 }
+
+/* begin[clockin_test_entry_draft] */
+function getShellEntryDraft_() {
+  try {
+    const raw = localStorage.getItem(SHELL_ENTRY_DRAFT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveShellEntryDraft_() {
+  const shellAuth = getShellAuth_();
+  if (!shellAuth || !shellAuth.cleanerName || !shellUnlocked) return;
+
+  localStorage.setItem(SHELL_ENTRY_DRAFT_KEY, JSON.stringify({
+    cleanerName: String(shellAuth.cleanerName),
+    propertyName: String((selectedOfflineProperty && selectedOfflineProperty.name) || ""),
+    action: String((offlineActionSelect && offlineActionSelect.value) || ""),
+    note: String((offlineNoteInput && offlineNoteInput.value) || ""),
+  }));
+}
+
+function clearShellEntryDraft_() {
+  localStorage.removeItem(SHELL_ENTRY_DRAFT_KEY);
+}
+
+function reconcileShellEntryDraft_(shellAuth) {
+  const savedDraft = getShellEntryDraft_();
+  const sameCleaner =
+    savedDraft &&
+    String(savedDraft.cleanerName || "") === String((shellAuth && shellAuth.cleanerName) || "");
+  const activeShiftProperty = getCurrentPropertyText_(shellAuth);
+  const draftPropertyName = sameCleaner ? String(savedDraft.propertyName || "") : "";
+  const propertyName = activeShiftProperty || draftPropertyName;
+  const property = findOfflinePropertyByName_(propertyName, shellAuth);
+  const isClockedIn = !!(shellAuth && shellAuth.currentShift);
+  const draftAction = sameCleaner ? String(savedDraft.action || "") : "";
+  const actionIsValid =
+    (draftAction === "clock_in" && !isClockedIn) ||
+    ((draftAction === "add_note" || draftAction === "clock_out") && isClockedIn);
+
+  selectedOfflineProperty = property || null;
+  if (offlinePropertySearch) {
+    offlinePropertySearch.value = property ? String(property.name || "") : "";
+    offlinePropertySearch.readOnly = !!activeShiftProperty;
+    offlinePropertySearch.classList.toggle("lockedProperty", !!activeShiftProperty);
+  }
+
+  if (property) {
+    fillOfflinePropertyInfo_(property);
+  } else {
+    hideOfflinePropertyInfo_();
+  }
+
+  if (offlineActionSelect) {
+    offlineActionSelect.value = actionIsValid ? draftAction : "";
+  }
+  updateOfflineActionOptions_(shellAuth);
+
+  if (offlineNoteInput) {
+    offlineNoteInput.value =
+      actionIsValid && draftAction === "add_note" ? String(savedDraft.note || "") : "";
+  }
+
+  clearOfflinePropertyResults_();
+  updateOfflineGuidanceText_(shellAuth);
+  saveShellEntryDraft_();
+}
+/* end[clockin_test_entry_draft] */
 
 /* function startShellBackgroundSync_() {
   if (shellSyncTimer) {
@@ -677,6 +749,7 @@ function selectOfflineProperty_(prop) {
   }
 
   updateOfflineGuidanceText_(getShellAuth_());
+  saveShellEntryDraft_();
 }
 /* end[select_offline_property_with_guidance_refresh] */
 
@@ -743,6 +816,7 @@ function handleOfflinePropertySearch_() {
 
 /* begin[reset_offline_entry_form_with_guidance_refresh] */
 function resetOfflineEntryForm_(shellAuth) {
+  clearShellEntryDraft_();
   if (offlineActionSelect) {
     offlineActionSelect.value = "";
   }
@@ -1205,7 +1279,6 @@ async function refreshShellAuthOnForegroundIfNeeded_() {
     const freshShellAuth = getShellAuth_() || {};
     updateOfflineReadyText_(freshShellAuth);
     updateOfflineQueueCount_();
-    resetOfflineEntryForm_(freshShellAuth);
     updateShellUi_();
 
     return {
@@ -1688,7 +1761,6 @@ async function unlockShellWithPin_() {
     clearShellPin_();
     updateShellUi_();
     updateOfflineQueueCount_();
-    resetOfflineEntryForm_(shellAuth);
 
     const cleanerName = shellAuth.cleanerName || "Cleaner";
     setOfflineReadyStatusText_("");
@@ -1846,6 +1918,7 @@ async function loadOfflinePrep_() {
     };
 
     saveShellAuth_(shellAuth);
+    clearShellEntryDraft_();
     shellUnlocked = false;
     clearPrepPin_();
     clearShellPin_();
@@ -2135,7 +2208,7 @@ function updateShellUi_() {
 
     updateOfflineReadyText_(shellAuth);
     updateOfflineQueueCount_();
-    resetOfflineEntryForm_(shellAuth);
+    reconcileShellEntryDraft_(shellAuth);
     return;
   }
 
@@ -2309,9 +2382,14 @@ if (offlineActionSelect) {
     }
 
     updateOfflineGuidanceText_(getShellAuth_());
+    saveShellEntryDraft_();
   });
 }
 /* end[offline_action_change_with_guidance_refresh] */
+
+if (offlineNoteInput) {
+  offlineNoteInput.addEventListener("input", saveShellEntryDraft_);
+}
 
 if (saveOfflineEntryBtn) {
   saveOfflineEntryBtn.addEventListener("click", saveOfflineEntry_);
