@@ -1,0 +1,21 @@
+@import url("/clockin/style.css");
+
+/* begin[clockin_test_environment_banner] */
+#ceTestEnvironmentBanner {
+  position: sticky;
+  top: 0;
+  z-index: 20000;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  background: #fff3cd;
+  border-bottom: 1px solid #e0b84f;
+  color: #5f4700;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+/* end[clockin_test_environment_banner] */
