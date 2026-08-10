@@ -18,6 +18,7 @@
 
       let html = await response.text();
       html = html.replaceAll("/clockin/", "/clockin-test/");
+      html = html.replaceAll("/clockin-test/icon.png", "/clockin/icon.png");
       html = html.replace(
         "<title>Clean Energy Clock In</title>",
         "<title>Clean Energy Clock In – TEST</title>"
