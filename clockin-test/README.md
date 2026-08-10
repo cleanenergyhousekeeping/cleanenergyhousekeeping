@@ -9,9 +9,9 @@ Flow:
 ## Isolation boundaries
 
 - TEST Apps Script deployment URL only.
-- TEST localStorage keys: `ce_shell_test_auth_v1` and `ce_shell_test_queue_v1`.
+- TEST localStorage keys: `ce_shell_test_auth_v1`, `ce_shell_test_queue_v1`, and `ce_shell_test_entry_draft_v1`.
 - TEST service worker scope: `/clockin-test/`.
-- TEST cache namespace: `ce-clockin-test-shell-v4`.
+- TEST cache namespace: `ce-clockin-test-shell-v5`.
 - Persistent visible `TEST ENVIRONMENT • TEST DATA ONLY` banner.
 - Production `/clockin/` files are not modified; the existing `/clockin/icon.png` is reused without duplication.
 - TEST phone preparation is handled locally at `/clockin-test/seed.html` and authenticates directly against the TEST backend, so it never enters the production `/clockin/seed.html` flow.
