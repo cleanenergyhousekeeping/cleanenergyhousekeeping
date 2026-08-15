@@ -13,7 +13,8 @@
     {
       "binding": "DB",
       "database_name": "ceh-relay-test-db",
-      "database_id": "8804b3a1-8af0-413d-a0c3-37830e0988a0"
+      "database_id": "8804b3a1-8af0-413d-a0c3-37830e0988a0",
+      "migrations_dir": "migrations"
     }
   ]
 }
