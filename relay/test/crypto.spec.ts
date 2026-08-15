@@ -4,10 +4,12 @@ import {
   decryptJson,
   digestCanonicalEvent,
   encryptJson,
+  eventEncryptionContext,
   generateSecureId,
   hashRelayToken,
   importEncryptionKey,
   importHmacKey,
+  stateEncryptionContext,
 } from "../src/crypto";
 import { validateProposedNoteLimit } from "../src/validation";
 
@@ -25,18 +27,20 @@ describe("relay cryptography", () => {
     expect(await hashRelayToken(`${token}-different`, key)).not.toBe(firstHash);
   });
 
-  it("round trips AES-GCM data and rejects modified ciphertext", async () => {
+  it("round trips AES-GCM data with the correct event context", async () => {
     const key = await importEncryptionKey(
       crypto.getRandomValues(new Uint8Array(32)),
     );
+    const context = eventEncryptionContext("event_correct-context");
     const encrypted = await encryptJson(
       { property: "synthetic-property", note: "synthetic-note" },
       key,
       3,
+      context,
     );
 
     await expect(
-      decryptJson(encrypted, new Map([[3, key]])),
+      decryptJson(encrypted, new Map([[3, key]]), context),
     ).resolves.toEqual({
       property: "synthetic-property",
       note: "synthetic-note",
@@ -47,7 +51,60 @@ describe("relay cryptography", () => {
       ...encrypted,
       ciphertext: `${firstCharacter}${encrypted.ciphertext.slice(1)}`,
     };
-    await expect(decryptJson(tampered, new Map([[3, key]]))).rejects.toThrow();
+    await expect(
+      decryptJson(tampered, new Map([[3, key]]), context),
+    ).rejects.toThrow();
+  });
+
+  it("rejects an event ciphertext under another event or purpose", async () => {
+    const key = await importEncryptionKey(
+      crypto.getRandomValues(new Uint8Array(32)),
+    );
+    const encrypted = await encryptJson(
+      { eventType: "clock_in" },
+      key,
+      1,
+      eventEncryptionContext("event_original"),
+    );
+
+    await expect(
+      decryptJson(
+        encrypted,
+        new Map([[1, key]]),
+        eventEncryptionContext("event_different"),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      decryptJson(
+        encrypted,
+        new Map([[1, key]]),
+        stateEncryptionContext("cleaner_subject_original"),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("binds state ciphertext to its cleaner subject", async () => {
+    const key = await importEncryptionKey(
+      crypto.getRandomValues(new Uint8Array(32)),
+    );
+    const context = stateEncryptionContext("cleaner_subject_original");
+    const encrypted = await encryptJson(
+      { currentShift: null },
+      key,
+      2,
+      context,
+    );
+
+    await expect(
+      decryptJson(encrypted, new Map([[2, key]]), context),
+    ).resolves.toEqual({ currentShift: null });
+    await expect(
+      decryptJson(
+        encrypted,
+        new Map([[2, key]]),
+        stateEncryptionContext("cleaner_subject_different"),
+      ),
+    ).rejects.toThrow();
   });
 
   it("produces stable keyed digests for canonical event data", async () => {

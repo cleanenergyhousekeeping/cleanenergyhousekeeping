@@ -3,6 +3,7 @@ import type { EncryptedValue } from "./persistence/types";
 /* begin[relay_crypto_utilities] */
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const ENCRYPTION_CONTEXT_PREFIX = "ceh-relay:test";
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -53,6 +54,33 @@ function canonicalize(value: unknown): string {
   throw new TypeError("Canonical values cannot contain this value type");
 }
 
+function requireContextComponent(value: string, label: string): string {
+  if (value.length === 0) {
+    throw new TypeError(`${label} must not be empty`);
+  }
+  return value;
+}
+
+function encodeAuthenticatedContext(authenticatedContext: string): Uint8Array {
+  if (authenticatedContext.length === 0) {
+    throw new TypeError("Authenticated encryption context must not be empty");
+  }
+  return textEncoder.encode(authenticatedContext);
+}
+
+export function eventEncryptionContext(eventId: string): string {
+  const contextEventId = requireContextComponent(eventId, "Event ID");
+  return `${ENCRYPTION_CONTEXT_PREFIX}:event:${contextEventId}`;
+}
+
+export function stateEncryptionContext(cleanerSubject: string): string {
+  const contextCleanerSubject = requireContextComponent(
+    cleanerSubject,
+    "Cleaner subject",
+  );
+  return `${ENCRYPTION_CONTEXT_PREFIX}:state:${contextCleanerSubject}`;
+}
+
 export async function importHmacKey(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     "raw",
@@ -97,6 +125,7 @@ export async function encryptJson(
   value: unknown,
   key: CryptoKey,
   keyVersion: number,
+  authenticatedContext: string,
 ): Promise<EncryptedValue> {
   if (!Number.isInteger(keyVersion) || keyVersion < 1) {
     throw new TypeError("Encryption key versions must be positive integers");
@@ -105,7 +134,11 @@ export async function encryptJson(
   const nonce = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = textEncoder.encode(JSON.stringify(value));
   const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: nonce },
+    {
+      name: "AES-GCM",
+      iv: nonce,
+      additionalData: encodeAuthenticatedContext(authenticatedContext),
+    },
     key,
     plaintext,
   );
@@ -120,6 +153,7 @@ export async function encryptJson(
 export async function decryptJson<T>(
   encryptedValue: EncryptedValue,
   keysByVersion: ReadonlyMap<number, CryptoKey>,
+  authenticatedContext: string,
 ): Promise<T> {
   const key = keysByVersion.get(encryptedValue.keyVersion);
   if (key === undefined) {
@@ -127,7 +161,11 @@ export async function decryptJson<T>(
   }
 
   const plaintext = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: base64UrlToBytes(encryptedValue.nonce) },
+    {
+      name: "AES-GCM",
+      iv: base64UrlToBytes(encryptedValue.nonce),
+      additionalData: encodeAuthenticatedContext(authenticatedContext),
+    },
     key,
     base64UrlToBytes(encryptedValue.ciphertext),
   );

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   digestCanonicalEvent,
   encryptJson,
+  eventEncryptionContext,
   generateSecureId,
   hashRelayToken,
   importEncryptionKey,
@@ -19,7 +20,8 @@ import {
   isEventStateTransitionAllowed,
   markEventDelivered,
   markEventPending,
-  markTerminalFailure,
+  markLeasedTerminalFailure,
+  markPreDeliveryTerminalFailure,
   resolveSequenceGap,
   scheduleInfrastructureFailure,
 } from "../src/persistence/events";
@@ -86,6 +88,7 @@ async function createEventFixture(
     { property, cleanerDisplayName: `synthetic-cleaner-${label}`, note },
     encryptionKey,
     1,
+    eventEncryptionContext(eventId),
   );
 
   const result = await insertEvent(env.DB, {
@@ -325,11 +328,11 @@ describe("failure scheduling", () => {
     ).not.toBeNull();
   });
 
-  it("makes terminal failures ineligible and blocks their lane", async () => {
+  it("allows a pre-delivery terminal transition without a lease", async () => {
     const fixture = await createEventFixture("terminal");
 
     expect(
-      await markTerminalFailure(env.DB, {
+      await markPreDeliveryTerminalFailure(env.DB, {
         eventId: fixture.eventId,
         category: "corrupt_event",
         nowMs: NOW_MS,
@@ -344,6 +347,115 @@ describe("failure scheduling", () => {
       .bind(fixture.lane.lane_id)
       .first<RelayLaneRow>();
     expect(lane?.blocked_reason).toBe("terminal_event");
+  });
+
+  it("allows a terminal transition with the matching active lease", async () => {
+    const fixture = await createEventFixture("leased-terminal");
+    await makePending(fixture.eventId);
+    await claimEventLease(
+      env.DB,
+      fixture.eventId,
+      "worker_terminal",
+      NOW_MS,
+      60_000,
+    );
+
+    expect(
+      await markLeasedTerminalFailure(env.DB, {
+        eventId: fixture.eventId,
+        category: "permanent_business_rejection",
+        nowMs: NOW_MS + 1,
+        leaseOwner: "worker_terminal",
+      }),
+    ).toBe(true);
+    const event = await getEvent(env.DB, fixture.eventId);
+    expect(event.state).toBe("terminal_failure");
+    expect(event.lease_owner).toBeNull();
+  });
+
+  it("rejects a terminal transition from the wrong lease owner", async () => {
+    const fixture = await createEventFixture("wrong-terminal-owner");
+    await makePending(fixture.eventId);
+    await claimEventLease(
+      env.DB,
+      fixture.eventId,
+      "worker_active",
+      NOW_MS,
+      60_000,
+    );
+
+    expect(
+      await markLeasedTerminalFailure(env.DB, {
+        eventId: fixture.eventId,
+        category: "permanent_business_rejection",
+        nowMs: NOW_MS + 1,
+        leaseOwner: "worker_wrong",
+      }),
+    ).toBe(false);
+    const event = await getEvent(env.DB, fixture.eventId);
+    const lane = await env.DB.prepare(
+      "SELECT * FROM relay_lanes WHERE lane_id = ?",
+    )
+      .bind(fixture.lane.lane_id)
+      .first<RelayLaneRow>();
+    expect(event.state).toBe("delivering");
+    expect(event.lease_owner).toBe("worker_active");
+    expect(lane?.status).toBe("active");
+    expect(lane?.blocked_reason).toBeNull();
+  });
+
+  it("rejects a lease-free terminal transition for a delivering event", async () => {
+    const fixture = await createEventFixture("missing-terminal-owner");
+    await makePending(fixture.eventId);
+    await claimEventLease(
+      env.DB,
+      fixture.eventId,
+      "worker_active",
+      NOW_MS,
+      60_000,
+    );
+
+    expect(
+      await markPreDeliveryTerminalFailure(env.DB, {
+        eventId: fixture.eventId,
+        category: "permanent_business_rejection",
+        nowMs: NOW_MS + 1,
+      }),
+    ).toBe(false);
+    const event = await getEvent(env.DB, fixture.eventId);
+    const lane = await env.DB.prepare(
+      "SELECT * FROM relay_lanes WHERE lane_id = ?",
+    )
+      .bind(fixture.lane.lane_id)
+      .first<RelayLaneRow>();
+    expect(event.state).toBe("delivering");
+    expect(event.lease_owner).toBe("worker_active");
+    expect(lane?.status).toBe("active");
+    expect(lane?.blocked_reason).toBeNull();
+  });
+
+  it("rejects a terminal transition after the matching lease expires", async () => {
+    const fixture = await createEventFixture("expired-terminal-lease");
+    await makePending(fixture.eventId);
+    await claimEventLease(
+      env.DB,
+      fixture.eventId,
+      "worker_expired",
+      NOW_MS,
+      1_000,
+    );
+
+    expect(
+      await markLeasedTerminalFailure(env.DB, {
+        eventId: fixture.eventId,
+        category: "permanent_business_rejection",
+        nowMs: NOW_MS + 1_001,
+        leaseOwner: "worker_expired",
+      }),
+    ).toBe(false);
+    const event = await getEvent(env.DB, fixture.eventId);
+    expect(event.state).toBe("delivering");
+    expect(event.lease_owner).toBe("worker_expired");
   });
 
   it("delivers earlier FIFO events before blocking on a later terminal event", async () => {
@@ -363,7 +475,7 @@ describe("failure scheduling", () => {
         })
       ).outcome,
     ).toBe("inserted");
-    await markTerminalFailure(env.DB, {
+    await markPreDeliveryTerminalFailure(env.DB, {
       eventId: terminalEventId,
       category: "permanent_business_rejection",
       nowMs: NOW_MS + 2,
@@ -677,6 +789,7 @@ describe("retention and sensitive-data boundaries", () => {
       { property, cleanerDisplayName, note },
       encryptionKey,
       1,
+      eventEncryptionContext(`event_${label}`),
     );
     const payloadDigest = await digestCanonicalEvent(
       { property, cleanerDisplayName, note },

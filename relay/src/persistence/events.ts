@@ -349,35 +349,73 @@ export async function markEventDelivered(
   return (results[0].meta.changes ?? 0) === 1;
 }
 
-export async function markTerminalFailure(
-  db: D1Database,
-  input: {
-    eventId: string;
-    category: TerminalFailureCategory;
-    nowMs: number;
-    leaseOwner?: string;
-  },
-): Promise<boolean> {
-  const leaseClause = input.leaseOwner === undefined ? "" : " AND lease_owner = ?";
-  const bindings: unknown[] = [
-    input.category,
-    input.nowMs,
-    input.nowMs,
-    input.eventId,
-  ];
-  if (input.leaseOwner !== undefined) {
-    bindings.push(input.leaseOwner);
-  }
+interface TerminalFailureInput {
+  eventId: string;
+  category: TerminalFailureCategory;
+  nowMs: number;
+}
 
+export async function markPreDeliveryTerminalFailure(
+  db: D1Database,
+  input: TerminalFailureInput,
+): Promise<boolean> {
+  return applyTerminalFailure(
+    db,
+    input,
+    "pre_delivery",
+    null,
+  );
+}
+
+export async function markLeasedTerminalFailure(
+  db: D1Database,
+  input: TerminalFailureInput & { leaseOwner: string },
+): Promise<boolean> {
+  return applyTerminalFailure(
+    db,
+    input,
+    "leased",
+    input.leaseOwner,
+  );
+}
+
+async function applyTerminalFailure(
+  db: D1Database,
+  input: TerminalFailureInput,
+  transitionMode: "pre_delivery" | "leased",
+  leaseOwner: string | null,
+): Promise<boolean> {
   const results = await db.batch([
     db
       .prepare(
         `UPDATE relay_events
          SET state = 'terminal_failure', failure_category = ?, terminal_at_ms = ?,
              lease_owner = NULL, lease_expires_at_ms = NULL, updated_at_ms = ?
-         WHERE event_id = ? AND state NOT IN ('delivered', 'terminal_failure')${leaseClause}`,
+         WHERE event_id = ?
+           AND (
+             (? = 'pre_delivery'
+               AND state IN (
+                 'accepted', 'pending', 'retryable_failure', 'attention_required'
+               )
+               AND lease_owner IS NULL
+               AND lease_expires_at_ms IS NULL)
+             OR
+             (? = 'leased'
+               AND state = 'delivering'
+               AND lease_owner = ?
+               AND lease_expires_at_ms > ?)
+           )`,
       )
-      .bind(...bindings),
+      .bind(
+        input.category,
+        input.nowMs,
+        input.nowMs,
+        input.eventId,
+        transitionMode,
+        transitionMode,
+        leaseOwner,
+        input.nowMs,
+      ),
     db
       .prepare(
         `UPDATE relay_lanes

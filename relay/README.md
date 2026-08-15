@@ -25,6 +25,8 @@ Versioned schema changes live in `migrations/` and use Wrangler's D1 migration l
 
 The schema stores relay tokens only as HMAC hashes. Event payloads and state snapshots must be AES-GCM encrypted before insertion; property names, cleaner display names, and notes are never stored in plaintext. No Worker secrets belong in migration files, configuration, source, or tests.
 
+AES-GCM additional authenticated data binds each ciphertext to its intended TEST record and purpose. Use `ceh-relay:test:event:<eventId>` for events and `ceh-relay:test:state:<cleanerSubject>` for state snapshots. This context is not secret, is not stored with the ciphertext, and must be reconstructed exactly for decryption.
+
 Tests apply the real migrations to isolated local D1 storage. To inspect the migration state of Wrangler's local development database without contacting the remote database, run:
 
 ```bash
