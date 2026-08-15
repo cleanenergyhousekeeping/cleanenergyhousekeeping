@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "migrations:list:local": "wrangler d1 migrations list DB --local",
     "deploy:dry-run": "wrangler deploy --dry-run",
     "check": "npm run cf-typegen && npm run typecheck && npm test && npm run deploy:dry-run"
   },
