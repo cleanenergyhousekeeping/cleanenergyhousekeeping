@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ceh-relay-test",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ceh-relay-test-db",
+      "database_id": "8804b3a1-8af0-413d-a0c3-37830e0988a0"
+    }
+  ]
+}
