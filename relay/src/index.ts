@@ -6,9 +6,20 @@ import {
 } from "./cors";
 import { healthResponse } from "./health";
 import { jsonResponse } from "./responses";
+import { loadRelayConfig } from "./config";
+import { DELIVERY_CRON, runDeliveryBatch } from "./delivery-service";
+import {
+  enrollRelaySession,
+  renewRelaySession,
+  type SessionRequestInput,
+  type SessionServiceResult,
+} from "./session-service";
 
 /* begin[relay_request_router] */
 const HEALTH_PATH = "/health";
+const ENROLL_PATH = "/v1/relay-sessions/enroll";
+const RENEW_PATH = "/v1/relay-sessions/renew";
+const MAX_SESSION_REQUEST_BYTES = 4_096;
 
 function notFoundResponse(headers: HeadersInit): Response {
   return jsonResponse(
@@ -21,9 +32,12 @@ function notFoundResponse(headers: HeadersInit): Response {
   );
 }
 
-function methodNotAllowedResponse(headers: HeadersInit): Response {
+function methodNotAllowedResponse(
+  headers: HeadersInit,
+  allowedMethods: readonly string[],
+): Response {
   const responseHeaders = new Headers(headers);
-  responseHeaders.set("Allow", "GET, OPTIONS");
+  responseHeaders.set("Allow", `${allowedMethods.join(", ")}, OPTIONS`);
 
   return jsonResponse(
     {
@@ -32,6 +46,97 @@ function methodNotAllowedResponse(headers: HeadersInit): Response {
     },
     405,
     responseHeaders,
+  );
+}
+
+function sessionStatus(result: SessionServiceResult): number {
+  if (result.ok) return 200;
+  if (result.error === "invalid_request") return 400;
+  if (result.error === "authentication_failed") return 401;
+  return 503;
+}
+
+function parseBearerToken(request: Request): string {
+  const authorization = request.headers.get("Authorization") ?? "";
+  const match = /^Bearer ([A-Za-z0-9_-]+)$/u.exec(authorization);
+  return match?.[1] ?? "";
+}
+
+async function parseSessionRequest(request: Request): Promise<SessionRequestInput | null> {
+  const contentLength = Number(request.headers.get("Content-Length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_SESSION_REQUEST_BYTES) {
+    return null;
+  }
+  if (!(request.headers.get("Content-Type") ?? "").toLowerCase().startsWith("application/json")) {
+    return null;
+  }
+  try {
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_SESSION_REQUEST_BYTES) {
+      return null;
+    }
+    const parsed = JSON.parse(rawBody) as unknown;
+    if (parsed === null || Array.isArray(parsed) || typeof parsed !== "object") {
+      return null;
+    }
+    const body = parsed as Record<string, unknown>;
+    if (
+      Object.keys(body).sort().join("\n") !==
+        ["appsSessionToken", "deviceId"].join("\n") ||
+      typeof body.appsSessionToken !== "string" ||
+      typeof body.deviceId !== "string"
+    ) {
+      return null;
+    }
+    return {
+      appsSessionToken: body.appsSessionToken,
+      deviceId: body.deviceId,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function sessionResponse(
+  request: Request,
+  env: Env,
+  path: string,
+  corsHeaders: Headers,
+): Promise<Response> {
+  const input = await parseSessionRequest(request);
+  if (input === null) {
+    return jsonResponse(
+      { ok: false, error: "invalid_request", retryable: false },
+      400,
+      corsHeaders,
+    );
+  }
+
+  let config;
+  try {
+    config = await loadRelayConfig(env);
+  } catch (_) {
+    return jsonResponse(
+      { ok: false, error: "temporarily_unavailable", retryable: true },
+      503,
+      corsHeaders,
+    );
+  }
+  const result =
+    path === ENROLL_PATH
+      ? await enrollRelaySession(env.DB, config, input)
+      : await renewRelaySession(
+          env.DB,
+          config,
+          parseBearerToken(request),
+          input,
+        );
+  return jsonResponse(
+    result.ok
+      ? { ok: true, environment: config.environment, session: result.data }
+      : result,
+    path === ENROLL_PATH && result.ok ? 201 : sessionStatus(result),
+    corsHeaders,
   );
 }
 
@@ -46,19 +151,53 @@ export default {
 
     const corsHeaders = createCorsHeaders(origin);
 
-    if (url.pathname !== HEALTH_PATH) {
+    const isHealth = url.pathname === HEALTH_PATH;
+    const isSession = url.pathname === ENROLL_PATH || url.pathname === RENEW_PATH;
+    if (!isHealth && !isSession) {
       return notFoundResponse(corsHeaders);
     }
 
     if (request.method === "OPTIONS") {
-      return preflightResponse(request);
+      return isHealth
+        ? preflightResponse(request, ["GET"])
+        : preflightResponse(
+            request,
+            ["POST"],
+            url.pathname === RENEW_PATH
+              ? ["Content-Type", "Authorization"]
+              : ["Content-Type"],
+          );
     }
 
-    if (request.method !== "GET") {
-      return methodNotAllowedResponse(corsHeaders);
+    if (isHealth) {
+      if (request.method !== "GET") {
+        return methodNotAllowedResponse(corsHeaders, ["GET"]);
+      }
+      return healthResponse(env.DB, corsHeaders);
     }
 
-    return healthResponse(env.DB, corsHeaders);
+    if (request.method !== "POST") {
+      return methodNotAllowedResponse(corsHeaders, ["POST"]);
+    }
+    return sessionResponse(request, env, url.pathname, corsHeaders);
+  },
+
+  scheduled(controller, env, ctx): void {
+    if (controller.cron !== DELIVERY_CRON) {
+      return;
+    }
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const config = await loadRelayConfig(env);
+          const summary = await runDeliveryBatch(env.DB, config);
+          console.info(JSON.stringify({ event: "relay_delivery_batch", ...summary }));
+        } catch (_) {
+          console.error(JSON.stringify({ event: "relay_delivery_batch_failed" }));
+          throw new Error("relay_delivery_batch_failed");
+        }
+      })(),
+    );
   },
 } satisfies ExportedHandler<Env>;
 /* end[relay_request_router] */

@@ -65,14 +65,6 @@ export async function rotateSessionToken(
   const results = await db.batch([
     db
       .prepare(
-        `UPDATE relay_session_tokens
-         SET rotated_at_ms = COALESCE(rotated_at_ms, ?),
-             expires_at_ms = MIN(expires_at_ms, ?)
-         WHERE session_id = ? AND expires_at_ms > ?`,
-      )
-      .bind(nowMs, overlapEndsAtMs, sessionId, nowMs),
-    db
-      .prepare(
         `INSERT INTO relay_session_tokens (
            token_hash, session_id, issued_at_ms, expires_at_ms
          )
@@ -89,14 +81,46 @@ export async function rotateSessionToken(
       ),
     db
       .prepare(
+        `UPDATE relay_session_tokens
+         SET rotated_at_ms = COALESCE(rotated_at_ms, ?),
+             expires_at_ms = MIN(expires_at_ms, ?)
+         WHERE session_id = ? AND token_hash != ? AND expires_at_ms > ?
+           AND EXISTS (
+             SELECT 1 FROM relay_session_tokens
+             WHERE token_hash = ? AND session_id = ?
+           )`,
+      )
+      .bind(
+        nowMs,
+        overlapEndsAtMs,
+        sessionId,
+        nextTokenHash,
+        nowMs,
+        nextTokenHash,
+        sessionId,
+      ),
+    db
+      .prepare(
         `UPDATE relay_sessions
          SET last_validated_at_ms = ?, expires_at_ms = ?, updated_at_ms = ?
-         WHERE session_id = ? AND status = 'active' AND expires_at_ms > ?`,
+         WHERE session_id = ? AND status = 'active' AND expires_at_ms > ?
+           AND EXISTS (
+             SELECT 1 FROM relay_session_tokens
+             WHERE token_hash = ? AND session_id = ?
+           )`,
       )
-      .bind(nowMs, nextExpiresAtMs, nowMs, sessionId, nowMs),
+      .bind(
+        nowMs,
+        nextExpiresAtMs,
+        nowMs,
+        sessionId,
+        nowMs,
+        nextTokenHash,
+        sessionId,
+      ),
   ]);
 
-  return (results[1].meta.changes ?? 0) === 1;
+  return (results[0].meta.changes ?? 0) === 1;
 }
 
 export async function revokeSession(

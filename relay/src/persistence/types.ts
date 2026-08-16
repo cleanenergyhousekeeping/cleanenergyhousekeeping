@@ -13,6 +13,7 @@ export const EVENT_STATES = [
 
 export type EventType = (typeof EVENT_TYPES)[number];
 export type EventState = (typeof EVENT_STATES)[number];
+export type RelayEnvironment = "test" | "production";
 
 export interface EncryptedValue {
   ciphertext: string;
@@ -42,6 +43,17 @@ export interface RelayEventRow {
   attention_required_at_ms: number | null;
   terminal_at_ms: number | null;
   payload_redacted_at_ms: number | null;
+}
+
+export interface DeliveryCandidateRow extends RelayEventRow {
+  cleaner_subject: string;
+  device_id: string;
+}
+
+export interface SequenceGapCandidateRow {
+  lane_id: string;
+  missing_from_sequence: number;
+  missing_to_sequence: number;
 }
 
 export interface RelayLaneRow {
@@ -87,6 +99,10 @@ export type TerminalFailureCategory =
 
 export type InfrastructureFailureCategory =
   | "apps_script_unavailable"
+  | "apps_script_authentication"
+  | "apps_script_protocol_error"
+  | "apps_script_replay"
+  | "apps_script_stale_request"
   | "google_unavailable"
   | "network_error"
   | "timeout"

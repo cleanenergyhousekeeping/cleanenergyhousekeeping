@@ -36,6 +36,7 @@ import {
   createSession,
   expireSessions,
   findActiveSessionByTokenHash,
+  RELAY_TOKEN_LIFETIME_MS,
   RELAY_TOKEN_ROTATION_OVERLAP_MS,
   rotateSessionToken,
 } from "../src/persistence/sessions";
@@ -74,6 +75,7 @@ async function createEventFixture(
   const eventId = `event_${label}`;
   const eventType = options.eventType ?? "clock_in";
   const deviceSequence = options.deviceSequence ?? 1;
+  const submittedAtMs = acceptedAtMs - 1_000;
   const property = `synthetic-property-${label}`;
   const note = `synthetic-note-${label}`;
   const digestKey = await importHmacKey(`digest-key-${label}`);
@@ -81,14 +83,33 @@ async function createEventFixture(
     crypto.getRandomValues(new Uint8Array(32)),
   );
   const payloadDigest = await digestCanonicalEvent(
-    { eventId, deviceSequence, eventType, property, note },
+    {
+      eventId,
+      cleanerSubject: lane.cleaner_subject,
+      deviceId: lane.device_id,
+      deviceSequence,
+      eventType,
+      submittedAtMs,
+      property,
+      note,
+    },
     digestKey,
+    "test",
   );
   const encryptedPayload = await encryptJson(
-    { property, cleanerDisplayName: `synthetic-cleaner-${label}`, note },
+    {
+      eventId,
+      cleanerSubject: lane.cleaner_subject,
+      deviceId: lane.device_id,
+      deviceSequence,
+      eventType,
+      submittedAtMs,
+      property,
+      note,
+    },
     encryptionKey,
     1,
-    eventEncryptionContext(eventId),
+    eventEncryptionContext("test", eventId),
   );
 
   const result = await insertEvent(env.DB, {
@@ -96,7 +117,7 @@ async function createEventFixture(
     laneId: lane.lane_id,
     deviceSequence,
     eventType,
-    submittedAtMs: acceptedAtMs - 1_000,
+    submittedAtMs,
     payloadDigest,
     encryptedPayload,
     acceptedAtMs,
@@ -590,8 +611,8 @@ describe("session lifecycle", () => {
     const hmacKey = await importHmacKey("synthetic-session-hmac-material");
     const oldToken = generateSecureId("token");
     const nextToken = generateSecureId("token");
-    const oldHash = await hashRelayToken(oldToken, hmacKey);
-    const nextHash = await hashRelayToken(nextToken, hmacKey);
+    const oldHash = await hashRelayToken(oldToken, hmacKey, "test");
+    const nextHash = await hashRelayToken(nextToken, hmacKey, "test");
     const session = await createSession(env.DB, {
       sessionId: "session_rotation",
       cleanerSubject: "cleaner_subject_rotation",
@@ -653,6 +674,62 @@ describe("session lifecycle", () => {
     expect(
       await findActiveSessionByTokenHash(env.DB, "hash_next-device", NOW_MS + 2),
     ).not.toBeNull();
+  });
+
+  it("rolls back session revocation when atomic enrollment storage fails", async () => {
+    await createSession(env.DB, {
+      sessionId: "session_atomic_current",
+      cleanerSubject: "cleaner_subject_atomic",
+      deviceId: "device_atomic_current",
+      tokenHash: "hash_atomic_current",
+      nowMs: NOW_MS,
+    });
+    await createSession(env.DB, {
+      sessionId: "session_atomic_collision",
+      cleanerSubject: "cleaner_subject_other",
+      deviceId: "device_atomic_other",
+      tokenHash: "hash_atomic_other",
+      nowMs: NOW_MS,
+    });
+
+    await expect(
+      createSession(env.DB, {
+        sessionId: "session_atomic_collision",
+        cleanerSubject: "cleaner_subject_atomic",
+        deviceId: "device_atomic_next",
+        tokenHash: "hash_atomic_next",
+        nowMs: NOW_MS + 1,
+      }),
+    ).rejects.toThrow();
+    expect(
+      await findActiveSessionByTokenHash(env.DB, "hash_atomic_current", NOW_MS + 2),
+    ).not.toBeNull();
+  });
+
+  it("does not shorten an existing token when atomic rotation cannot insert", async () => {
+    const session = await createSession(env.DB, {
+      sessionId: "session_atomic_rotation",
+      cleanerSubject: "cleaner_subject_atomic_rotation",
+      deviceId: "device_atomic_rotation",
+      tokenHash: "hash_atomic_rotation",
+      nowMs: NOW_MS,
+    });
+
+    expect(
+      await rotateSessionToken(
+        env.DB,
+        "session_missing_rotation",
+        "hash_atomic_rotation_next",
+        NOW_MS + 1,
+      ),
+    ).toBe(false);
+    expect(
+      await findActiveSessionByTokenHash(
+        env.DB,
+        "hash_atomic_rotation",
+        NOW_MS + RELAY_TOKEN_LIFETIME_MS - 1,
+      ),
+    ).toMatchObject({ session_id: session.session_id });
   });
 
   it("deletes sessions thirty days after revocation or expiration", async () => {
@@ -768,7 +845,7 @@ describe("retention and sensitive-data boundaries", () => {
     const note = `note-${label}`;
     const rawToken = generateSecureId("token");
     const hmacKey = await importHmacKey("synthetic-negative-hmac-material");
-    const tokenHash = await hashRelayToken(rawToken, hmacKey);
+    const tokenHash = await hashRelayToken(rawToken, hmacKey, "test");
     await createSession(env.DB, {
       sessionId: `session_${label}`,
       cleanerSubject: `subject_${label}`,
@@ -789,11 +866,12 @@ describe("retention and sensitive-data boundaries", () => {
       { property, cleanerDisplayName, note },
       encryptionKey,
       1,
-      eventEncryptionContext(`event_${label}`),
+      eventEncryptionContext("test", `event_${label}`),
     );
     const payloadDigest = await digestCanonicalEvent(
       { property, cleanerDisplayName, note },
       hmacKey,
+      "test",
     );
     await insertEvent(env.DB, {
       eventId: `event_${label}`,
