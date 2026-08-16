@@ -57,6 +57,10 @@ function doPost(e) {
     const raw = (e && e.postData && e.postData.contents) || "{}";
     const body = JSON.parse(raw);
 
+    if (body && body.mode === "relayWorkerRequest") {
+      return createRelayJsonOutput_(handleRelayWorkerRequest_(body));
+    }
+
     if (body && body.mode === "submitShellQueueEntry") {
       const queuePayload = body.payload || {};
       logClockInDebugSafe_({
