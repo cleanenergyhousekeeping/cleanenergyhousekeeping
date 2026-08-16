@@ -68,6 +68,11 @@ function findRelayLedgerEvent_(context, eventId) {
     rowNumber: match.rowNumber,
     eventId: safeStr_(match.values[context.indexes["Event ID"]]),
     payloadDigest: safeStr_(match.values[context.indexes["Payload Digest"]]),
+    cleanerSubject: safeStr_(match.values[context.indexes["Cleaner Subject"]]),
+    deviceId: safeStr_(match.values[context.indexes["Device ID"]]),
+    deviceSequence: Number(match.values[context.indexes["Device Sequence"]]),
+    eventType: safeStr_(match.values[context.indexes["Event Type"]]),
+    clientTimestamp: Number(match.values[context.indexes["Client Timestamp"]]),
     state: safeStr_(match.values[context.indexes.State]),
     resultCode: safeStr_(match.values[context.indexes["Result Code"]]),
   };
@@ -92,18 +97,18 @@ function appendRelayProcessingEvent_(context, event, nowMs) {
 }
 
 function setRelayLedgerOutcome_(context, rowNumber, state, resultCode, nowMs) {
-  context.sheet.getRange(
+  const rowRange = context.sheet.getRange(
     rowNumber,
-    context.indexes.State + 1
-  ).setValue(state);
-  context.sheet.getRange(
-    rowNumber,
-    context.indexes["Applied At"] + 1
-  ).setValue(state === RELAY_LEDGER_STATE_APPLIED_ ? new Date(nowMs) : "");
-  context.sheet.getRange(
-    rowNumber,
-    context.indexes["Result Code"] + 1
-  ).setValue(resultCode);
+    1,
+    1,
+    RELAY_LEDGER_HEADERS_.length
+  );
+  const rowValues = rowRange.getValues()[0];
+  rowValues[context.indexes.State] = state;
+  rowValues[context.indexes["Applied At"]] =
+    state === RELAY_LEDGER_STATE_APPLIED_ ? new Date(nowMs) : "";
+  rowValues[context.indexes["Result Code"]] = resultCode;
+  rowRange.setValues([rowValues]);
 }
 
 function getRelayContiguousAppliedSequence_(context, cleanerSubject, deviceId) {

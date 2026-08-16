@@ -143,9 +143,13 @@ function buildRestrictedRelayCurrentShift_(cleanerName) {
   };
 }
 
-function processRelaySessionValidation_(config, operation, payload) {
+function processRelaySessionValidation_(config, operation, payload, nowMs) {
   const cleaner = findRelaySessionCleaner_(config, payload.sessionToken);
-  if (!cleaner || !Number.isSafeInteger(cleaner.expiresAtMs)) {
+  if (
+    !cleaner ||
+    !Number.isSafeInteger(cleaner.expiresAtMs) ||
+    cleaner.expiresAtMs <= nowMs
+  ) {
     return buildRelayFailure_(operation, "authentication_failed", false);
   }
 
@@ -211,7 +215,29 @@ function reconcileRelayEvent_(event) {
   });
 }
 
+function relayLedgerIdentityMatches_(existing, payload) {
+  return existing.payloadDigest === payload.payloadDigest &&
+    existing.cleanerSubject === payload.cleanerSubject &&
+    existing.deviceId === payload.deviceId &&
+    existing.deviceSequence === payload.deviceSequence &&
+    existing.eventType === payload.eventType &&
+    existing.clientTimestamp === payload.submittedAtMs;
+}
+
 function processRelayEvent_(config, operation, payload, nowMs) {
+  const ledger = getRelayLedgerContext_(config);
+  if (!ledger) {
+    return buildRelayFailure_(operation, "internal_error", true);
+  }
+
+  const existing = findRelayLedgerEvent_(ledger, payload.eventId);
+  if (existing && existing.corrupt) {
+    return buildRelayFailure_(operation, "internal_error", true);
+  }
+  if (existing && !relayLedgerIdentityMatches_(existing, payload)) {
+    return buildRelayFailure_(operation, "event_conflict", false);
+  }
+
   const users = getRelayUserRecords_(config);
   if (!users) {
     return buildRelayFailure_(operation, "authentication_failed", false);
@@ -223,18 +249,6 @@ function processRelayEvent_(config, operation, payload, nowMs) {
     return buildRelayFailure_(operation, "authentication_failed", false);
   }
 
-  const ledger = getRelayLedgerContext_(config);
-  if (!ledger) {
-    return buildRelayFailure_(operation, "internal_error", true);
-  }
-
-  const existing = findRelayLedgerEvent_(ledger, payload.eventId);
-  if (existing && existing.corrupt) {
-    return buildRelayFailure_(operation, "internal_error", true);
-  }
-  if (existing && existing.payloadDigest !== payload.payloadDigest) {
-    return buildRelayFailure_(operation, "event_conflict", false);
-  }
   if (existing && existing.state === RELAY_LEDGER_STATE_APPLIED_) {
     return buildRelayResult_(operation, true, "already_applied", false, {
       eventId: payload.eventId,
@@ -337,7 +351,12 @@ function handleRelayWorkerRequest_(outerBody) {
       }
 
       if (operation === "validate_session") {
-        return processRelaySessionValidation_(config, operation, validated.payload);
+        return processRelaySessionValidation_(
+          config,
+          operation,
+          validated.payload,
+          nowMs
+        );
       }
       return processRelayEvent_(config, operation, validated.payload, nowMs);
     } finally {

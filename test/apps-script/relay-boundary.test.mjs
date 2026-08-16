@@ -76,6 +76,14 @@ class FakeRange {
   }
 
   setValues(values) {
+    this.sheet.writes.push({
+      type: "setValues",
+      row: this.row,
+      column: this.column,
+      rowCount: this.rowCount,
+      columnCount: this.columnCount,
+      values: values.map((row) => [...row]),
+    });
     values.forEach((row, rowOffset) => {
       row.forEach((value, columnOffset) => {
         this.sheet.setCell(this.row + rowOffset, this.column + columnOffset, value);
@@ -85,6 +93,12 @@ class FakeRange {
   }
 
   setValue(value) {
+    this.sheet.writes.push({
+      type: "setValue",
+      row: this.row,
+      column: this.column,
+      value,
+    });
     this.sheet.setCell(this.row, this.column, value);
     return this;
   }
@@ -93,6 +107,7 @@ class FakeRange {
 class FakeSheet {
   constructor(rows) {
     this.rows = rows.map((row) => [...row]);
+    this.writes = [];
   }
 
   getCell(row, column) {
@@ -118,6 +133,7 @@ class FakeSheet {
   }
 
   appendRow(row) {
+    this.writes.push({ type: "appendRow", values: [...row] });
     this.rows.push([...row]);
     return this;
   }
@@ -408,6 +424,12 @@ function parseOutput(output) {
   return JSON.parse(output.text);
 }
 
+function snapshotRows(rows) {
+  return rows.map((row) => row.map((value) =>
+    value instanceof Date ? value.getTime() : value,
+  ));
+}
+
 test("valid session validation returns only the approved identity and shift fields", () => {
   const harness = createHarness({
     openShifts: [["Cleaner One", {
@@ -519,6 +541,21 @@ test("invalid and inactive sessions are rejected", () => {
   assert.equal(createHarness({ usersRows: inactiveRows }).api.handle(sessionEnvelope()).result, "authentication_failed");
 });
 
+test("an explicitly expired session fails closed without sensitive data", () => {
+  const harness = createHarness();
+  harness.state.sessions.set(SESSION_TOKEN, {
+    pin: "1234",
+    name: "Cleaner One",
+    expires: Date.now() - 1,
+  });
+  const result = harness.api.handle(sessionEnvelope());
+  assert.equal(result.result, "authentication_failed");
+  assert.equal(result.ok, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(result, "data"), false);
+  assert.equal(JSON.stringify(result).includes(SESSION_TOKEN), false);
+  assert.equal(JSON.stringify(result).includes(USER_ONE_ID), false);
+});
+
 test("nonce replay is rejected and raw nonce material is not stored", () => {
   const harness = createHarness();
   const envelope = sessionEnvelope({ nonce: "nonce_replay_00000000000001" });
@@ -606,6 +643,64 @@ test("a reused event ID with a different digest is a permanent conflict", () => 
   assert.equal(harness.state.reconciliationCalls.length, 1);
 });
 
+test("existing event IDs reject every immutable identity mismatch without mutation", () => {
+  const usersRows = defaultUsersRows();
+  usersRows.push(["5678", "Cleaner Two", true, "cleaner", "LIMITED", "two@example.test", USER_TWO_ID]);
+  const cases = [
+    {
+      label: "cleaner subject",
+      change: (event, api, config) => ({
+        ...event,
+        cleanerSubject: api.buildSubject(config, USER_TWO_ID),
+      }),
+    },
+    {
+      label: "device ID",
+      change: (event) => ({ ...event, deviceId: "device_0000000002" }),
+    },
+    {
+      label: "device sequence",
+      change: (event) => ({ ...event, deviceSequence: 2 }),
+    },
+    {
+      label: "event type",
+      change: (event) => ({ ...event, eventType: "clock_out" }),
+    },
+    {
+      label: "client timestamp",
+      change: (event) => ({ ...event, submittedAtMs: event.submittedAtMs + 1 }),
+    },
+  ];
+
+  for (const conflictCase of cases) {
+    const harness = createHarness({ usersRows });
+    const config = harness.api.loadConfig();
+    const originalEvent = makeEvent(harness.api, config);
+    harness.state.ledgerSheet.rows.push([
+      originalEvent.eventId,
+      originalEvent.payloadDigest,
+      "APPLIED",
+      originalEvent.cleanerSubject,
+      originalEvent.deviceId,
+      originalEvent.deviceSequence,
+      originalEvent.eventType,
+      originalEvent.submittedAtMs,
+      new Date(1_786_824_001_000),
+      new Date(1_786_824_002_000),
+      "inserted_clock_in",
+    ]);
+    const beforeRows = snapshotRows(harness.state.ledgerSheet.rows);
+    const conflictingEvent = conflictCase.change(originalEvent, harness.api, config);
+    const result = harness.api.handle(makeEnvelope("submit_event", conflictingEvent));
+
+    assert.equal(result.result, "event_conflict", conflictCase.label);
+    assert.equal(result.retryable, false, conflictCase.label);
+    assert.equal(harness.state.reconciliationCalls.length, 0, conflictCase.label);
+    assert.deepEqual(snapshotRows(harness.state.ledgerSheet.rows), beforeRows, conflictCase.label);
+    assert.equal(harness.state.ledgerSheet.writes.length, 0, conflictCase.label);
+  }
+});
+
 test("PROCESSING events safely re-enter reconciliation", () => {
   const harness = createHarness();
   const config = harness.api.loadConfig();
@@ -627,6 +722,86 @@ test("PROCESSING events safely re-enter reconciliation", () => {
   assert.equal(result.result, "applied");
   assert.equal(harness.state.reconciliationCalls.length, 1);
   assert.equal(harness.state.ledgerSheet.rows[1][2], "APPLIED");
+});
+
+test("APPLIED finalization writes the full row once and preserves immutable metadata", () => {
+  const harness = createHarness();
+  const config = harness.api.loadConfig();
+  const event = makeEvent(harness.api, config);
+  const receivedAt = new Date(1_786_824_001_000);
+  harness.state.ledgerSheet.rows.push([
+    event.eventId,
+    event.payloadDigest,
+    "PROCESSING",
+    event.cleanerSubject,
+    event.deviceId,
+    event.deviceSequence,
+    event.eventType,
+    event.submittedAtMs,
+    receivedAt,
+    "",
+    "",
+  ]);
+  const immutableIndexes = [0, 1, 3, 4, 5, 6, 7, 8];
+  const beforeMetadata = immutableIndexes.map((index) => harness.state.ledgerSheet.rows[1][index]);
+
+  const result = harness.api.handle(makeEnvelope("submit_event", event));
+  const outcomeWrites = harness.state.ledgerSheet.writes.filter((write) =>
+    write.type === "setValues",
+  );
+  assert.equal(result.result, "applied");
+  assert.equal(outcomeWrites.length, 1);
+  assert.equal(outcomeWrites[0].column, 1);
+  assert.equal(outcomeWrites[0].columnCount, LEDGER_HEADERS.length);
+  assert.equal(harness.state.ledgerSheet.writes.some((write) => write.type === "setValue"), false);
+  assert.equal(harness.state.ledgerSheet.rows[1][2], "APPLIED");
+  assert.equal(harness.state.ledgerSheet.rows[1][9] instanceof Date, true);
+  assert.equal(harness.state.ledgerSheet.rows[1][10], "inserted_clock_in");
+  assert.deepEqual(
+    immutableIndexes.map((index) => harness.state.ledgerSheet.rows[1][index]),
+    beforeMetadata,
+  );
+});
+
+test("REJECTED finalization writes the full row once with blank Applied At", () => {
+  const harness = createHarness({
+    reconcile: () => { throw new Error("Cleaner One has no matching Test Property shift for this queued clock out entry."); },
+  });
+  const config = harness.api.loadConfig();
+  const event = makeEvent(harness.api, config, { eventType: "clock_out" });
+  const receivedAt = new Date(1_786_824_001_000);
+  harness.state.ledgerSheet.rows.push([
+    event.eventId,
+    event.payloadDigest,
+    "PROCESSING",
+    event.cleanerSubject,
+    event.deviceId,
+    event.deviceSequence,
+    event.eventType,
+    event.submittedAtMs,
+    receivedAt,
+    "",
+    "",
+  ]);
+  const immutableIndexes = [0, 1, 3, 4, 5, 6, 7, 8];
+  const beforeMetadata = immutableIndexes.map((index) => harness.state.ledgerSheet.rows[1][index]);
+
+  const result = harness.api.handle(makeEnvelope("submit_event", event));
+  const outcomeWrites = harness.state.ledgerSheet.writes.filter((write) =>
+    write.type === "setValues",
+  );
+  assert.equal(result.result, "business_rejected");
+  assert.equal(outcomeWrites.length, 1);
+  assert.equal(outcomeWrites[0].column, 1);
+  assert.equal(outcomeWrites[0].columnCount, LEDGER_HEADERS.length);
+  assert.equal(harness.state.ledgerSheet.writes.some((write) => write.type === "setValue"), false);
+  assert.equal(harness.state.ledgerSheet.rows[1][2], "REJECTED");
+  assert.equal(harness.state.ledgerSheet.rows[1][9], "");
+  assert.equal(harness.state.ledgerSheet.rows[1][10], "business_rejected");
+  assert.deepEqual(
+    immutableIndexes.map((index) => harness.state.ledgerSheet.rows[1][index]),
+    beforeMetadata,
+  );
 });
 
 test("lock contention is retryable and does not mutate the ledger", () => {

@@ -59,7 +59,9 @@ Result Code
 
 The ledger stores no property, note, display name, User ID, credential, signature, request body, raw error, or stack trace. The sheet must exist with exactly these headers; request handling never creates or repairs it.
 
-The ledger enters `PROCESSING` before existing queued reconciliation runs. Spreadsheet writes are flushed before `APPLIED` is recorded. A matching PROCESSING retry re-enters the unchanged reconciliation function, while a matching APPLIED retry returns success without another mutation. Session high-water is the highest contiguous APPLIED device sequence beginning at one, never a simple maximum across gaps.
+For an existing Event ID, payload digest, cleaner subject, device ID, device sequence, event type, and client timestamp must all match exactly. Any mismatch is a permanent conflict without reconciliation or ledger mutation. Property and note remain absent from the ledger and are bound through the payload digest.
+
+The ledger enters `PROCESSING` before existing queued reconciliation runs. Spreadsheet writes are flushed before `APPLIED` is recorded. Final State, Applied At, and Result Code are written together as one complete-row update. A matching PROCESSING retry re-enters the unchanged reconciliation function, while a matching APPLIED retry returns success without another mutation. Session high-water is the highest contiguous APPLIED device sequence beginning at one, never a simple maximum across gaps.
 
 ## Production Promotion
 
