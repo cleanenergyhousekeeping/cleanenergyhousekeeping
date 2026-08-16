@@ -76,11 +76,34 @@ const RETRYABLE_RESULTS: Readonly<Record<string, InfrastructureFailureCategory>>
   authentication_failed: "apps_script_authentication",
 };
 
+const SUCCESS_RESULTS = new Set(["applied", "already_applied"]);
+
+const APPLIED_RESULT_CODES = new Set([
+  "duplicate_clock_in",
+  "ignored_clock_in_already_open",
+  "inserted_clock_in",
+  "merged_add_note",
+  "merged_clock_out",
+]);
+
 const TERMINAL_RESULTS: Readonly<Record<string, TerminalFailureCategory>> = {
   event_conflict: "event_id_conflict",
   invalid_event: "invalid_payload",
   business_rejected: "permanent_business_rejection",
 };
+
+function hasExactSuccessData(value: unknown, eventId: string): boolean {
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    return false;
+  }
+  const data = value as Record<string, unknown>;
+  return (
+    Object.keys(data).sort().join("\n") === "eventId\nresultCode" &&
+    data.eventId === eventId &&
+    typeof data.resultCode === "string" &&
+    APPLIED_RESULT_CODES.has(data.resultCode)
+  );
+}
 
 function countCodePoints(value: string): number {
   return Array.from(value).length;
@@ -215,38 +238,49 @@ async function handleAppsOutcome(
   }
 
   const response = outcome.response;
-  const responseData =
-    response.data !== null &&
-    !Array.isArray(response.data) &&
-    typeof response.data === "object"
-      ? (response.data as Record<string, unknown>)
-      : null;
-  if (
-    response.ok &&
-    response.operation === "submit_event" &&
-    (response.result === "applied" || response.result === "already_applied") &&
-    responseData?.eventId === candidate.event_id
-  ) {
-    return (await markEventDelivered(db, candidate.event_id, leaseOwner, nowMs))
-      ? "delivered"
-      : "skipped";
-  }
-
-  const retryCategory = RETRYABLE_RESULTS[response.result];
-  if (retryCategory !== undefined) {
-    return scheduleFailure(
-      db,
-      candidate,
-      leaseOwner,
-      retryCategory,
-      nowMs,
-      undefined,
-      randomUnit,
-    );
-  }
-  const terminalCategory = TERMINAL_RESULTS[response.result];
-  if (terminalCategory !== undefined && response.operation === "submit_event") {
-    return markTerminal(db, candidate, leaseOwner, terminalCategory, nowMs);
+  if (SUCCESS_RESULTS.has(response.result)) {
+    if (
+      response.ok === true &&
+      response.operation === "submit_event" &&
+      response.retryable === false &&
+      hasExactSuccessData(response.data, candidate.event_id)
+    ) {
+      return (await markEventDelivered(db, candidate.event_id, leaseOwner, nowMs))
+        ? "delivered"
+        : "skipped";
+    }
+  } else {
+    const terminalCategory = TERMINAL_RESULTS[response.result];
+    if (terminalCategory !== undefined) {
+      if (
+        response.ok === false &&
+        response.operation === "submit_event" &&
+        response.retryable === false &&
+        response.data === undefined
+      ) {
+        return markTerminal(db, candidate, leaseOwner, terminalCategory, nowMs);
+      }
+    } else {
+      const retryCategory = RETRYABLE_RESULTS[response.result];
+      const expectedRetryable = response.result !== "authentication_failed";
+      if (
+        retryCategory !== undefined &&
+        response.ok === false &&
+        response.operation === "submit_event" &&
+        response.retryable === expectedRetryable &&
+        response.data === undefined
+      ) {
+        return scheduleFailure(
+          db,
+          candidate,
+          leaseOwner,
+          retryCategory,
+          nowMs,
+          undefined,
+          randomUnit,
+        );
+      }
+    }
   }
   return scheduleFailure(
     db,
@@ -356,8 +390,17 @@ async function processWithConcurrency(
 ): Promise<DeliveryOutcome[]> {
   const outcomes: DeliveryOutcome[] = [];
   for (let offset = 0; offset < candidates.length; offset += concurrency) {
+    const group = candidates.slice(offset, offset + concurrency);
     outcomes.push(
-      ...(await Promise.all(candidates.slice(offset, offset + concurrency).map(process))),
+      ...(await Promise.all(
+        group.map(async (candidate) => {
+          try {
+            return await process(candidate);
+          } catch (_) {
+            return "skipped";
+          }
+        }),
+      )),
     );
   }
   return outcomes;

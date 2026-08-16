@@ -1,10 +1,14 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import type { AppsCallOutcome } from "../src/apps-script-client";
+import type {
+  AppsCallOutcome,
+  AppsRelayResponse,
+} from "../src/apps-script-client";
 import type { RelayConfig } from "../src/config";
 import {
   ATTENTION_REQUIRED_AGE_MS,
+  DELIVERY_LEASE_MS,
   runDeliveryBatch,
 } from "../src/delivery-service";
 import {
@@ -119,16 +123,30 @@ function appsResult(
   ok = false,
   eventId?: string,
 ): AppsCallOutcome {
+  const terminal = [
+    "event_conflict",
+    "invalid_event",
+    "business_rejected",
+  ].includes(result);
+  const retryable = ok
+    ? false
+    : !terminal && result !== "authentication_failed";
   return {
     kind: "result",
     response: {
       ok,
       operation: "submit_event",
       result,
-      retryable: !ok,
-      ...(eventId === undefined ? {} : { data: { eventId } }),
+      retryable,
+      ...(eventId === undefined
+        ? {}
+        : { data: { eventId, resultCode: "inserted_clock_in" } }),
     },
   };
+}
+
+function resultOutcome(response: AppsRelayResponse): AppsCallOutcome {
+  return { kind: "result", response };
 }
 
 describe("scheduled delivery bridge", () => {
@@ -258,6 +276,48 @@ describe("scheduled delivery bridge", () => {
     expect((await getEvent(env.DB, delivered.eventId)).state).toBe("delivered");
   });
 
+  it("contains an unexpected lane exception and continues later groups", async () => {
+    const config = await makeConfig();
+    const fixtures = await Promise.all(
+      Array.from({ length: 7 }, (_, index) =>
+        createFixture(`exception_${index}`, config),
+      ),
+    );
+    let shouldThrow = true;
+    const callApps = async (
+      _config: RelayConfig,
+      _operation: string,
+      payload: Record<string, unknown>,
+    ) => {
+      if (shouldThrow && payload.eventId === fixtures[0].eventId) {
+        throw new Error("synthetic sensitive upstream exception");
+      }
+      return appsResult("applied", true, String(payload.eventId));
+    };
+
+    const first = await runDeliveryBatch(env.DB, config, {
+      now: () => NOW_MS,
+      callApps: callApps as never,
+    });
+
+    expect(first).toMatchObject({ selected: 7, delivered: 6, skipped: 1 });
+    expect(await getEvent(env.DB, fixtures[0].eventId)).toMatchObject({
+      state: "delivering",
+      lease_expires_at_ms: NOW_MS + DELIVERY_LEASE_MS,
+    });
+    for (const fixture of fixtures.slice(1)) {
+      expect((await getEvent(env.DB, fixture.eventId)).state).toBe("delivered");
+    }
+
+    shouldThrow = false;
+    const recovered = await runDeliveryBatch(env.DB, config, {
+      now: () => NOW_MS + DELIVERY_LEASE_MS + 1,
+      callApps: callApps as never,
+    });
+    expect(recovered.delivered).toBeGreaterThanOrEqual(1);
+    expect((await getEvent(env.DB, fixtures[0].eventId)).state).toBe("delivered");
+  });
+
   it("blocks a sequence gap without delivering a later event", async () => {
     const config = await makeConfig();
     const fixture = await createFixture("gap", config, { sequence: 2 });
@@ -336,6 +396,153 @@ describe("scheduled delivery bridge", () => {
         lease_owner: null,
       });
     }
+  });
+
+  it.each([
+    {
+      label: "success marked retryable",
+      makeResponse: (eventId: string): AppsRelayResponse => ({
+        ok: true,
+        operation: "submit_event",
+        result: "applied",
+        retryable: true,
+        data: { eventId, resultCode: "inserted_clock_in" },
+      }),
+    },
+    {
+      label: "success marked failed",
+      makeResponse: (eventId: string): AppsRelayResponse => ({
+        ok: false,
+        operation: "submit_event",
+        result: "already_applied",
+        retryable: false,
+        data: { eventId, resultCode: "inserted_clock_in" },
+      }),
+    },
+    {
+      label: "success missing required result data",
+      makeResponse: (): AppsRelayResponse => ({
+        ok: true,
+        operation: "submit_event",
+        result: "applied",
+        retryable: false,
+      }),
+    },
+    {
+      label: "success with unexpected result data",
+      makeResponse: (eventId: string): AppsRelayResponse => ({
+        ok: true,
+        operation: "submit_event",
+        result: "applied",
+        retryable: false,
+        data: {
+          eventId,
+          resultCode: "inserted_clock_in",
+          unexpected: true,
+        },
+      }),
+    },
+    {
+      label: "terminal result marked successful",
+      makeResponse: (): AppsRelayResponse => ({
+        ok: true,
+        operation: "submit_event",
+        result: "event_conflict",
+        retryable: false,
+      }),
+    },
+    {
+      label: "terminal result marked retryable",
+      makeResponse: (): AppsRelayResponse => ({
+        ok: false,
+        operation: "submit_event",
+        result: "invalid_event",
+        retryable: true,
+      }),
+    },
+    {
+      label: "terminal result with wrong operation",
+      makeResponse: (): AppsRelayResponse => ({
+        ok: false,
+        operation: "validate_session",
+        result: "business_rejected",
+        retryable: false,
+      }),
+    },
+    {
+      label: "retryable result marked permanent",
+      makeResponse: (): AppsRelayResponse => ({
+        ok: false,
+        operation: "submit_event",
+        result: "lock_busy",
+        retryable: false,
+      }),
+    },
+    {
+      label: "retryable result marked successful",
+      makeResponse: (): AppsRelayResponse => ({
+        ok: true,
+        operation: "submit_event",
+        result: "stale_request",
+        retryable: true,
+      }),
+    },
+    {
+      label: "authentication failure marked retryable",
+      makeResponse: (): AppsRelayResponse => ({
+        ok: false,
+        operation: "submit_event",
+        result: "authentication_failed",
+        retryable: true,
+      }),
+    },
+    {
+      label: "retryable result with unexpected data",
+      makeResponse: (): AppsRelayResponse => ({
+        ok: false,
+        operation: "submit_event",
+        result: "temporary_google_failure",
+        retryable: true,
+        data: {},
+      }),
+    },
+    {
+      label: "retryable result with wrong operation",
+      makeResponse: (): AppsRelayResponse => ({
+        ok: false,
+        operation: "validate_session",
+        result: "internal_error",
+        retryable: true,
+      }),
+    },
+  ])("treats contradictory Apps response: $label as a protocol error", async ({
+    label,
+    makeResponse,
+  }) => {
+    const config = await makeConfig();
+    const fixture = await createFixture(
+      `contradictory_${label.replaceAll(" ", "_")}`,
+      config,
+    );
+    const summary = await runDeliveryBatch(env.DB, config, {
+      now: () => NOW_MS,
+      randomUnit: () => 0,
+      callApps: (async () => resultOutcome(makeResponse(fixture.eventId))) as never,
+    });
+
+    expect(summary).toMatchObject({
+      selected: 1,
+      delivered: 0,
+      retryable: 1,
+      terminal: 0,
+    });
+    expect(await getEvent(env.DB, fixture.eventId)).toMatchObject({
+      state: "retryable_failure",
+      failure_category: "apps_script_protocol_error",
+      delivered_at_ms: null,
+      terminal_at_ms: null,
+      lease_owner: null,
+    });
   });
 
   it("keeps every retryable Apps result nonterminal", async () => {
