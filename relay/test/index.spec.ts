@@ -139,6 +139,60 @@ describe("OPTIONS /health", () => {
   });
 });
 
+describe("session route preflights", () => {
+  it("allows only the approved enrollment headers and method", async () => {
+    const response = await workerFetch("/v1/relay-sessions/enroll", {
+      method: "OPTIONS",
+      headers: {
+        Origin: ALLOWED_ORIGIN,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "Content-Type",
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Access-Control-Allow-Methods")).toBe("POST");
+    expect(response.headers.get("Access-Control-Allow-Headers")).toBe(
+      "Content-Type",
+    );
+    expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+  });
+
+  it("allows bearer authorization only on renewal", async () => {
+    const response = await workerFetch("/v1/relay-sessions/renew", {
+      method: "OPTIONS",
+      headers: {
+        Origin: ALLOWED_ORIGIN,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "Authorization, Content-Type",
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Access-Control-Allow-Headers")).toBe(
+      "Content-Type, Authorization",
+    );
+  });
+
+  it("rejects unapproved enrollment headers", async () => {
+    const response = await workerFetch("/v1/relay-sessions/enroll", {
+      method: "OPTIONS",
+      headers: {
+        Origin: ALLOWED_ORIGIN,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "Authorization",
+      },
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "header_not_allowed",
+    });
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+});
+
 describe("routing errors", () => {
   it("returns JSON for GET on an unknown route", async () => {
     const response = await workerFetch("/unknown");

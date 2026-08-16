@@ -28,7 +28,11 @@ export function unauthorizedOriginResponse(): Response {
   );
 }
 
-export function preflightResponse(request: Request): Response {
+export function preflightResponse(
+  request: Request,
+  allowedMethods: readonly string[] = ["GET"],
+  allowedHeaders: readonly string[] = [],
+): Response {
   const origin = request.headers.get("Origin");
   const requestedMethod = request.headers.get("Access-Control-Request-Method");
   const headers = createCorsHeaders(origin);
@@ -37,8 +41,8 @@ export function preflightResponse(request: Request): Response {
     return unauthorizedOriginResponse();
   }
 
-  if (requestedMethod !== "GET") {
-    headers.set("Allow", "GET, OPTIONS");
+  if (requestedMethod === null || !allowedMethods.includes(requestedMethod)) {
+    headers.set("Allow", `${allowedMethods.join(", ")}, OPTIONS`);
     return jsonResponse(
       {
         ok: false,
@@ -49,7 +53,23 @@ export function preflightResponse(request: Request): Response {
     );
   }
 
-  headers.set("Access-Control-Allow-Methods", "GET");
+  const requestedHeaders = (request.headers.get("Access-Control-Request-Headers") ?? "")
+    .split(",")
+    .map((header) => header.trim().toLowerCase())
+    .filter(Boolean);
+  const normalizedAllowedHeaders = allowedHeaders.map((header) => header.toLowerCase());
+  if (requestedHeaders.some((header) => !normalizedAllowedHeaders.includes(header))) {
+    return jsonResponse(
+      { ok: false, error: "header_not_allowed" },
+      403,
+      headers,
+    );
+  }
+
+  headers.set("Access-Control-Allow-Methods", allowedMethods.join(", "));
+  if (allowedHeaders.length > 0) {
+    headers.set("Access-Control-Allow-Headers", allowedHeaders.join(", "));
+  }
   headers.set("Access-Control-Max-Age", "86400");
   headers.set("Cache-Control", "no-store");
 

@@ -9,6 +9,23 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "CEH_RELAY_ENVIRONMENT": "test",
+    "CEH_RELAY_APPS_ACTIVE_KEY_ID": "test-v1",
+    "CEH_RELAY_PAYLOAD_ACTIVE_KEY_VERSION": "1"
+  },
+  "secrets": {
+    "required": [
+      "CEH_RELAY_APPS_URL",
+      "CEH_RELAY_APPS_HMAC_KEYS_JSON",
+      "CEH_RELAY_TOKEN_HMAC_KEY",
+      "CEH_RELAY_EVENT_DIGEST_HMAC_KEY",
+      "CEH_RELAY_PAYLOAD_ENCRYPTION_KEYS_JSON"
+    ]
+  },
   "d1_databases": [
     {
       "binding": "DB",

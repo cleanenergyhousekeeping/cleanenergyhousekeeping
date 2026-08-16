@@ -1,11 +1,13 @@
 import type {
   EncryptedValue,
+  DeliveryCandidateRow,
   EventInsertResult,
   EventState,
   EventType,
   InfrastructureFailureCategory,
   RelayEventRow,
   RelayLaneRow,
+  SequenceGapCandidateRow,
   TerminalFailureCategory,
 } from "./types";
 
@@ -183,6 +185,74 @@ export async function markEventPending(
     .bind(nowMs, eventId)
     .run();
   return (result.meta.changes ?? 0) === 1;
+}
+
+export async function listDueLaneHeads(
+  db: D1Database,
+  nowMs: number,
+  limit: number,
+): Promise<DeliveryCandidateRow[]> {
+  const boundedLimit = Math.max(1, Math.min(25, Math.trunc(limit)));
+  const result = await db
+    .prepare(
+      `SELECT events.*, lanes.cleaner_subject, lanes.device_id
+       FROM relay_lanes AS lanes
+       JOIN relay_events AS events
+         ON events.lane_id = lanes.lane_id
+        AND events.device_sequence = lanes.next_delivery_sequence
+       WHERE lanes.status = 'active'
+         AND events.next_attempt_at_ms <= ?
+         AND (
+           events.state IN (
+             'accepted', 'pending', 'retryable_failure', 'attention_required'
+           )
+           OR (
+             events.state = 'delivering'
+             AND events.lease_expires_at_ms <= ?
+           )
+         )
+       ORDER BY events.next_attempt_at_ms ASC,
+                events.accepted_at_ms ASC,
+                events.event_id ASC
+       LIMIT ?`,
+    )
+    .bind(nowMs, nowMs, boundedLimit)
+    .all<DeliveryCandidateRow>();
+  return result.results;
+}
+
+export async function listActiveSequenceGaps(
+  db: D1Database,
+  limit: number,
+): Promise<SequenceGapCandidateRow[]> {
+  const boundedLimit = Math.max(1, Math.min(25, Math.trunc(limit)));
+  const result = await db
+    .prepare(
+      `SELECT lanes.lane_id,
+              lanes.next_delivery_sequence AS missing_from_sequence,
+              COALESCE(
+                (
+                  SELECT MIN(later.device_sequence) - 1
+                  FROM relay_events AS later
+                  WHERE later.lane_id = lanes.lane_id
+                    AND later.device_sequence > lanes.next_delivery_sequence
+                ),
+                lanes.highest_accepted_sequence
+              ) AS missing_to_sequence
+       FROM relay_lanes AS lanes
+       WHERE lanes.status = 'active'
+         AND lanes.highest_accepted_sequence >= lanes.next_delivery_sequence
+         AND NOT EXISTS (
+           SELECT 1 FROM relay_events AS expected
+           WHERE expected.lane_id = lanes.lane_id
+             AND expected.device_sequence = lanes.next_delivery_sequence
+         )
+       ORDER BY lanes.updated_at_ms ASC, lanes.lane_id ASC
+       LIMIT ?`,
+    )
+    .bind(boundedLimit)
+    .all<SequenceGapCandidateRow>();
+  return result.results;
 }
 
 export async function claimEventLease(

@@ -1,11 +1,11 @@
-import type { EncryptedValue } from "./persistence/types";
+import type { EncryptedValue, RelayEnvironment } from "./persistence/types";
 
 /* begin[relay_crypto_utilities] */
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-const ENCRYPTION_CONTEXT_PREFIX = "ceh-relay:test";
+const RELAY_CONTEXT_PREFIX = "ceh-relay";
 
-function bytesToBase64Url(bytes: Uint8Array): string {
+export function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
@@ -17,7 +17,10 @@ function bytesToBase64Url(bytes: Uint8Array): string {
     .replace(/=+$/u, "");
 }
 
-function base64UrlToBytes(value: string): Uint8Array {
+export function base64UrlToBytes(value: string): Uint8Array {
+  if (!/^[A-Za-z0-9_-]+$/u.test(value)) {
+    throw new TypeError("Value must be unpadded base64url");
+  }
   const padded = value.replaceAll("-", "+").replaceAll("_", "/").padEnd(
     Math.ceil(value.length / 4) * 4,
     "=",
@@ -68,17 +71,30 @@ function encodeAuthenticatedContext(authenticatedContext: string): Uint8Array {
   return textEncoder.encode(authenticatedContext);
 }
 
-export function eventEncryptionContext(eventId: string): string {
-  const contextEventId = requireContextComponent(eventId, "Event ID");
-  return `${ENCRYPTION_CONTEXT_PREFIX}:event:${contextEventId}`;
+function requireEnvironment(environment: RelayEnvironment): RelayEnvironment {
+  if (environment !== "test" && environment !== "production") {
+    throw new TypeError("Relay environment is invalid");
+  }
+  return environment;
 }
 
-export function stateEncryptionContext(cleanerSubject: string): string {
+export function eventEncryptionContext(
+  environment: RelayEnvironment,
+  eventId: string,
+): string {
+  const contextEventId = requireContextComponent(eventId, "Event ID");
+  return `${RELAY_CONTEXT_PREFIX}:${requireEnvironment(environment)}:event:${contextEventId}`;
+}
+
+export function stateEncryptionContext(
+  environment: RelayEnvironment,
+  cleanerSubject: string,
+): string {
   const contextCleanerSubject = requireContextComponent(
     cleanerSubject,
     "Cleaner subject",
   );
-  return `${ENCRYPTION_CONTEXT_PREFIX}:state:${contextCleanerSubject}`;
+  return `${RELAY_CONTEXT_PREFIX}:${requireEnvironment(environment)}:state:${contextCleanerSubject}`;
 }
 
 export async function importHmacKey(secret: string): Promise<CryptoKey> {
@@ -91,23 +107,72 @@ export async function importHmacKey(secret: string): Promise<CryptoKey> {
   );
 }
 
+export async function importBase64UrlHmacKey(
+  encodedKey: string,
+): Promise<CryptoKey> {
+  const rawKey = base64UrlToBytes(encodedKey);
+  if (rawKey.byteLength !== 32) {
+    throw new TypeError("HMAC keys must be 256 bits");
+  }
+  return crypto.subtle.importKey(
+    "raw",
+    rawKey,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"],
+  );
+}
+
+export async function signBytes(
+  value: Uint8Array,
+  hmacKey: CryptoKey,
+): Promise<string> {
+  const signature = await crypto.subtle.sign("HMAC", hmacKey, value);
+  return bytesToBase64Url(new Uint8Array(signature));
+}
+
 export async function hashRelayToken(
   relayToken: string,
   hmacKey: CryptoKey,
+  environment: RelayEnvironment,
 ): Promise<string> {
-  const signature = await crypto.subtle.sign(
-    "HMAC",
+  return signBytes(
+    textEncoder.encode(
+      ["ceh-relay-token", "v1", requireEnvironment(environment), relayToken].join(
+        "\n",
+      ),
+    ),
     hmacKey,
-    textEncoder.encode(relayToken),
   );
-  return bytesToBase64Url(new Uint8Array(signature));
 }
 
 export async function digestCanonicalEvent(
   event: Record<string, unknown>,
   hmacKey: CryptoKey,
+  environment: RelayEnvironment,
 ): Promise<string> {
-  return hashRelayToken(canonicalize(event), hmacKey);
+  return signBytes(
+    textEncoder.encode(
+      [
+        "ceh-relay-event-digest",
+        "v1",
+        requireEnvironment(environment),
+        canonicalize(event),
+      ].join("\n"),
+    ),
+    hmacKey,
+  );
+}
+
+export function stringsEqualConstantTime(left: string, right: string): boolean {
+  const leftBytes = textEncoder.encode(left);
+  const rightBytes = textEncoder.encode(right);
+  let difference = leftBytes.byteLength ^ rightBytes.byteLength;
+  const length = Math.max(leftBytes.byteLength, rightBytes.byteLength);
+  for (let index = 0; index < length; index += 1) {
+    difference |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0);
+  }
+  return difference === 0;
 }
 
 export async function importEncryptionKey(rawKey: Uint8Array): Promise<CryptoKey> {

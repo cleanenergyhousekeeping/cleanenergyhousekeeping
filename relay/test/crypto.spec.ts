@@ -19,19 +19,20 @@ describe("relay cryptography", () => {
     const key = await importHmacKey("synthetic-test-hmac-material");
     const token = generateSecureId("token");
 
-    const firstHash = await hashRelayToken(token, key);
-    const secondHash = await hashRelayToken(token, key);
+    const firstHash = await hashRelayToken(token, key, "test");
+    const secondHash = await hashRelayToken(token, key, "test");
 
     expect(firstHash).toBe(secondHash);
     expect(firstHash).not.toContain(token);
-    expect(await hashRelayToken(`${token}-different`, key)).not.toBe(firstHash);
+    expect(await hashRelayToken(`${token}-different`, key, "test")).not.toBe(firstHash);
+    expect(await hashRelayToken(token, key, "production")).not.toBe(firstHash);
   });
 
   it("round trips AES-GCM data with the correct event context", async () => {
     const key = await importEncryptionKey(
       crypto.getRandomValues(new Uint8Array(32)),
     );
-    const context = eventEncryptionContext("event_correct-context");
+    const context = eventEncryptionContext("test", "event_correct-context");
     const encrypted = await encryptJson(
       { property: "synthetic-property", note: "synthetic-note" },
       key,
@@ -64,21 +65,21 @@ describe("relay cryptography", () => {
       { eventType: "clock_in" },
       key,
       1,
-      eventEncryptionContext("event_original"),
+      eventEncryptionContext("test", "event_original"),
     );
 
     await expect(
       decryptJson(
         encrypted,
         new Map([[1, key]]),
-        eventEncryptionContext("event_different"),
+        eventEncryptionContext("test", "event_different"),
       ),
     ).rejects.toThrow();
     await expect(
       decryptJson(
         encrypted,
         new Map([[1, key]]),
-        stateEncryptionContext("cleaner_subject_original"),
+        stateEncryptionContext("test", "cleaner_subject_original"),
       ),
     ).rejects.toThrow();
   });
@@ -87,7 +88,7 @@ describe("relay cryptography", () => {
     const key = await importEncryptionKey(
       crypto.getRandomValues(new Uint8Array(32)),
     );
-    const context = stateEncryptionContext("cleaner_subject_original");
+    const context = stateEncryptionContext("test", "cleaner_subject_original");
     const encrypted = await encryptJson(
       { currentShift: null },
       key,
@@ -102,7 +103,7 @@ describe("relay cryptography", () => {
       decryptJson(
         encrypted,
         new Map([[2, key]]),
-        stateEncryptionContext("cleaner_subject_different"),
+        stateEncryptionContext("test", "cleaner_subject_different"),
       ),
     ).rejects.toThrow();
   });
@@ -120,8 +121,11 @@ describe("relay cryptography", () => {
       eventType: "clock_in",
     };
 
-    expect(await digestCanonicalEvent(left, key)).toBe(
-      await digestCanonicalEvent(right, key),
+    expect(await digestCanonicalEvent(left, key, "test")).toBe(
+      await digestCanonicalEvent(right, key, "test"),
+    );
+    expect(await digestCanonicalEvent(left, key, "production")).not.toBe(
+      await digestCanonicalEvent(right, key, "test"),
     );
   });
 
