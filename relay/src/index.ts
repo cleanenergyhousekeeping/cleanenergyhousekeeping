@@ -9,6 +9,12 @@ import { jsonResponse } from "./responses";
 import { loadRelayConfig } from "./config";
 import { DELIVERY_CRON, runDeliveryBatch } from "./delivery-service";
 import {
+  acceptRelayEvent,
+  parseRelayEventRequest,
+  type EventAcceptanceResult,
+} from "./event-acceptance-service";
+import { parseRelayBearerToken } from "./request-auth";
+import {
   enrollRelaySession,
   renewRelaySession,
   type SessionRequestInput,
@@ -19,6 +25,7 @@ import {
 const HEALTH_PATH = "/health";
 const ENROLL_PATH = "/v1/relay-sessions/enroll";
 const RENEW_PATH = "/v1/relay-sessions/renew";
+const EVENT_PATH = "/v1/relay-events";
 const MAX_SESSION_REQUEST_BYTES = 4_096;
 
 function notFoundResponse(headers: HeadersInit): Response {
@@ -54,12 +61,6 @@ function sessionStatus(result: SessionServiceResult): number {
   if (result.error === "invalid_request") return 400;
   if (result.error === "authentication_failed") return 401;
   return 503;
-}
-
-function parseBearerToken(request: Request): string {
-  const authorization = request.headers.get("Authorization") ?? "";
-  const match = /^Bearer ([A-Za-z0-9_-]+)$/u.exec(authorization);
-  return match?.[1] ?? "";
 }
 
 async function parseSessionRequest(request: Request): Promise<SessionRequestInput | null> {
@@ -128,7 +129,7 @@ async function sessionResponse(
       : await renewRelaySession(
           env.DB,
           config,
-          parseBearerToken(request),
+          parseRelayBearerToken(request),
           input,
         );
   return jsonResponse(
@@ -136,6 +137,53 @@ async function sessionResponse(
       ? { ok: true, environment: config.environment, session: result.data }
       : result,
     path === ENROLL_PATH && result.ok ? 201 : sessionStatus(result),
+    corsHeaders,
+  );
+}
+
+function eventStatus(result: EventAcceptanceResult): number {
+  if (result.ok) return result.outcome === "inserted" ? 202 : 200;
+  if (result.error === "invalid_request") return 400;
+  if (result.error === "authentication_failed") return 401;
+  if (result.error === "event_conflict") return 409;
+  return 503;
+}
+
+async function eventResponse(
+  request: Request,
+  env: Env,
+  corsHeaders: Headers,
+): Promise<Response> {
+  const input = await parseRelayEventRequest(request);
+  if (input === null) {
+    return jsonResponse(
+      { ok: false, error: "invalid_request", retryable: false },
+      400,
+      corsHeaders,
+    );
+  }
+
+  let config;
+  try {
+    config = await loadRelayConfig(env);
+  } catch (_) {
+    return jsonResponse(
+      { ok: false, error: "temporarily_unavailable", retryable: true },
+      503,
+      corsHeaders,
+    );
+  }
+  const result = await acceptRelayEvent(
+    env.DB,
+    config,
+    parseRelayBearerToken(request),
+    input,
+  );
+  return jsonResponse(
+    result.ok
+      ? { ok: true, eventId: result.eventId, status: "accepted" }
+      : result,
+    eventStatus(result),
     corsHeaders,
   );
 }
@@ -153,7 +201,8 @@ export default {
 
     const isHealth = url.pathname === HEALTH_PATH;
     const isSession = url.pathname === ENROLL_PATH || url.pathname === RENEW_PATH;
-    if (!isHealth && !isSession) {
+    const isEvent = url.pathname === EVENT_PATH;
+    if (!isHealth && !isSession && !isEvent) {
       return notFoundResponse(corsHeaders);
     }
 
@@ -163,7 +212,7 @@ export default {
         : preflightResponse(
             request,
             ["POST"],
-            url.pathname === RENEW_PATH
+            url.pathname === RENEW_PATH || isEvent
               ? ["Content-Type", "Authorization"]
               : ["Content-Type"],
           );
@@ -178,6 +227,9 @@ export default {
 
     if (request.method !== "POST") {
       return methodNotAllowedResponse(corsHeaders, ["POST"]);
+    }
+    if (isEvent) {
+      return eventResponse(request, env, corsHeaders);
     }
     return sessionResponse(request, env, url.pathname, corsHeaders);
   },

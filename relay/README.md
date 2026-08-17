@@ -21,7 +21,7 @@ npm run dev
 
 ## Persistence foundation
 
-Versioned schema changes live in `migrations/` and use Wrangler's D1 migration ledger. The persistence modules under `src/persistence/` are not connected to public routes in this foundation phase.
+Versioned schema changes live in `migrations/` and use Wrangler's D1 migration ledger. Public routes reach D1 only through the focused session and event service layers; persistence modules remain independent of HTTP parsing and response formatting.
 
 The schema stores relay tokens only as HMAC hashes. Event payloads and state snapshots must be AES-GCM encrypted before insertion; property names, cleaner display names, and notes are never stored in plaintext. No Worker secrets belong in migration files, configuration, source, or tests.
 
@@ -30,6 +30,10 @@ AES-GCM additional authenticated data binds each ciphertext to its intended envi
 ## Apps Script delivery bridge
 
 The Worker exposes `POST /v1/relay-sessions/enroll` and `POST /v1/relay-sessions/renew`. Both validate the supplied Apps Script session through the signed `validate_session` boundary before changing D1. Renewal also requires the current bearer relay token and matching device. Relay tokens last seven days; successful rotation keeps the prior token valid for ten minutes.
+
+Authenticated phones submit events with `POST /v1/relay-events`, `Content-Type: application/json`, and `Authorization: Bearer <relay token>`. The request body contains exactly `eventId`, `deviceSequence`, `eventType`, `submittedAtMs`, `property`, and `note`. Cleaner subject and device identity always come from the active relay session and cannot be supplied by the client. Unknown fields, malformed values, notes over 1,000 Unicode code points, and properties over 500 characters are rejected.
+
+An inserted event returns HTTP 202 and an identical replay returns HTTP 200; both use the stable body `{ "ok": true, "eventId": "<client event ID>", "status": "accepted" }`. Conflicts return sanitized HTTP 409 responses. The acknowledgment is sent only after D1 classifies the insert. Acceptance computes an environment-bound digest and stores the complete canonical event as event-bound AES-GCM ciphertext; it never calls Apps Script directly.
 
 Accepted clock events are delivered by the five-minute Cron Trigger, never inline with phone acceptance. Each run fairly selects at most 25 due lane heads, processes no more than five independent lanes concurrently, and uses conditional two-minute leases. Delivery is strictly contiguous per cleaner/device. Missing sequences block the lane and are never skipped automatically.
 
