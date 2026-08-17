@@ -112,6 +112,7 @@ function validateEventInput(value: unknown): RelayEventRequestInput | null {
     Number(input.submittedAtMs) < 1 ||
     typeof input.property !== "string" ||
     input.property.length < 1 ||
+    input.property.trim().length < 1 ||
     input.property.length > EVENT_PROPERTY_MAX_CHARACTERS ||
     typeof input.note !== "string" ||
     Array.from(input.note).length > PROPOSED_NOTE_MAX_CHARACTERS ||

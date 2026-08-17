@@ -340,6 +340,48 @@ describe("POST /v1/relay-events", () => {
     ).toBe(eventCountBefore);
   });
 
+  it("returns sanitized HTTP 400 for an authenticated whitespace-only property", async () => {
+    const testEnv = await makeRouterEnv();
+    const config = await loadRelayConfig(testEnv);
+    const token = generateSecureId("relay", 32);
+    const nowMs = Date.now();
+    await createSession(env.DB, {
+      sessionId: generateSecureId("session"),
+      cleanerSubject: `cehusr_v1_${"W".repeat(43)}`,
+      deviceId: "device_whitespace_123",
+      tokenHash: await hashRelayToken(token, config.relayTokenHmacKey, "test"),
+      nowMs,
+    });
+    const laneCountBefore = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM relay_lanes",
+    ).first<number>("count");
+    const eventCountBefore = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM relay_events",
+    ).first<number>("count");
+
+    const response = await directWorkerFetch(
+      eventRequest(token, { ...EVENT_BODY, property: " " }),
+      testEnv,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "invalid_request",
+      retryable: false,
+    });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM relay_lanes").first<number>(
+        "count",
+      ),
+    ).toBe(laneCountBefore);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM relay_events").first<number>(
+        "count",
+      ),
+    ).toBe(eventCountBefore);
+  });
+
   it("permits only the approved origin, method, and request headers", async () => {
     const preflight = await workerFetch("/v1/relay-events", {
       method: "OPTIONS",

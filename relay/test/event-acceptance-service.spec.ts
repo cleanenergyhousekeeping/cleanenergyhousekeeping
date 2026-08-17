@@ -230,6 +230,22 @@ describe("authenticated event acceptance", () => {
     expect(await relayCounts()).toEqual({ lanes: 0, events: 0 });
   });
 
+  it("rejects a whitespace-only property without creating a lane or event", async () => {
+    const config = await makeConfig();
+    const { token } = await createAuthorizedSession(config);
+
+    expect(
+      await acceptRelayEvent(
+        env.DB,
+        config,
+        token,
+        validInput("whitespace-property", { property: " " }),
+        { nowMs: NOW_MS },
+      ),
+    ).toEqual({ ok: false, error: "invalid_request", retryable: false });
+    expect(await relayCounts()).toEqual({ lanes: 0, events: 0 });
+  });
+
   it("fails closed for malformed, unknown, revoked, and expired bearer tokens", async () => {
     const config = await makeConfig();
     const revoked = await createAuthorizedSession(config);
