@@ -82,6 +82,7 @@ const relayDeviceIdInput = document.getElementById("relayDeviceIdInput");
 const relayPairingConfirm = document.getElementById("relayPairingConfirm");
 const relayPairingBtn = document.getElementById("relayPairingBtn");
 const relayPairingStatus = document.getElementById("relayPairingStatus");
+const relayPairedIndicator = document.getElementById("relayPairedIndicator");
 /* end[clockin_shell_dom_refs] */
 
 
@@ -97,6 +98,7 @@ let shellSyncTimer = null;
 let shellLastForegroundRefreshMs = 0;
 let offlineReadyStatusOverride = "";
 let relayReachabilityProbe = null;
+let relayReachabilityState = "unknown";
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -898,26 +900,61 @@ function saveRelayState_(state) {
 }
 
 function updateRelayQueueCount_() {
-  if (!offlineQueueCount) return;
+  renderRelayStatus_();
+}
+
+function setRelayReachabilityState_(state) {
+  relayReachabilityState = state;
+  renderRelayStatus_();
+}
+
+function renderRelayStatus_() {
+  if (!TEST_RELAY_FEATURE_ENABLED) return;
   const state = getRelayState_();
   const queue = state && Array.isArray(state.queue) ? state.queue : [];
-  if (!queue.length) {
-    offlineQueueCount.textContent = "";
-    offlineQueueCount.classList.add("hidden");
-    return;
+  const pending = queue.filter(function (event) {
+    return event.status !== "accepted";
+  });
+  const hasTerminal = pending.some(function (event) {
+    return event.status === "terminal";
+  });
+  const hasRetryable = pending.some(function (event) {
+    return event.status === "retryable";
+  });
+  const hasAccepted = queue.some(function (event) {
+    return event.status === "accepted";
+  });
+  let message = "";
+
+  if (hasTerminal) {
+    message = "TEST relay requires attention. Saved events need review.";
+  } else if (pending.length && !navigator.onLine) {
+    message = "Phone offline. Saved locally; waiting to contact Cloudflare.";
+  } else if (pending.length && relayReachabilityState === "unreachable") {
+    message = "Waiting for Cloudflare. Saved locally until the TEST relay is reachable.";
+  } else if (pending.length) {
+    message = relayReachabilityState === "reachable" && hasRetryable
+      ? "Saved locally. Retrying the TEST relay session."
+      : relayReachabilityState === "reachable"
+      ? "Saved locally. Sending to the TEST relay."
+      : "Saved locally. Checking the TEST relay before sending.";
+  } else if (hasAccepted) {
+    message = "Accepted by TEST relay; no longer pending on this phone.";
   }
-  const counts = queue.reduce(function (result, event) {
-    const status = String((event && event.status) || "queued");
-    result[status] = (result[status] || 0) + 1;
-    return result;
-  }, {});
-  const parts = [];
-  if (counts.queued) parts.push(counts.queued + " queued");
-  if (counts.retryable) parts.push(counts.retryable + " retrying");
-  if (counts.accepted) parts.push(counts.accepted + " relay accepted");
-  if (counts.terminal) parts.push(counts.terminal + " needs attention");
-  offlineQueueCount.textContent = "TEST relay: " + parts.join(" • ");
-  offlineQueueCount.classList.remove("hidden");
+
+  if (offlineQueueCount) {
+    if (message) {
+      offlineQueueCount.textContent = message;
+      offlineQueueCount.classList.remove("hidden");
+    } else {
+      offlineQueueCount.textContent = "";
+      offlineQueueCount.classList.add("hidden");
+    }
+  }
+
+  if (message && shellUnlocked && isStandaloneMode_()) {
+    setStatusText_(message);
+  }
 }
 
 function setRelayPairingStatus_(message) {
@@ -937,15 +974,19 @@ function makeRelayEventId_() {
 
 function updateRelayPairingUi_() {
   if (!relayPairingPanel) return;
-  relayPairingPanel.classList.toggle("hidden", !TEST_RELAY_FEATURE_ENABLED);
+  const state = getRelayState_();
+  const paired = !!(state && state.pairedDeviceId);
+  relayPairingPanel.classList.toggle("hidden", !TEST_RELAY_FEATURE_ENABLED || paired);
+  if (relayPairedIndicator) {
+    relayPairedIndicator.classList.toggle("hidden", !TEST_RELAY_FEATURE_ENABLED || !paired);
+  }
   if (!TEST_RELAY_FEATURE_ENABLED) return;
   if (getShellQueue_().length > 0) {
     if (relayPairingBtn) relayPairingBtn.disabled = true;
     setRelayPairingStatus_("Sync the legacy queue with the TEST relay gate disabled before pairing or using relay mode.");
     return;
   }
-  const state = getRelayState_();
-  if (state && state.pairedDeviceId) {
+  if (paired) {
     if (relayDeviceIdInput) {
       relayDeviceIdInput.value = state.pairedDeviceId;
       relayDeviceIdInput.disabled = true;
@@ -994,14 +1035,17 @@ function probeRelayReachability_() {
     if (response.status !== 200) return null;
     return response.json();
   }).then(function (payload) {
-    return !!(
+    const reachable = !!(
       payload &&
       payload.ok === true &&
       payload.service === "ceh-relay" &&
       payload.environment === "test" &&
       payload.storage === "ok"
     );
+    setRelayReachabilityState_(reachable ? "reachable" : "unreachable");
+    return reachable;
   }).catch(function () {
+    setRelayReachabilityState_("unreachable");
     return false;
   }).finally(function () {
     clearTimeout(timeout);
@@ -1258,8 +1302,7 @@ async function saveRelayEntry_() {
     const currentAuth = getShellAuth_();
     resetOfflineEntryForm_(currentAuth);
     updateShellUi_();
-    updateRelayQueueCount_();
-    setOfflineReadyStatusText_("Saved for TEST relay acceptance.");
+    renderRelayStatus_();
     syncRelayQueue_();
   } catch (error) {
     showShellFlashHud_((error && error.message) || "Relay entry was not saved.", false);
@@ -1280,7 +1323,7 @@ async function syncRelayQueue_() {
     // This probe intentionally precedes the Web Lock so an unavailable Worker
     // never holds the allocation/synchronization lock or changes event attempts.
     if (!(await probeRelayReachability_())) {
-      setStatusText_("TEST relay is unreachable; saved entries remain queued.");
+      renderRelayStatus_();
       scheduleRelayReachabilityRetry_();
       return;
     }
@@ -1360,10 +1403,10 @@ async function syncRelayQueue_() {
         nextAttemptAtMs = event.nextAttemptAtMs;
       }
     });
-    updateRelayQueueCount_();
+    renderRelayStatus_();
     if (nextAttemptAtMs > 0) scheduleRelaySyncTimer_(nextAttemptAtMs);
   } catch (error) {
-    setStatusText_((error && error.message) || "TEST relay is unavailable; entries remain saved.");
+    renderRelayStatus_();
   }
 }
 
@@ -2298,6 +2341,9 @@ async function unlockShellWithPin_() {
     }
 
     setStatusText_("Unlocked for " + cleanerName + " with live permissions.");
+    if (TEST_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
+      renderRelayStatus_();
+    }
 
   } catch (error) {
     clearShellPin_();
@@ -2734,9 +2780,13 @@ function updateShellUi_() {
     const queueSuffix =
       queueCount > 0 ? ` Queued entries: ${queueCount}.` : "";
 
-    setStatusText_(
-      `${online ? "Online" : "Offline"} ready for ${shellAuth.cleanerName}.${currentShiftText}${queueSuffix}`
-    );
+    if (TEST_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
+      renderRelayStatus_();
+    } else {
+      setStatusText_(
+        `${online ? "Online" : "Offline"} ready for ${shellAuth.cleanerName}.${currentShiftText}${queueSuffix}`
+      );
+    }
 
     updateOfflineReadyText_(shellAuth);
     updateOfflineQueueCount_();
@@ -2780,7 +2830,11 @@ async function registerServiceWorker_() {
 /* begin[clockin_shell_event_wiring] */
 window.addEventListener("online", function () {
   updateShellUi_();
-  setStatusText_("Back online. Syncing saved entries...");
+  if (!TEST_RELAY_FEATURE_ENABLED || !getRelayState_() || !getRelayState_().pairedDeviceId) {
+    setStatusText_("Back online. Syncing saved entries...");
+  } else {
+    renderRelayStatus_();
+  }
   refreshShellAuthOnForegroundIfNeeded_();
   syncShellQueue_();
 });
@@ -2789,8 +2843,12 @@ window.addEventListener("offline", function () {
   hideShellSyncHud_();
   shellSyncInProgress = false;
   updateShellUi_();
-  setStatusText_("Offline. Entries will be saved on phone and synced later.");
-  setOfflineReadyStatusText_("Saved on phone. Will sync when online.");
+  if (TEST_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
+    renderRelayStatus_();
+  } else {
+    setStatusText_("Offline. Entries will be saved on phone and synced later.");
+    setOfflineReadyStatusText_("Saved on phone. Will sync when online.");
+  }
 });
 
 function retryQueuedSyncIfReady_() {
