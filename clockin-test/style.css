@@ -814,3 +814,10 @@ body.shellWorkHistoryOpen {
 .relayPairingTitle {
   font-weight: 700;
 }
+
+.relayPairedIndicator {
+  margin: 10px 0;
+  color: #4e3a00;
+  font-size: 13px;
+  font-weight: 700;
+}
