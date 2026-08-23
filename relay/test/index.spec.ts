@@ -7,6 +7,7 @@ import { ALLOWED_ORIGIN, createCorsHeaders } from "../src/cors";
 import { bytesToBase64Url, generateSecureId, hashRelayToken } from "../src/crypto";
 import { healthResponse } from "../src/health";
 import { loadRelayConfig } from "../src/config";
+import { DELIVERY_CRON } from "../src/delivery-service";
 import { createSession } from "../src/persistence/sessions";
 
 /* begin[relay_worker_tests] */
@@ -73,6 +74,37 @@ function eventRequest(
 function directWorkerFetch(request: Request, testEnv: Env): Promise<Response> {
   return worker.fetch(request as Parameters<typeof worker.fetch>[0], testEnv);
 }
+
+describe("scheduled delivery trigger", () => {
+  it("accepts only the configured every-minute cron", async () => {
+    const acceptedWaits: Promise<unknown>[] = [];
+    worker.scheduled(
+      { cron: DELIVERY_CRON } as ScheduledController,
+      await makeRouterEnv(),
+      {
+        waitUntil(promise: Promise<unknown>): void {
+          acceptedWaits.push(promise);
+        },
+      } as ExecutionContext,
+    );
+    await Promise.all(acceptedWaits);
+
+    const obsoleteWaits: Promise<unknown>[] = [];
+    worker.scheduled(
+      { cron: "*/5 * * * *" } as ScheduledController,
+      await makeRouterEnv(),
+      {
+        waitUntil(promise: Promise<unknown>): void {
+          obsoleteWaits.push(promise);
+        },
+      } as ExecutionContext,
+    );
+
+    expect(DELIVERY_CRON).toBe("* * * * *");
+    expect(acceptedWaits).toHaveLength(1);
+    expect(obsoleteWaits).toHaveLength(0);
+  });
+});
 
 describe("GET /health", () => {
   it("returns the exact successful contract without an Origin header", async () => {

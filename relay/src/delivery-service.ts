@@ -26,9 +26,8 @@ import type {
 } from "./persistence/types";
 
 /* begin[relay_delivery_service] */
-export const DELIVERY_CRON = "*/5 * * * *";
-export const DELIVERY_BATCH_LIMIT = 25;
-export const DELIVERY_CONCURRENCY = 5;
+export const DELIVERY_CRON = "* * * * *";
+export const DELIVERY_BATCH_LIMIT = 20;
 export const DELIVERY_LEASE_MS = 2 * 60 * 1_000;
 export const ATTENTION_REQUIRED_AGE_MS = 60 * 60 * 1_000;
 export const ATTENTION_REQUIRED_MIN_ATTEMPTS = 2;
@@ -383,29 +382,6 @@ async function deliverCandidate(
   );
 }
 
-async function processWithConcurrency(
-  candidates: DeliveryCandidateRow[],
-  concurrency: number,
-  process: (candidate: DeliveryCandidateRow) => Promise<DeliveryOutcome>,
-): Promise<DeliveryOutcome[]> {
-  const outcomes: DeliveryOutcome[] = [];
-  for (let offset = 0; offset < candidates.length; offset += concurrency) {
-    const group = candidates.slice(offset, offset + concurrency);
-    outcomes.push(
-      ...(await Promise.all(
-        group.map(async (candidate) => {
-          try {
-            return await process(candidate);
-          } catch (_) {
-            return "skipped";
-          }
-        }),
-      )),
-    );
-  }
-  return outcomes;
-}
-
 export async function runDeliveryBatch(
   db: D1Database,
   config: RelayConfig,
@@ -427,14 +403,32 @@ export async function runDeliveryBatch(
     }
   }
 
-  const candidates = await listDueLaneHeads(db, nowMs, DELIVERY_BATCH_LIMIT);
-  const outcomes = await processWithConcurrency(
-    candidates,
-    DELIVERY_CONCURRENCY,
-    (candidate) => deliverCandidate(db, config, candidate, dependencies),
-  );
+  const outcomes: DeliveryOutcome[] = [];
+  while (outcomes.length < DELIVERY_BATCH_LIMIT) {
+    // Each query returns only the current head of each active lane. Processing
+    // one complete round before selecting again keeps busy lanes from consuming
+    // the batch ahead of other ready lanes while allowing a successful lane to
+    // advance to its next contiguous event in the same scheduled invocation.
+    const candidates = await listDueLaneHeads(
+      db,
+      nowMs,
+      DELIVERY_BATCH_LIMIT - outcomes.length,
+    );
+    if (candidates.length === 0) {
+      break;
+    }
+    for (const candidate of candidates) {
+      try {
+        outcomes.push(
+          await deliverCandidate(db, config, candidate, dependencies),
+        );
+      } catch (_) {
+        outcomes.push("skipped");
+      }
+    }
+  }
   return {
-    selected: candidates.length,
+    selected: outcomes.length,
     delivered: outcomes.filter((outcome) => outcome === "delivered").length,
     retryable: outcomes.filter((outcome) => outcome === "retryable").length,
     attentionRequired: outcomes.filter(
