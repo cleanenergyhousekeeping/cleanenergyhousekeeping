@@ -1786,21 +1786,48 @@ async function validateShellPinInBackground_(pin, pinHash) {
   }
 }
 
-function clearRelayAuthorizationPreservingQueue_() {
-  const relayState = getRelayState_();
-  if (!relayState) return;
-  relayState.relayToken = "";
-  relayState.relayTokenExpiresAtMs = 0;
-  saveRelayState_(relayState);
+function shellAuthorizationMatches_(currentShellAuth, expectedShellAuth) {
+  return !!(
+    currentShellAuth &&
+    expectedShellAuth &&
+    String(currentShellAuth.pinHash || "") === String(expectedShellAuth.pinHash || "") &&
+    String(currentShellAuth.sessionToken || "") === String(expectedShellAuth.sessionToken || "") &&
+    Number(currentShellAuth.seededAtMs || 0) === Number(expectedShellAuth.seededAtMs || 0)
+  );
 }
 
-function invalidateShellAuthorization_(loginGeneration) {
-  if (loginGeneration !== shellLoginGeneration) return;
+async function clearRelayAuthorizationPreservingQueue_(invalidationGeneration) {
+  if (!navigator.locks || typeof navigator.locks.request !== "function") return false;
 
-  shellLoginGeneration += 1;
+  try {
+    return await withRelayLock_(async function () {
+      if (shellLoginGeneration !== invalidationGeneration || shellUnlocked) return false;
+
+      const relayState = getRelayState_();
+      if (!relayState) return true;
+      relayState.relayToken = "";
+      relayState.relayTokenExpiresAtMs = 0;
+      saveRelayState_(relayState);
+      return true;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
+function invalidateShellAuthorization_(loginGeneration, expectedShellAuth) {
+  const currentShellAuth = getShellAuth_() || {};
+  if (
+    loginGeneration !== shellLoginGeneration ||
+    !shellAuthorizationMatches_(currentShellAuth, expectedShellAuth)
+  ) {
+    return;
+  }
+
+  const invalidationGeneration = shellLoginGeneration + 1;
+  shellLoginGeneration = invalidationGeneration;
   shellUnlocked = false;
   localStorage.removeItem(SHELL_AUTH_KEY);
-  clearRelayAuthorizationPreservingQueue_();
   clearShellEntryDraft_();
   selectedOfflineProperty = null;
   hideOfflinePropertyInfo_();
@@ -1811,6 +1838,7 @@ function invalidateShellAuthorization_(loginGeneration) {
   setOfflineReadyStatusText_("This phone is no longer authorized. Please prepare it again online.");
   setStatusText_("This phone is no longer authorized. Please prepare it again online.");
   showShellFlashHud_("This phone is no longer authorized. Please prepare it again online.", false);
+  clearRelayAuthorizationPreservingQueue_(invalidationGeneration);
 }
 
 function applyBackgroundPinAuthorization_(freshShellAuth, loginGeneration, expectedShellAuth) {
@@ -1820,9 +1848,8 @@ function applyBackgroundPinAuthorization_(freshShellAuth, loginGeneration, expec
     loginGeneration !== shellLoginGeneration ||
     !freshShellAuth ||
     !freshShellAuth.pinHash ||
-    String(currentShellAuth.pinHash || "") !== String(freshShellAuth.pinHash) ||
-    String(currentShellAuth.sessionToken || "") !== String(expectedShellAuth.sessionToken || "") ||
-    Number(currentShellAuth.seededAtMs || 0) !== Number(expectedShellAuth.seededAtMs || 0)
+    !shellAuthorizationMatches_(currentShellAuth, expectedShellAuth) ||
+    String(currentShellAuth.pinHash || "") !== String(freshShellAuth.pinHash)
   ) {
     return false;
   }
@@ -1843,7 +1870,7 @@ function startShellBackgroundPinValidation_(pin, pinHash, loginGeneration, expec
     if (result && result.ok) {
       applyBackgroundPinAuthorization_(result.payload, loginGeneration, expectedShellAuth);
     } else if (result && result.definitiveInvalidation) {
-      invalidateShellAuthorization_(loginGeneration);
+      invalidateShellAuthorization_(loginGeneration, expectedShellAuth);
     }
   }).catch(function () {
     // A background refresh must never interrupt a locally unlocked shell.
@@ -2560,6 +2587,7 @@ async function loadOfflinePrep_() {
 
     saveShellAuth_(shellAuth);
     clearShellEntryDraft_();
+    shellLoginGeneration += 1;
     shellUnlocked = false;
     clearPrepPin_();
     clearShellPin_();
