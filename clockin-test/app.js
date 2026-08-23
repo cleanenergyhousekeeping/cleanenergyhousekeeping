@@ -441,6 +441,8 @@ function hideShellSyncHud_() {
   if (shellSyncHudTitle) {
     shellSyncHudTitle.textContent = "SYNCING";
   }
+
+  tryTestPwaUpdateReload_();
 }
 
 function showShellActionConfirmation_(title, detail, durationMs) {
@@ -473,6 +475,7 @@ function showShellFlashHud_(message, isSuccess) {
     shellFlashHud.classList.add("hidden");
     shellFlashHud.classList.remove("success", "error");
     shellFlashHud.setAttribute("aria-hidden", "true");
+    tryTestPwaUpdateReload_();
   }, 1800);
 }
 
@@ -1361,7 +1364,6 @@ async function saveRelayEntry_() {
       }
       saveShellAuth_(shellAuth);
     });
-    relaySubmissionInProgress = false;
     const currentAuth = getShellAuth_();
     resetOfflineEntryForm_(currentAuth);
     updateShellUi_();
@@ -1374,10 +1376,13 @@ async function saveRelayEntry_() {
       showShellActionConfirmation_("CLOCKED OUT", property);
     }
     syncRelayQueue_();
+    relaySubmissionInProgress = false;
+    tryTestPwaUpdateReload_();
   } catch (error) {
     relaySubmissionInProgress = false;
     hideShellSyncHud_();
     showShellFlashHud_((error && error.message) || "Relay entry was not saved.", false);
+    tryTestPwaUpdateReload_();
   }
 }
 
@@ -1888,6 +1893,7 @@ function startShellBackgroundPinValidation_(pin, pinHash, loginGeneration, expec
     // A background refresh must never interrupt a locally unlocked shell.
   }).finally(function () {
     shellBackgroundPinValidationInProgress = false;
+    tryTestPwaUpdateReload_();
   });
 }
 /* end[local_first_pin_authorization] */
@@ -2368,6 +2374,7 @@ async function syncShellQueue_() {
     setStatusText_(finalStatusMessage);
   } finally {
     shellSyncInProgress = false;
+    tryTestPwaUpdateReload_();
     hideShellSyncHud_();
     updateOfflineQueueCount_();
 
@@ -2468,6 +2475,7 @@ async function unlockShellWithPin_() {
     showShellFlashHud_("PIN check failed.", false);
   } finally {
     shellPinUnlockInProgress = false;
+    tryTestPwaUpdateReload_();
   }
 }
 /* end[unlock_shell_with_welcome_flash] */
@@ -2933,6 +2941,7 @@ let testPwaUpdateReloadPending = false;
 let testPwaUpdateReloadRetryCount = 0;
 let testPwaUpdateReloadTimer = null;
 let testPwaControllerChangeListening = false;
+let testPwaServiceWorkerRegistration = null;
 
 function isTestPwaUpdateReloadGuardSet_() {
   try {
@@ -3024,6 +3033,28 @@ function listenForTestPwaControllerChange_() {
   );
 }
 
+function requestTestPwaServiceWorkerUpdate_() {
+  if (!navigator.onLine || !("serviceWorker" in navigator)) return;
+
+  const requestUpdate = function (registration) {
+    if (!registration) return;
+    registration.update().catch(function () {
+      // Update checks are best effort; the installed shell remains usable.
+    });
+  };
+
+  if (testPwaServiceWorkerRegistration) {
+    requestUpdate(testPwaServiceWorkerRegistration);
+    return;
+  }
+
+  navigator.serviceWorker.getRegistration("/clockin-test/")
+    .then(requestUpdate)
+    .catch(function () {
+      // A later launch can register or update the shell normally.
+    });
+}
+
 async function registerServiceWorker_() {
   if (!("serviceWorker" in navigator)) {
     return false;
@@ -3035,12 +3066,9 @@ async function registerServiceWorker_() {
       "/clockin-test/service-worker.js",
       { scope: "/clockin-test/" }
     );
+    testPwaServiceWorkerRegistration = registration;
 
-    if (navigator.onLine) {
-      registration.update().catch(function () {
-        // Update checks are best effort; the installed shell remains usable.
-      });
-    }
+    requestTestPwaServiceWorkerUpdate_();
 
     return !!registration;
   } catch (error) {
@@ -3053,6 +3081,7 @@ async function registerServiceWorker_() {
 
 /* begin[clockin_shell_event_wiring] */
 window.addEventListener("online", function () {
+  requestTestPwaServiceWorkerUpdate_();
   setRelayReachabilityState_("unknown");
   updateShellUi_();
   if (!TEST_RELAY_FEATURE_ENABLED || !getRelayState_() || !getRelayState_().pairedDeviceId) {
