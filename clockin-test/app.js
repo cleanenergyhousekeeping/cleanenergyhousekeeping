@@ -1380,8 +1380,8 @@ async function saveRelayEntry_() {
     tryTestPwaUpdateReload_();
   } catch (error) {
     relaySubmissionInProgress = false;
-    hideShellSyncHud_();
     showShellFlashHud_((error && error.message) || "Relay entry was not saved.", false);
+    hideShellSyncHud_();
     tryTestPwaUpdateReload_();
   }
 }
