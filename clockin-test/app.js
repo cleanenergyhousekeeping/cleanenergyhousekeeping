@@ -1164,6 +1164,10 @@ async function pairRelayInstallation_() {
     setRelayPairingStatus_("Enter a valid device ID and confirm this ID belongs to only this installation.");
     return;
   }
+  if (!(await probeRelayReachability_())) {
+    setRelayPairingStatus_("TEST relay is unreachable; pairing was not completed. Try again when it is reachable.");
+    return;
+  }
   try {
     await withRelayLock_(async function () {
       if (getRelayState_()) throw new Error("This installation already has relay state and cannot be re-paired here.");
