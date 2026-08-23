@@ -101,6 +101,7 @@ let offlineReadyStatusOverride = "";
 let relayReachabilityProbe = null;
 let relayReachabilityState = "unknown";
 let relayHudAttentionMessage = "";
+let relaySubmissionInProgress = false;
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -378,6 +379,19 @@ function setShellEntryLocked_(locked) {
 }
 /* end[shell_entry_lock_helper] */
 
+function relayAttentionRequiresEntryLock_() {
+  if (!TEST_RELAY_FEATURE_ENABLED) return false;
+  const shellAuth = getShellAuth_() || {};
+  const state = getRelayState_();
+  return !!(
+    shellAuth.relayAttentionRequired ||
+    (state && state.attentionRequired) ||
+    (state && Array.isArray(state.queue) && state.queue.some(function (event) {
+      return event.status === "terminal";
+    }))
+  );
+}
+
 let shellActionHudTimer = null;
 
 function showShellSyncHud_(detailText, titleText) {
@@ -406,7 +420,7 @@ function hideShellSyncHud_() {
     clearTimeout(shellActionHudTimer);
     shellActionHudTimer = null;
   }
-  setShellEntryLocked_(false);
+  setShellEntryLocked_(relayAttentionRequiresEntryLock_());
 
   if (shellSyncHud) {
     shellSyncHud.classList.add("hidden");
@@ -1280,7 +1294,16 @@ async function saveRelayEntry_() {
   const action = (offlineActionSelect && offlineActionSelect.value || "").trim();
   const note = (offlineNoteInput && offlineNoteInput.value || "").trim();
   const property = String((selectedOfflineProperty && selectedOfflineProperty.name) || "");
+  if (relaySubmissionInProgress) return;
+  relaySubmissionInProgress = true;
   try {
+    if (action === "clock_in" && property) {
+      showShellSyncHud_("Saving your clock-in...", "CLOCKING IN");
+    } else if (action === "add_note" && property) {
+      showShellSyncHud_("Saving your note...", "SAVING NOTE");
+    } else if (action === "clock_out" && property) {
+      showShellSyncHud_("Saving your clock-out...", "CLOCKING OUT");
+    }
     await withRelayLock_(async function () {
       assertLegacyQueueIsEmpty_();
       const shellAuth = getShellAuth_();
@@ -1292,7 +1315,7 @@ async function saveRelayEntry_() {
         throw new Error("Pair this installation with the TEST relay before saving entries.");
       }
       if (shellAuth.relayAttentionRequired || state.queue.some(function (event) { return event.status === "terminal"; })) {
-        throw new Error("TEST relay requires operator attention before another event can be allocated.");
+        throw new Error("Some entries need help syncing. Your work is still saved.");
       }
       if (!property.trim() || property.length > 500 || Array.from(note).length > 1000) {
         throw new Error("Property or note exceeds the TEST relay limit.");
@@ -1306,13 +1329,6 @@ async function saveRelayEntry_() {
       }
       if ((action === "add_note" || action === "clock_out") && !shellAuth.currentShift) {
         throw new Error("Clock in before adding a note or clocking out.");
-      }
-      if (action === "clock_in") {
-        showShellSyncHud_("Saving your clock-in...", "CLOCKING IN");
-      } else if (action === "add_note") {
-        showShellSyncHud_("Saving your note...", "SAVING NOTE");
-      } else {
-        showShellSyncHud_("Saving your clock-out...", "CLOCKING OUT");
       }
       const submittedAtMs = Date.now();
       const event = {
@@ -1337,6 +1353,7 @@ async function saveRelayEntry_() {
       }
       saveShellAuth_(shellAuth);
     });
+    relaySubmissionInProgress = false;
     const currentAuth = getShellAuth_();
     resetOfflineEntryForm_(currentAuth);
     updateShellUi_();
@@ -1350,6 +1367,7 @@ async function saveRelayEntry_() {
     }
     syncRelayQueue_();
   } catch (error) {
+    relaySubmissionInProgress = false;
     hideShellSyncHud_();
     showShellFlashHud_((error && error.message) || "Relay entry was not saved.", false);
   }
@@ -2384,17 +2402,20 @@ async function unlockShellWithPin_() {
     const cleanerName = shellAuth.cleanerName || "Cleaner";
     setOfflineReadyStatusText_("");
 
+    let loginConfirmationDetail = "Ready for " + cleanerName + ".";
     if (usedSavedFallback && navigator.onLine) {
       setStatusText_("Unlocked for " + cleanerName + " using saved phone data.");
+      loginConfirmationDetail = "Using saved phone data for " + cleanerName + ".";
     } else if (usedSavedFallback && !navigator.onLine) {
       setStatusText_("Unlocked for " + cleanerName + " offline.");
+      loginConfirmationDetail = "Ready for " + cleanerName + " offline.";
     } else {
       setStatusText_("Unlocked for " + cleanerName + " with live permissions.");
+      if (TEST_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
+        renderRelayStatus_();
+      }
     }
-    if (TEST_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
-      renderRelayStatus_();
-    }
-    showShellActionConfirmation_("LOGGED IN", "Ready for " + cleanerName + ".");
+    showShellActionConfirmation_("LOGGED IN", loginConfirmationDetail);
 
   } catch (error) {
     clearShellPin_();
@@ -2812,7 +2833,7 @@ function updateShellUi_() {
 
     if (TEST_RELAY_FEATURE_ENABLED && shellAuth.relayAttentionRequired) {
       setShellEntryLocked_(true);
-      setStatusText_("TEST relay requires operator attention. No new events will be allocated.");
+      setStatusText_("Some entries need help syncing. Your work is still saved.");
       updateOfflineReadyText_(shellAuth);
       updateOfflineQueueCount_();
       reconcileShellEntryDraft_(shellAuth);
