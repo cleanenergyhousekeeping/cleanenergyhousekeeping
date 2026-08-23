@@ -16,6 +16,8 @@ const TEST_RELAY_WORKER_URL = "https://ceh-relay-test.kyle-405.workers.dev";
 const TEST_RELAY_STATE_KEY = "ce_shell_test_relay_state_v1";
 const TEST_RELAY_LOCK_NAME = "ce-shell-test-relay-v1";
 const TEST_RELAY_INITIAL_HIGH_WATER = 2;
+const TEST_RELAY_HEALTH_TIMEOUT_MS = 5 * 1000;
+const TEST_RELAY_REACHABILITY_RETRY_MS = 30 * 1000;
 /* end[clockin_test_shell_constants] */
 
 
@@ -94,6 +96,7 @@ let shellSyncInProgress = false;
 let shellSyncTimer = null;
 let shellLastForegroundRefreshMs = 0;
 let offlineReadyStatusOverride = "";
+let relayReachabilityProbe = null;
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -969,6 +972,45 @@ async function callRelayJson_(path, body, relayToken) {
   return { httpStatus: response.status, payload: payload };
 }
 
+function probeRelayReachability_() {
+  if (!navigator.onLine) {
+    return Promise.resolve(false);
+  }
+  if (relayReachabilityProbe) {
+    return relayReachabilityProbe;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(function () {
+    controller.abort();
+  }, TEST_RELAY_HEALTH_TIMEOUT_MS);
+
+  relayReachabilityProbe = fetch(TEST_RELAY_WORKER_URL + "/health", {
+    method: "GET",
+    cache: "no-store",
+    credentials: "omit",
+    signal: controller.signal,
+  }).then(function (response) {
+    if (response.status !== 200) return null;
+    return response.json();
+  }).then(function (payload) {
+    return !!(
+      payload &&
+      payload.ok === true &&
+      payload.service === "ceh-relay" &&
+      payload.environment === "test" &&
+      payload.storage === "ok"
+    );
+  }).catch(function () {
+    return false;
+  }).finally(function () {
+    clearTimeout(timeout);
+    relayReachabilityProbe = null;
+  });
+
+  return relayReachabilityProbe;
+}
+
 function readRelaySession_(result, expectedDeviceId) {
   const payload = result && result.payload;
   const session = payload && payload.ok === true ? payload.session : null;
@@ -1065,6 +1107,13 @@ function scheduleRelaySyncTimer_(nextAttemptAtMs) {
   }, delayMs);
 }
 
+function scheduleRelayReachabilityRetry_() {
+  const state = getRelayState_();
+  const event = state ? firstNonAcceptedRelayEvent_(state) : null;
+  if (!navigator.onLine || !event || event.status === "terminal") return;
+  scheduleRelaySyncTimer_(Date.now() + TEST_RELAY_REACHABILITY_RETRY_MS);
+}
+
 function applyRelaySession_(state, session) {
   verifyRelayHighWater_(state, session.ledgerHighWater.appliedThroughSequence);
   state.lastConfirmedLedgerHighWater = session.ledgerHighWater.appliedThroughSequence;
@@ -1113,6 +1162,10 @@ async function pairRelayInstallation_() {
   const deviceId = String((relayDeviceIdInput && relayDeviceIdInput.value) || "").trim();
   if (!isRelayDeviceId_(deviceId) || !relayPairingConfirm || !relayPairingConfirm.checked) {
     setRelayPairingStatus_("Enter a valid device ID and confirm this ID belongs to only this installation.");
+    return;
+  }
+  if (!(await probeRelayReachability_())) {
+    setRelayPairingStatus_("TEST relay is unreachable; pairing was not completed. Try again when it is reachable.");
     return;
   }
   try {
@@ -1207,15 +1260,31 @@ async function saveRelayEntry_() {
     updateShellUi_();
     updateRelayQueueCount_();
     setOfflineReadyStatusText_("Saved for TEST relay acceptance.");
-    if (navigator.onLine) syncRelayQueue_();
+    syncRelayQueue_();
   } catch (error) {
     showShellFlashHud_((error && error.message) || "Relay entry was not saved.", false);
   }
 }
 
 async function syncRelayQueue_() {
-  if (!TEST_RELAY_FEATURE_ENABLED || !navigator.onLine) return;
+  if (!TEST_RELAY_FEATURE_ENABLED) return;
   let nextAttemptAtMs = 0;
+  const initialState = getRelayState_();
+  const initialEvent = initialState ? firstNonAcceptedRelayEvent_(initialState) : null;
+  if (!initialEvent) return;
+  if (initialEvent.status !== "terminal") {
+    if (Number(initialEvent.nextAttemptAtMs || 0) > Date.now()) {
+      scheduleRelaySyncTimer_(initialEvent.nextAttemptAtMs);
+      return;
+    }
+    // This probe intentionally precedes the Web Lock so an unavailable Worker
+    // never holds the allocation/synchronization lock or changes event attempts.
+    if (!(await probeRelayReachability_())) {
+      setStatusText_("TEST relay is unreachable; saved entries remain queued.");
+      scheduleRelayReachabilityRetry_();
+      return;
+    }
+  }
   try {
     await withRelayLock_(async function () {
       assertLegacyQueueIsEmpty_();
