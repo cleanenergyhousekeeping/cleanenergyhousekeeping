@@ -99,6 +99,7 @@ let shellLastForegroundRefreshMs = 0;
 let offlineReadyStatusOverride = "";
 let relayReachabilityProbe = null;
 let relayReachabilityState = "unknown";
+let relayHudAttentionMessage = "";
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -908,6 +909,11 @@ function setRelayReachabilityState_(state) {
   renderRelayStatus_();
 }
 
+function setRelayHudAttention_(message) {
+  relayHudAttentionMessage = String(message || "");
+  renderRelayStatus_();
+}
+
 function renderRelayStatus_() {
   if (!TEST_RELAY_FEATURE_ENABLED) return;
   const state = getRelayState_();
@@ -926,7 +932,9 @@ function renderRelayStatus_() {
   });
   let message = "";
 
-  if (hasTerminal) {
+  if (relayHudAttentionMessage) {
+    message = relayHudAttentionMessage;
+  } else if (hasTerminal) {
     message = "TEST relay requires attention. Saved events need review.";
   } else if (pending.length && !navigator.onLine) {
     message = "Phone offline. Saved locally; waiting to contact Cloudflare.";
@@ -940,6 +948,8 @@ function renderRelayStatus_() {
       : "Saved locally. Checking the TEST relay before sending.";
   } else if (hasAccepted) {
     message = "Accepted by TEST relay; no longer pending on this phone.";
+  } else if (state && state.pairedDeviceId && relayReachabilityState === "reachable") {
+    message = "TEST relay reachable.";
   }
 
   if (offlineQueueCount) {
@@ -1239,6 +1249,7 @@ async function pairRelayInstallation_() {
       });
     });
     updateRelayPairingUi_();
+    renderRelayStatus_();
     setRelayPairingStatus_("TEST relay pairing confirmed. New events start at sequence 3.");
   } catch (error) {
     setRelayPairingStatus_((error && error.message) || "Relay pairing was not completed.");
@@ -1403,10 +1414,20 @@ async function syncRelayQueue_() {
         nextAttemptAtMs = event.nextAttemptAtMs;
       }
     });
+    relayHudAttentionMessage = "";
     renderRelayStatus_();
     if (nextAttemptAtMs > 0) scheduleRelaySyncTimer_(nextAttemptAtMs);
   } catch (error) {
-    renderRelayStatus_();
+    const detail = (error && error.message) || "Synchronization could not continue.";
+    if (/exclusive Web Locks support/i.test(detail)) {
+      setRelayHudAttention_(
+        "TEST relay requires attention. Event remains saved locally; exclusive browser locking is unavailable."
+      );
+    } else {
+      setRelayHudAttention_(
+        "TEST relay requires attention. Event remains saved locally; " + detail
+      );
+    }
   }
 }
 
@@ -2829,6 +2850,7 @@ async function registerServiceWorker_() {
 
 /* begin[clockin_shell_event_wiring] */
 window.addEventListener("online", function () {
+  setRelayReachabilityState_("unknown");
   updateShellUi_();
   if (!TEST_RELAY_FEATURE_ENABLED || !getRelayState_() || !getRelayState_().pairedDeviceId) {
     setStatusText_("Back online. Syncing saved entries...");
@@ -2842,6 +2864,7 @@ window.addEventListener("online", function () {
 window.addEventListener("offline", function () {
   hideShellSyncHud_();
   shellSyncInProgress = false;
+  setRelayReachabilityState_("unknown");
   updateShellUi_();
   if (TEST_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
     renderRelayStatus_();
