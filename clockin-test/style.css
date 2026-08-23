@@ -792,3 +792,25 @@ body.shellWorkHistoryOpen {
   text-align: center;
 }
 /* end[clockin_test_environment_banner] */
+
+.relayPairingPanel {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid #e0b84f;
+  border-radius: 12px;
+  background: #fffaf0;
+  color: #4e3a00;
+}
+
+.relayPairingPanel p,
+.relayPairingConfirm,
+.relayPairingStatus {
+  display: block;
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.relayPairingTitle {
+  font-weight: 700;
+}
