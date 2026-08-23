@@ -1,343 +1,267 @@
 /**
- * Clean Energy Housekeeping System - Project Summary
+ * Clean Energy Housekeeping System — Current Architecture Summary
  *
  * VERSION NAME:
- * "Stable Field System + HUD + Overlay + Access Control + Shell Offline Sync"
+ * "Operational System + TEST Durable Relay"
  *
- * DATE:
- * 2026-04-12
+ * UPDATED:
+ * 2026-08-23
  *
- * =====================================================
- * STATUS
- * =====================================================
- * The system is now fully operational in the field.
- * Core workflow (login → property selection → clock in/out → invoice pipeline)
- * is stable, validated, and no longer dependent on legacy Google Forms.
- *
- * The app has transitioned from a fragile prototype into a structured system
- * with proper UX layers, validation, session handling, backend consistency,
- * and a working shell-based offline mode for field use.
+ * This document describes the system that exists now. It is an architectural
+ * summary, not the CEH backlog or a complete project history. The separate CEH
+ * to-do list remains the source for pending ideas, bugs, polish, and detailed
+ * historical notes.
  *
  * =====================================================
- * ARCHITECTURE
- * =====================================================
- * Live Web App (Apps Script HTML/JS)
- *   → Apps Script WebApp Service
- *   → Time Tracker Sheet
- *   → Invoice Prep System
- *   → Invoice Generator (Docs)
- *
- * Offline Clock In Shell
- *   → Standalone home-screen shell app
- *   → Local shell auth storage
- *   → Local queued offline entry storage
- *   → Background queue sync back to Apps Script when signal returns
- *
- *
- * =====================================================
- * CORE FEATURES (STABLE)
+ * 1. OVERALL SYSTEM STATUS
  * =====================================================
  *
- * 1) Web App UI (Mobile-First)
- * - Custom Apps Script web app (replaced Google Forms)
- * - Large touch-friendly UI optimized for phone use
- * - Clean PIN-based login screen with keypad
- * - Property autocomplete search (no dropdown lag)
- * - Sticky property lock during active shift
+ * CEH is an operational housekeeping platform. The Time Tracker is the
+ * operational source of truth for completed and open shifts; it feeds Work
+ * History, payroll, invoicing, notifications, and related workflows.
  *
- *
- * 2) Authentication + Session System
- * - 4-digit PIN login system (no Google login required)
- * - Session token stored in browser
- * - Auto-login on return visits
- * - Brute-force protection with lockout timer
- * - Session revalidation on app load
- *
- *
- * 3) Access Control System
- * - FULL vs LIMITED access levels implemented
- * - Backend filters sensitive property data
- * - Frontend hides restricted fields dynamically
- * - Access updates automatically on next session load
- *
- *
- * 4) Shift Protection + Validation
- * - Prevents duplicate clock-ins
- * - Prevents clock-out without open shift
- * - Prevents cross-property errors
- * - Prevents notes without active shift
- * - Prevents notes on wrong property
- *
- *
- * 5) Property Workflow UX
- * - Autocomplete property search
- * - Property locks during active shift
- * - Reset after clock-out
- * - Property Info Panel introduced
- *
- * Property Info includes:
- * - Directions (Google Maps link)
- * - Entrance info (restricted by access)
- * - Alarm info (restricted by access)
- * - Wi-Fi + password
- * - Owner names
- * - House notes
- *
- *
- * 6) Directions Integration
- * - "Google Map Directions" button
- * - Appears when property selected
- * - Opens correct address in Maps
- * - Positioned at top of property panel
- *
- *
- * 7) Cleaning Note System
- * - Added "Add Cleaning Note" action
- * - Designed for customer-visible "extras only"
- * - Supports mid-clean notes
- * - Currently stored in Clock Out Note column (transitional design)
- *
- *
- * 8) Real-Time Shift State
- * - "Current Clean Status" block in UI
- * - Shows:
- *   - Current property
- *   - Clock-in time
- * - Persists through refresh and auto-login
- * - Fully driven by Time Tracker open-shift data
- *
- *
- * 9) UI Feedback System
- *
- * A) HUD (Temporary Feedback)
- * - Centered vertically + horizontally
- * - Displays only:
- *   SUCCESS / ERROR
- *   + details on next line
- * - Color coded:
- *   Green = success
- *   Red = error
- * - Auto-dismisses quickly
- *
- * B) Full-Screen Overlay
- * - Used for:
- *   - Auto login
- *   - PIN login
- *   - Form submission
- *   - Offline prep
- * - Displays "Working..." then result message
- * - Clean white overlay with centered card
- *
- * C) Bottom Status Box
- * - Still exists for full verbose messages
- * - No longer cluttering main UI
- *
- *
- * 10) Time Tracker System
- * - Central source of truth
- * - Tracks:
- *   - Clock in/out
- *   - Total hours
- *   - Notes
- *   - Client + property
- *
- *
- * 11) Transit Tracking
- * - Calculates gap time between same-day jobs
- * - Tracks:
- *   - Transit minutes
- *   - Transit hours
- *   - Alert status
- * - Sends alert if >35 minutes
- * - NOT billed to client (payroll-side metric)
- *
- *
- * 12) Invoice System
- * - Pulls from Time Tracker or Invoice Prep
- * - Groups by client + date range
- * - Supports:
- *   - Hourly billing
- *   - Flat rate billing
- *   - Discounts / fees
- * - Generates clean formatted Google Docs invoices
- *
- *
- * 13) Invoice Prep Layer
- * - Intermediate control layer before invoicing
- * - Stores:
- *   - Cleaner breakdowns
- *   - Billing adjustments
- *   - Notes
- * - Enables future audit + manual overrides
- *
- *
- * 14) Email System
- * - Triggered from Web App (not legacy form)
- * - Sends:
- *   - Check-in notifications
- *   - Check-out notifications
- *   - Blocked submission alerts
- *   - Missing clock-out reminders
- * - Fully aligned with Time Tracker (single source)
- *
- *
- * 15) Offline Shell System (NEW - WORKING)
- * - Standalone home-screen Clock In shell app is now working
- * - Shell stores offline auth locally on the phone
- * - Shell stores offline queued entries locally on the phone
- * - Offline entries now sync back automatically when signal returns
- * - Shell refreshes auth before syncing queued entries
- * - Shell sync now uses current shell auth as primary auth during sync
- * - Current shift state is refreshed and preserved through shell sync
- *
- * Shell storage keys:
- * - ce_shell_auth_v1
- * - ce_shell_queue_v1
- *
- * Current shell assets include:
- * - standalone shell page
- * - seed page
- * - manifest
- * - service worker cache
- *
+ * The cleaner-facing clock-in experience is a mobile-oriented installed web
+ * shell. It supports local-first PIN unlock, property lookup and restricted
+ * property information, current-shift state, clock-in, cleaning notes, and
+ * clock-out. The TEST shell also has a durable relay path for reliable online
+ * and offline submission.
  *
  * =====================================================
- * MAJOR IMPROVEMENTS RECENTLY COMPLETED
+ * 2. HIGH-LEVEL ARCHITECTURE
  * =====================================================
  *
- * - Rebuilt HUD system (clean + minimal)
- * - Rebuilt overlay system (stable across flows)
- * - Implemented access control (FULL / LIMITED)
- * - Restored + fixed email notification pipeline
- * - Added real-time shift status in UI
- * - Cleaned out legacy Google Form dependencies
- * - Standardized UI feedback (HUD + overlay + status box)
- * - Built shell-based offline clock-in system
- * - Added shell queue storage and reconnect sync
- * - Fixed stale queued-entry issue
- * - Added shell auth refresh before queue sync
- * - Added current-shift + property helper support for shell refresh
- * - Updated seed reset path so clear=1 clears both shell auth and shell queue
- * - Confirmed successful end-to-end offline test:
- *   prep → offline save → reconnect → automatic sync
+ * Operational Apps Script system
+ *   → Apps Script web application and spreadsheet-bound services
+ *   → Time Tracker (shift source of truth)
+ *   → Work History, payroll, invoicing, notifications, and property workflows
  *
+ * TEST installed clock-in shell
+ *   → local prepared-auth and UI state
+ *   → local durable relay-event state when relay mode is active
+ *   → Cloudflare Worker → D1 relay storage → scheduled delivery
+ *   → TEST Apps Script relay service and relay ledger → TEST Time Tracker
+ *
+ * The relay accepts events durably before Apps Script delivery. A temporarily
+ * unavailable spreadsheet service therefore does not discard an accepted field
+ * entry.
  *
  * =====================================================
- * OFFLINE MODE - CURRENT BEHAVIOR
+ * 3. ENVIRONMENT SEPARATION AND DEPLOYMENT BOUNDARIES
  * =====================================================
  *
- * Initial prep:
- * - Live app prepares offline mode
- * - Shell loads prep and stores local shell auth
- *
- * While offline:
- * - Cleaner can save clock-ins, clock-outs, and notes into local queue
- * - Queue remains on device until connection returns
- *
- * When back online:
- * - Shell attempts to refresh auth first
- * - If refresh succeeds, shell syncs queued entries automatically
- * - If refresh fails because session is expired, queue remains safely stored
- *
- * Reset / recovery:
- * - seed.html#clear=1 now clears both:
- *   - ce_shell_auth_v1
- *   - ce_shell_queue_v1
- *
+ * - TEST and Live are separate environments. TEST relay Worker/D1 resources,
+ *   TEST Apps Script configuration/deployment, TEST shell storage namespaces,
+ *   and TEST service-worker scope are isolated from Live.
+ * - The TEST frontend is published through GitHub Pages. GitHub/main is the
+ *   source of truth for the shipped repository state.
+ * - TEST Apps Script clasp configuration is isolated from Live. Do not use a
+ *   Live deployment or Live sync target for TEST deployment/synchronization.
+ * - Relay keys, tokens, deployment URLs, Apps Script sessions, property data,
+ *   and decrypted relay payloads are not source-controlled or logged.
+ * - Production relay rollout is not implied by TEST relay implementation.
+ *   TEST remains the supported relay environment described here.
  *
  * =====================================================
- * CURRENT LIMITATIONS
+ * 4. CLEANER CLOCK-IN SHELL
  * =====================================================
  *
- * - Cleaning notes still stored in legacy column (temporary design)
- * - Property data payload still broader than ideal
- * - Users/PINs still partially managed in config (not fully in sheet)
- * - Manual prep-code handoff still exists and adds friction
- * - Shell still tells user to open live app manually if auth refresh fails
- * - Invoice layout still needs final polish (footer, alignment, etc.)
- *
- *
- * =====================================================
- * NEXT PRIORITIES
- * =====================================================
- *
- * - Make shell auto-open offline entry mode when offline and already prepared
- * - Replace manual prep-code handoff with silent background prep / token handoff
- * - Add automatic redirect / return flow when shell auth refresh truly expires
- * - Move PIN + user management fully to Users sheet
- * - Finalize cleaning-note schema (separate structured storage)
- * - Tighten property data exposure (security optimization)
- * - Payroll system (based on Time Tracker + transit)
- * - Invoice final polish + validation pass
- * - Admin controls (enable/disable cleaners, rotate PINs)
- * - iPhone field testing + UI tweaks
- *
+ * - The shell is designed for phone use and can be installed as a PWA.
+ * - It presents a PIN keypad, cleaner identity, property search, directions,
+ *   property information, current-clean state, and clear action feedback.
+ * - It supports clock-in, add-note, and clock-out actions. Active-shift rules
+ *   lock applicable property/action choices and prevent obvious duplicate or
+ *   invalid local actions.
+ * - Work History provides a cleaner-facing weekly, shift-level view, including
+ *   completed hours and transit information where available.
+ * - The shell keeps prepared data and state locally so field operation does not
+ *   depend on a network request for every screen transition.
  *
  * =====================================================
- * OVERALL ASSESSMENT
+ * 5. TEST RELAY ARCHITECTURE
  * =====================================================
  *
- * This system is no longer experimental.
+ * Event path:
+ *   TEST PWA → Cloudflare Worker → encrypted D1 event storage
+ *   → scheduled delivery → TEST Apps Script relay service/ledger
+ *   → TEST Time Tracker
  *
- * It is a functioning operational platform with:
- * - Controlled access
- * - Reliable data flow
- * - Field-ready UI
- * - Expandable architecture
- * - Working offline shell capability
+ * Phone behavior
+ * - Each clock-in, note, and clock-out receives a stable event ID, immutable
+ *   original submission timestamp, and monotonically increasing per-device
+ *   sequence number before it is queued locally.
+ * - Events persist locally first and are retried automatically after reconnect.
+ *   A queued offline entry retains its original time when reconciled into Time
+ *   Tracker.
+ * - The phone sends only the first nonaccepted sequence at a time. The Worker
+ *   preserves contiguous per-cleaner/device ordering, so missing sequence
+ *   numbers block that lane rather than being silently skipped.
+ * - A real GET /health probe confirms Worker, environment, and D1 reachability
+ *   before relay synchronization. The cleaner-facing relay HUD reports
+ *   queued/syncing/reachable/attention states.
+ * - Retryable failures retain the event. Non-retryable outcomes create an
+ *   attention-required state rather than silently losing the field record.
+ * - Web Locks serialize pairing, sequence allocation, and synchronization; an
+ *   in-memory guard also prevents concurrent automatic pairing attempts.
  *
- * Remaining work is refinement, automation, and UX polishing —
- * not rescue.
-  * - Polished shell queue panel to show latest queued action, property, and save time
- * - Tightened shell submitted-state lock by dimming the full entry form during sync
- * - Added guided empty-state helper text when shell is unlocked but no clean is active
- * - Added welcome-back success HUD when shell unlock completes
-  * - Moved shell guidance text to sit directly under Cleaner for a more natural empty-state layout
- * - Reduced extra shell white space above the logo and below the form
- * - Tightened shell unlock keypad centering rules for the main PIN screen
-  * - Added shell-only Work History modal with Saturday-Friday weekly summary
- * - Shell Work History now shows total completed hours grouped by property
- * - Added shell work-history total footer and blue Back button under total
- * - Kept live app work-history route untouched while adding a separate shell summary route
-  * - Fixed shell PIN card clipping on narrow phones by making unlock and prep card widths border-box safe
-   * - Added iPhone safe-area padding to shell work-history top bar and footer
- * - Added app-wide bottom safe-area breathing room for curved-screen phones
-  * - Restored transit lines inside shell Work History and included transit in shell weekly totals
- * - Added online shell auth refresh during unlock so permission changes are respected when signal is available
- * - Shell unlock now skips auth refresh completely when offline and falls back safely on weak connections
-  * - Upgraded shell Work History from property totals to shift-level rows with clock-in, clock-out, and shift total
- * - Shell transit rows now show start time, end time, route context, and total transit time between same-day jobs
-  * - Added retry-based shell auth refresh on startup, unlock, and queue sync
- * - Shell now retries live permission refresh several times before falling back to saved phone data
- * - Preserved fail-open behavior for field reliability so cleaners are less likely to be locked out at a job
- * - Bumped service worker cache version to force newer shell assets onto installed phones
+ * Worker and Apps Script behavior
+ * - Worker acceptance authenticates a paired relay session and writes a
+ *   canonical, encrypted event to D1. Idempotent replay of the same event is
+ *   acknowledged; conflicts are rejected.
+ * - Payloads are encrypted at rest in D1; relay tokens are stored as hashes.
+ *   Cleaner/device identity is derived from the relay session, not trusted
+ *   event-body fields.
+ * - The every-minute Worker delivery process makes fair, sequential attempts
+ *   across ready lanes and can drain multiple contiguous events in one run.
+ *   It uses leases, backoff, and attention-required retry scheduling.
+ * - TEST Apps Script verifies signed Worker requests, validates relay input,
+ *   records processing/outcome in the relay ledger, and reconciles events
+ *   idempotently into Time Tracker. The ledger supplies contiguous applied
+ *   high-water state for the paired device.
+ *
+ * Automatic TEST installation identity
+ * - There is no manual device-ID form. A fresh installation creates an opaque
+ *   UUID-based installation ID with no cleaner, PIN, property, or timestamp
+ *   identity data and persists it before enrollment.
+ * - The same saved ID is reused across retry and lost-response cases. Existing
+ *   valid pairing state is authoritative; upgrades never automatically reset
+ *   or re-pair an existing installation.
+ * - Fresh enrollment requires relay-ledger high-water 0. It initializes the
+ *   first event sequence at 1 and fails closed if a fresh ID unexpectedly has
+ *   nonzero prior ledger state.
+ * - A remaining legacy shell queue blocks relay pairing, avoiding implicit
+ *   migration or reordering of prior queued entries.
+ * - Reinstalling the PWA or deleting browser storage can legitimately create a
+ *   new installation ID and requires a new pairing.
  *
  * =====================================================
- * PAYROLL SYSTEM - CURRENT STATUS
+ * 6. AUTHENTICATION AND ACCESS CONTROL
  * =====================================================
  *
- * - Payroll system is now working from Time Tracker data
- * - Payroll cleaner dropdown now supports canonical full names from active Users rows
- * - Payroll Prep rows can be generated from Payroll Control date range + cleaner selection
- * - Payroll Preview and Payroll PDF generation are working as separate deliberate steps
- * - Payroll PDF output now supports:
- *   - daily minimum guarantee
- *   - transit pay
- *   - gas / bonus / adjustment lines
- *   - hiding zero-value optional summary rows
- *   - grouped same-day row presentation
- *   - phone-readable PDF layout for texting
- * - Final payroll workflow now is:
- *   1) Setup Payroll Sheets
- *   2) Populate Payroll Prep
- *   3) Fill pay settings
- *   4) Generate Payroll Preview
- *   5) Generate Payroll PDFs
- * - Added dedicated Payroll custom menu in the spreadsheet for this flow
-  * - Added Payroll Defaults sheet support for cleaner-specific default pay rates and daily minimum hours
- * - Payroll now resolves pay settings in this order:
- *   1) exact Payroll Prep row for the selected pay period
- *   2) cleaner default from Payroll Defaults
- *   3) global fallback constants
- * - New Payroll Prep rows now auto-fill from cleaner defaults when available
+ * - PIN authentication is local-first in the shell. A prepared installation
+ *   can unlock essentially immediately from saved local data.
+ * - When online, validation/refresh happens in the background and does not
+ *   block normal local unlock. Offline login remains usable for field work.
+ * - Appropriate online preparation, unlock, and reconnect paths may refresh
+ *   Apps Script auth and recover/renew relay pairing/session state.
+ * - The Apps Script system maintains session validation and access control.
+ *   FULL versus LIMITED access determines which sensitive property fields are
+ *   returned/displayed; restricted entrance/alarm information is not exposed
+ *   to LIMITED shell users.
+ * - Backend shift rules remain authoritative. They protect against duplicate
+ *   clock-ins, invalid clock-outs, wrong-property actions, and invalid notes.
+ *
+ * =====================================================
+ * 7. TIME TRACKING, NOTES, AND WORK HISTORY
+ * =====================================================
+ *
+ * - Time Tracker records cleaner, property/client, clock-in, clock-out, total
+ *   hours, and notes. It is the shared operational record used downstream.
+ * - The active shift drives current-clean display and property locking in the
+ *   UI. Queued relay state is also reflected locally while an accepted event
+ *   awaits Apps Script delivery.
+ * - Cleaning notes are supported mid-clean and reconcile through the existing
+ *   Time Tracker workflow. The current schema still uses established
+ *   clock-out-note handling for that workflow.
+ * - Work History is derived from completed Time Tracker shifts. Transit
+ *   tracking captures between-job time for payroll/operational visibility and
+ *   appears in cleaner weekly history when applicable.
+ *
+ * =====================================================
+ * 8. PAYROLL
+ * =====================================================
+ *
+ * Payroll is separated into deliberate spreadsheet steps:
+ *
+ *   1) Set up payroll sheets and period controls.
+ *   2) Populate Payroll Prep from completed Time Tracker shifts.
+ *   3) Review/fill pay settings.
+ *   4) Generate Payroll Preview.
+ *   5) Generate Payroll PDFs.
+ *
+ * - Payroll Prep is scoped by cleaner and pay period. Cleaner-specific defaults
+ *   supply pay rate and daily-minimum values for new prep rows.
+ * - Resolution order is: exact Payroll Prep row, cleaner Payroll Defaults,
+ *   then global fallback constants.
+ * - Preview/PDF calculations support daily minimum guarantees, transit pay,
+ *   gas, bonus, and adjustment amounts. PDFs group same-day entries and hide
+ *   zero-value optional rows for readable phone-textable output.
+ * - Payroll includes a dedicated spreadsheet menu and completed performance
+ *   work to keep normal period preparation practical.
+ *
+ * =====================================================
+ * 9. INVOICING
+ * =====================================================
+ *
+ * - Invoice Prep is the intermediate review/control layer between Time Tracker
+ *   shifts and generated client invoices.
+ * - It groups completed work by service date, client, and property; retains
+ *   cleaner details and notes; and supports hourly or flat billing,
+ *   property/client rates, discounts, fees, and controlled overrides.
+ * - Invoice Control defines invoice number, period, optional rate override,
+ *   and optional client filter. Generation produces formatted Docs and records
+ *   invoice information through the established invoice workflow.
+ * - This separation supports review and legitimate adjustments before invoice
+ *   generation instead of treating raw time rows as final billing.
+ *
+ * =====================================================
+ * 10. RELIABILITY, OFFLINE USE, AND PWA UPDATES
+ * =====================================================
+ *
+ * - The installed TEST PWA uses service-worker cache versioning. Frontend
+ *   build/cache versions are advanced together when publishing a new shell.
+ * - Installed TEST updates have been field-tested across multiple versions.
+ *   Force-close then reopen is the reliable current update path.
+ * - Foreground-resume update detection/reload is optional polish, not a
+ *   required operational update mechanism.
+ * - Local storage preserves prepared shell state and relay queue state across
+ *   ordinary offline intervals. A queue/retry failure does not itself erase a
+ *   shift action.
+ *
+ * =====================================================
+ * 11. IMPORTANT INVARIANTS AND SAFETY RULES
+ * =====================================================
+ *
+ * - Do not bypass Time Tracker as the operational shift record.
+ * - Do not reorder, renumber, or drop relay events to unblock a sequence gap.
+ * - Preserve original client submission timestamps during offline recovery.
+ * - Treat existing valid relay pairing as authoritative; do not auto-reset it
+ *   during an app update.
+ * - A fresh relay identity with nonzero ledger high-water is fail-closed and
+ *   requires attention, not reuse of existing history.
+ * - Keep TEST and Live deployment, data, configuration, and credentials apart.
+ * - Never place PINs, secrets, tokens, sensitive IDs, or property data in this
+ *   summary, Git history, Worker logs, or relay migrations.
+ *
+ * =====================================================
+ * 12. CURRENT KNOWN LIMITATIONS
+ * =====================================================
+ *
+ * - The durable relay path summarized here is TEST-only; production relay use
+ *   requires its own explicit rollout and validation.
+ * - An attention-required relay event is retained and needs review; the system
+ *   will not silently skip it to advance later events.
+ * - Force-close/reopen is the dependable installed-PWA update instruction;
+ *   automatic foreground-resume updater polish is not a dependency.
+ * - Cleaning-note storage follows the existing Time Tracker note workflow; a
+ *   separate structured note schema is not represented as completed work.
+ *
+ * =====================================================
+ * 13. NEAR-TERM PRIORITIES
+ * =====================================================
+ *
+ * Maintain and verify the operational and TEST relay paths, resolve
+ * attention-required cases without compromising event ordering, and treat any
+ * production relay rollout or updater UX refinement as separately scoped work.
+ * The CEH to-do list, rather than this summary, holds detailed priorities.
+ *
+ * =====================================================
+ * 14. OVERALL ASSESSMENT
+ * =====================================================
+ *
+ * CEH has a functioning operational time, payroll, and invoicing system with a
+ * field-focused cleaner shell. The TEST relay adds a durable, ordered,
+ * security-bounded offline delivery architecture without making Apps Script
+ * availability a requirement for phone-side event acceptance. The central
+ * discipline is to keep Time Tracker authoritative, relay events immutable and
+ * ordered, and TEST/Live boundaries explicit.
  */
