@@ -1296,19 +1296,16 @@ async function ensureRelaySessionLocked_(state) {
 /* begin[test_automatic_relay_pairing] */
 async function pairRelayInstallationAutomatically_() {
   if (!TEST_RELAY_FEATURE_ENABLED || !navigator.onLine || relayAutoPairingInProgress) return;
-  const existingState = getRelayState_();
-  if (synchronizeExistingRelayInstallationIdentity_(existingState)) return;
-  if (existingState || getShellQueue_().length > 0) return;
 
   relayAutoPairingInProgress = true;
   setRelayPairingStatus_("Finishing secure phone setup...");
   try {
-    const deviceId = getOrCreateRelayInstallationId_();
     if (!(await probeRelayReachability_())) return;
     await withRelayLock_(async function () {
       const state = getRelayState_();
       if (synchronizeExistingRelayInstallationIdentity_(state) || state) return;
       assertLegacyQueueIsEmpty_();
+      const deviceId = getOrCreateRelayInstallationId_();
       const shellAuth = getShellAuth_() || {};
       if (!shellAuth.sessionToken) return;
       const result = await callRelayJson_("/v1/relay-sessions/enroll", {

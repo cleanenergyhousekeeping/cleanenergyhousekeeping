@@ -2,50 +2,187 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const app = fs.readFileSync(path.join(repoRoot, "clockin-test/app.js"), "utf8");
 const html = fs.readFileSync(path.join(repoRoot, "clockin-test/index.html"), "utf8");
 
-function section(name) {
-  const match = app.match(new RegExp(`/\\* begin\\[${name}\\] \\*/([\\s\\S]*?)/\\* end\\[${name}\\] \\*/`));
-  assert.ok(match, `missing ${name} section`);
-  return match[1];
+function makeStorage(initial = {}) {
+  const values = new Map(Object.entries(initial));
+  return {
+    getItem(key) { return values.has(key) ? values.get(key) : null; },
+    setItem(key, value) { values.set(key, String(value)); },
+    removeItem(key) { values.delete(key); },
+  };
 }
 
-test("paired TEST installations stay authoritative and do not enroll again", () => {
-  const pairing = section("test_automatic_relay_pairing");
-  assert.match(pairing, /synchronizeExistingRelayInstallationIdentity_\(existingState\)\) return;/);
-  assert.match(pairing, /if \(synchronizeExistingRelayInstallationIdentity_\(state\) \|\| state\) return;/);
-  assert.match(section("test_automatic_relay_installation_identity"), /saveRelayInstallationId_\(state\.pairedDeviceId\)/);
+function makeLocks() {
+  let pending = Promise.resolve();
+  return {
+    request(_name, _options, callback) {
+      const run = pending.then(callback);
+      pending = run.catch(function () {});
+      return run;
+    },
+  };
+}
+
+function makeElement() {
+  return {
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    addEventListener() {},
+    textContent: "",
+    value: "",
+    disabled: false,
+  };
+}
+
+function response(payload) {
+  return { status: 200, json: async () => payload };
+}
+
+function makeHarness({ storage, locks, randomUUID, enroll }) {
+  const elements = new Map();
+  const document = {
+    getElementById(id) {
+      if (!elements.has(id)) elements.set(id, makeElement());
+      return elements.get(id);
+    },
+    querySelectorAll() { return []; },
+    addEventListener() {},
+  };
+  const context = {
+    AbortController,
+    JSON,
+    Promise,
+    Date,
+    Math,
+    Number,
+    String,
+    Array,
+    Object,
+    RegExp,
+    Error,
+    setTimeout,
+    clearTimeout,
+    console: { error() {} },
+    document,
+    localStorage: storage,
+    navigator: { onLine: true, locks, serviceWorker: { addEventListener() {} } },
+    window: { navigator: { standalone: false }, matchMedia() { return { matches: false }; }, addEventListener() {} },
+    crypto: randomUUID ? { randomUUID } : {},
+    fetch: async (url, options = {}) => {
+      if (url.endsWith("/health")) {
+        return response({ ok: true, service: "ceh-relay", environment: "test", storage: "ok" });
+      }
+      if (url.endsWith("/v1/relay-sessions/enroll")) {
+        return enroll(JSON.parse(options.body).deviceId);
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(`${app}\nglobalThis.__relayIdentityTestApi = { pair: pairRelayInstallationAutomatically_, getState: getRelayState_, getIdentity: getRelayInstallationId_ };`, context);
+  return context.__relayIdentityTestApi;
+}
+
+function preparedStorage(extra = {}) {
+  return makeStorage({
+    ce_shell_test_auth_v1: JSON.stringify({ sessionToken: "prepared-session" }),
+    ...extra,
+  });
+}
+
+function enrolledSession(deviceId, highWater = 0) {
+  return response({
+    ok: true,
+    session: {
+      deviceId,
+      relayToken: "relay-token",
+      expiresAtMs: 2_000_000_000_000,
+      ledgerHighWater: { deviceId, appliedThroughSequence: highWater },
+    },
+  });
+}
+
+test("two concurrent browser contexts create and enroll one stable installation identity", async () => {
+  const storage = preparedStorage();
+  const locks = makeLocks();
+  const enrollmentIds = [];
+  const first = makeHarness({ storage, locks, randomUUID: () => "uuid-first", enroll: (id) => {
+    enrollmentIds.push(id);
+    return enrolledSession(id);
+  } });
+  const second = makeHarness({ storage, locks, randomUUID: () => "uuid-second", enroll: (id) => {
+    enrollmentIds.push(id);
+    return enrolledSession(id);
+  } });
+
+  await Promise.all([first.pair(), second.pair()]);
+
+  const state = first.getState();
+  assert.equal(enrollmentIds.length, 1);
+  assert.equal(first.getIdentity(), enrollmentIds[0]);
+  assert.equal(second.getIdentity(), enrollmentIds[0]);
+  assert.equal(state.pairedDeviceId, enrollmentIds[0]);
+  assert.equal(state.nextSequence, 1);
 });
 
-test("a new TEST identity is securely persisted before enrollment and reused", () => {
-  const identity = section("test_automatic_relay_installation_identity");
-  const pairing = section("test_automatic_relay_pairing");
-  assert.match(identity, /typeof crypto === "undefined" \|\| typeof crypto\.randomUUID !== "function"/);
-  assert.match(identity, /"test-relay-" \+ crypto\.randomUUID\(\)/);
-  assert.ok(identity.indexOf("const existingDeviceId = getRelayInstallationId_()") < identity.indexOf("crypto.randomUUID()"));
-  assert.ok(pairing.indexOf("getOrCreateRelayInstallationId_()") < pairing.indexOf('"/v1/relay-sessions/enroll"'));
+test("a lost enrollment response retries with the same persisted identity", async () => {
+  const storage = preparedStorage();
+  const enrollmentIds = [];
+  let attempt = 0;
+  const harness = makeHarness({
+    storage,
+    locks: makeLocks(),
+    randomUUID: () => "uuid-stable",
+    enroll: (id) => {
+      enrollmentIds.push(id);
+      attempt += 1;
+      if (attempt === 1) throw new Error("lost response");
+      return enrolledSession(id);
+    },
+  });
+
+  await harness.pair();
+  assert.equal(harness.getState(), null);
+  await harness.pair();
+  assert.deepEqual(enrollmentIds, ["test-relay-uuid-stable", "test-relay-uuid-stable"]);
+  assert.equal(harness.getState().pairedDeviceId, "test-relay-uuid-stable");
 });
 
-test("only a confirmed zero high-water initializes the first relay sequence", () => {
-  const pairing = section("test_automatic_relay_pairing");
-  assert.match(pairing, /appliedThroughSequence !== 0/);
-  assert.match(pairing, /lastConfirmedLedgerHighWater: 0/);
-  assert.match(pairing, /nextSequence: 1/);
-  assert.match(pairing, /highestAllocatedSequence: 0/);
-  assert.doesNotMatch(pairing, /TEST_RELAY_INITIAL_HIGH_WATER|nextSequence: 3/);
-});
+test("existing paired state, nonzero high-water, failures, and missing crypto never reset relay state", async () => {
+  const paired = {
+    version: 1, pairedDeviceId: "test-relay-existing-device", relayToken: "old", relayTokenExpiresAtMs: 1,
+    lastConfirmedLedgerHighWater: 7, nextSequence: 8, highestAllocatedSequence: 7, queue: [{ eventId: "kept" }],
+  };
+  const pairedStorage = preparedStorage({ ce_shell_test_relay_state_v1: JSON.stringify(paired) });
+  const pairedHarness = makeHarness({ storage: pairedStorage, locks: makeLocks(), randomUUID: () => "unused", enroll: () => {
+    throw new Error("existing pairing must not enroll");
+  } });
+  await pairedHarness.pair();
+  assert.deepEqual(pairedHarness.getState(), paired);
 
-test("automatic pairing serializes triggers and leaves relay state untouched on temporary failure", () => {
-  const pairing = section("test_automatic_relay_pairing");
-  assert.match(pairing, /relayAutoPairingInProgress\) return/);
-  assert.match(pairing, /await withRelayLock_\(async function/);
-  assert.equal((pairing.match(/saveRelayState_/g) || []).length, 1);
-  assert.doesNotMatch(pairing, /attemptCount|nextAttemptAtMs|\.queue\./);
-  assert.match(app, /relayAutoPairingInProgress \|\|/);
+  const nonzeroHarness = makeHarness({ storage: preparedStorage(), locks: makeLocks(), randomUUID: () => "nonzero", enroll: (id) => enrolledSession(id, 2) });
+  await nonzeroHarness.pair();
+  assert.equal(nonzeroHarness.getState(), null);
+
+  const legacyQueue = JSON.stringify([{ id: "legacy-unchanged" }]);
+  const failureStorage = preparedStorage({ ce_shell_test_queue_v1: legacyQueue });
+  const failureHarness = makeHarness({ storage: failureStorage, locks: makeLocks(), randomUUID: () => "unused", enroll: () => {
+    throw new Error("legacy queue must not enroll");
+  } });
+  await failureHarness.pair();
+  assert.equal(failureStorage.getItem("ce_shell_test_queue_v1"), legacyQueue);
+  assert.equal(failureHarness.getState(), null);
+
+  const cryptoHarness = makeHarness({ storage: preparedStorage(), locks: makeLocks(), enroll: () => {
+    throw new Error("missing crypto must not enroll");
+  } });
+  await cryptoHarness.pair();
+  assert.equal(cryptoHarness.getState(), null);
 });
 
 test("manual device-ID controls are absent from the cleaner interface", () => {
