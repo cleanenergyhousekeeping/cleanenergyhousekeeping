@@ -68,6 +68,7 @@ const offlineNoteWrap = document.getElementById("offlineNoteWrap");
 const offlineNoteInput = document.getElementById("offlineNoteInput");
 const saveOfflineEntryBtn = document.getElementById("saveOfflineEntryBtn");
 const shellSyncHud = document.getElementById("shellSyncHud");
+const shellSyncHudTitle = document.getElementById("shellSyncHudTitle");
 const shellSyncHudDetail = document.getElementById("shellSyncHudDetail");
 const shellFlashHud = document.getElementById("shellFlashHud");
 const shellFlashHudTitle = document.getElementById("shellFlashHudTitle");
@@ -170,7 +171,7 @@ function appendShellPinDigit_(digit) {
     }
     setStatusText_("Checking access...");
     setOfflineReadyStatusText_("Checking access...");
-    showShellSyncHud_("Checking access...");
+    showShellSyncHud_("Checking access...", "LOGGING IN");
     unlockShellWithPin_();
   }
 }
@@ -377,8 +378,18 @@ function setShellEntryLocked_(locked) {
 }
 /* end[shell_entry_lock_helper] */
 
-function showShellSyncHud_(detailText) {
+let shellActionHudTimer = null;
+
+function showShellSyncHud_(detailText, titleText) {
+  if (shellActionHudTimer) {
+    clearTimeout(shellActionHudTimer);
+    shellActionHudTimer = null;
+  }
   setShellEntryLocked_(true);
+
+  if (shellSyncHudTitle) {
+    shellSyncHudTitle.textContent = titleText || "SYNCING";
+  }
 
   if (shellSyncHudDetail) {
     shellSyncHudDetail.textContent = detailText || "Please wait...";
@@ -391,6 +402,10 @@ function showShellSyncHud_(detailText) {
 }
 
 function hideShellSyncHud_() {
+  if (shellActionHudTimer) {
+    clearTimeout(shellActionHudTimer);
+    shellActionHudTimer = null;
+  }
   setShellEntryLocked_(false);
 
   if (shellSyncHud) {
@@ -401,6 +416,18 @@ function hideShellSyncHud_() {
   if (shellSyncHudDetail) {
     shellSyncHudDetail.textContent = "Please wait...";
   }
+
+  if (shellSyncHudTitle) {
+    shellSyncHudTitle.textContent = "SYNCING";
+  }
+}
+
+function showShellActionConfirmation_(title, detail) {
+  showShellSyncHud_(detail, title);
+  shellActionHudTimer = setTimeout(function () {
+    shellActionHudTimer = null;
+    hideShellSyncHud_();
+  }, 2000);
 }
 
 let shellFlashHudTimer = null;
@@ -924,32 +951,25 @@ function renderRelayStatus_() {
   const hasTerminal = pending.some(function (event) {
     return event.status === "terminal";
   });
-  const hasRetryable = pending.some(function (event) {
-    return event.status === "retryable";
-  });
   const hasAccepted = queue.some(function (event) {
     return event.status === "accepted";
   });
   let message = "";
 
-  if (relayHudAttentionMessage) {
-    message = relayHudAttentionMessage;
-  } else if (hasTerminal) {
-    message = "TEST relay requires attention. Saved events need review.";
+  if (relayHudAttentionMessage || hasTerminal) {
+    message = "Some entries need help syncing. Your work is still saved.";
   } else if (pending.length && !navigator.onLine) {
-    message = "Phone offline. Saved locally; waiting to contact Cloudflare.";
+    message = "Saved on this phone. Waiting for connection.";
   } else if (pending.length && relayReachabilityState === "unreachable") {
-    message = "Waiting for Cloudflare. Saved locally until the TEST relay is reachable.";
+    message = "Saved on this phone. Waiting for connection.";
   } else if (pending.length) {
-    message = relayReachabilityState === "reachable" && hasRetryable
-      ? "Saved locally. Retrying the TEST relay session."
-      : relayReachabilityState === "reachable"
-      ? "Saved locally. Sending to the TEST relay."
-      : "Saved locally. Checking the TEST relay before sending.";
+    message = relayReachabilityState === "reachable"
+      ? "Sending saved entries..."
+      : "Saved on this phone. Checking connection...";
   } else if (hasAccepted) {
-    message = "Accepted by TEST relay; no longer pending on this phone.";
+    message = "All caught up.";
   } else if (state && state.pairedDeviceId && relayReachabilityState === "reachable") {
-    message = "TEST relay reachable.";
+    message = "Connected and ready.";
   }
 
   if (offlineQueueCount) {
@@ -1287,6 +1307,13 @@ async function saveRelayEntry_() {
       if ((action === "add_note" || action === "clock_out") && !shellAuth.currentShift) {
         throw new Error("Clock in before adding a note or clocking out.");
       }
+      if (action === "clock_in") {
+        showShellSyncHud_("Saving your clock-in...", "CLOCKING IN");
+      } else if (action === "add_note") {
+        showShellSyncHud_("Saving your note...", "SAVING NOTE");
+      } else {
+        showShellSyncHud_("Saving your clock-out...", "CLOCKING OUT");
+      }
       const submittedAtMs = Date.now();
       const event = {
         eventId: makeRelayEventId_(),
@@ -1314,8 +1341,16 @@ async function saveRelayEntry_() {
     resetOfflineEntryForm_(currentAuth);
     updateShellUi_();
     renderRelayStatus_();
+    if (action === "clock_in") {
+      showShellActionConfirmation_("CLOCKED IN", property);
+    } else if (action === "add_note") {
+      showShellActionConfirmation_("NOTE SAVED", property);
+    } else {
+      showShellActionConfirmation_("CLOCKED OUT", property);
+    }
     syncRelayQueue_();
   } catch (error) {
+    hideShellSyncHud_();
     showShellFlashHud_((error && error.message) || "Relay entry was not saved.", false);
   }
 }
@@ -2348,23 +2383,18 @@ async function unlockShellWithPin_() {
 
     const cleanerName = shellAuth.cleanerName || "Cleaner";
     setOfflineReadyStatusText_("");
-    hideShellSyncHud_();
 
     if (usedSavedFallback && navigator.onLine) {
       setStatusText_("Unlocked for " + cleanerName + " using saved phone data.");
-      showShellFlashHud_("Using saved phone data.", false);
-      return;
-    }
-
-    if (usedSavedFallback && !navigator.onLine) {
+    } else if (usedSavedFallback && !navigator.onLine) {
       setStatusText_("Unlocked for " + cleanerName + " offline.");
-      return;
+    } else {
+      setStatusText_("Unlocked for " + cleanerName + " with live permissions.");
     }
-
-    setStatusText_("Unlocked for " + cleanerName + " with live permissions.");
     if (TEST_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
       renderRelayStatus_();
     }
+    showShellActionConfirmation_("LOGGED IN", "Ready for " + cleanerName + ".");
 
   } catch (error) {
     clearShellPin_();
