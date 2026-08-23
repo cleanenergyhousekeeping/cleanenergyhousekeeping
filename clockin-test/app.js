@@ -11,6 +11,11 @@ const APPS_SCRIPT_URL =
 const SHELL_AUTH_KEY = "ce_shell_test_auth_v1";
 const SHELL_QUEUE_KEY = "ce_shell_test_queue_v1";
 const SHELL_ENTRY_DRAFT_KEY = "ce_shell_test_entry_draft_v1";
+const TEST_RELAY_FEATURE_ENABLED = false;
+const TEST_RELAY_WORKER_URL = "https://ceh-relay-test.kyle-405.workers.dev";
+const TEST_RELAY_STATE_KEY = "ce_shell_test_relay_state_v1";
+const TEST_RELAY_LOCK_NAME = "ce-shell-test-relay-v1";
+const TEST_RELAY_INITIAL_HIGH_WATER = 2;
 /* end[clockin_test_shell_constants] */
 
 
@@ -70,6 +75,11 @@ const shellWorkHistoryBackBtn = document.getElementById("shellWorkHistoryBackBtn
 const shellWorkHistoryWeekLabel = document.getElementById("shellWorkHistoryWeekLabel");
 const shellWorkHistoryContent = document.getElementById("shellWorkHistoryContent");
 const shellWorkHistoryTotalValue = document.getElementById("shellWorkHistoryTotalValue");
+const relayPairingPanel = document.getElementById("relayPairingPanel");
+const relayDeviceIdInput = document.getElementById("relayDeviceIdInput");
+const relayPairingConfirm = document.getElementById("relayPairingConfirm");
+const relayPairingBtn = document.getElementById("relayPairingBtn");
+const relayPairingStatus = document.getElementById("relayPairingStatus");
 /* end[clockin_shell_dom_refs] */
 
 
@@ -104,7 +114,10 @@ function getShellAuth_() {
 }
 
 function saveShellAuth_(payload) {
-  localStorage.setItem(SHELL_AUTH_KEY, JSON.stringify(payload));
+  localStorage.setItem(
+    SHELL_AUTH_KEY,
+    JSON.stringify(deriveEffectiveRelayShellAuth_(payload))
+  );
 }
 async function hashShellPin_(pin) {
   const normalized = String(pin || "").replace(/\D/g, "").trim();
@@ -597,6 +610,11 @@ function formatOfflineQueueTimestamp_(submittedAtMs) {
 function updateOfflineQueueCount_() {
   if (!offlineQueueCount) return;
 
+  if (TEST_RELAY_FEATURE_ENABLED) {
+    updateRelayQueueCount_();
+    return;
+  }
+
   const queue = getShellQueue_();
 
   if (!queue.length) {
@@ -854,7 +872,436 @@ function resetOfflineEntryForm_(shellAuth) {
 }
 /* end[reset_offline_entry_form_with_guidance_refresh] */
 
+async function withRelayLock_(callback) {
+  if (!navigator.locks || typeof navigator.locks.request !== "function") {
+    throw new Error("Relay mode requires exclusive Web Locks support.");
+  }
+  return navigator.locks.request(TEST_RELAY_LOCK_NAME, { mode: "exclusive" }, callback);
+}
+
+function getRelayState_() {
+  try {
+    const raw = localStorage.getItem(TEST_RELAY_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && parsed.version === 1 && Array.isArray(parsed.queue) ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveRelayState_(state) {
+  localStorage.setItem(TEST_RELAY_STATE_KEY, JSON.stringify(state));
+}
+
+function updateRelayQueueCount_() {
+  if (!offlineQueueCount) return;
+  const state = getRelayState_();
+  const queue = state && Array.isArray(state.queue) ? state.queue : [];
+  if (!queue.length) {
+    offlineQueueCount.textContent = "";
+    offlineQueueCount.classList.add("hidden");
+    return;
+  }
+  const counts = queue.reduce(function (result, event) {
+    const status = String((event && event.status) || "queued");
+    result[status] = (result[status] || 0) + 1;
+    return result;
+  }, {});
+  const parts = [];
+  if (counts.queued) parts.push(counts.queued + " queued");
+  if (counts.retryable) parts.push(counts.retryable + " retrying");
+  if (counts.accepted) parts.push(counts.accepted + " relay accepted");
+  if (counts.terminal) parts.push(counts.terminal + " needs attention");
+  offlineQueueCount.textContent = "TEST relay: " + parts.join(" • ");
+  offlineQueueCount.classList.remove("hidden");
+}
+
+function setRelayPairingStatus_(message) {
+  if (relayPairingStatus) relayPairingStatus.textContent = String(message || "");
+}
+
+function isRelayDeviceId_(value) {
+  return /^[A-Za-z][A-Za-z0-9._:-]{15,127}$/.test(String(value || ""));
+}
+
+function makeRelayEventId_() {
+  if (!crypto || typeof crypto.randomUUID !== "function") {
+    throw new Error("Relay mode requires secure event-ID generation.");
+  }
+  return "relay-event-" + crypto.randomUUID();
+}
+
+function updateRelayPairingUi_() {
+  if (!relayPairingPanel) return;
+  relayPairingPanel.classList.toggle("hidden", !TEST_RELAY_FEATURE_ENABLED);
+  if (!TEST_RELAY_FEATURE_ENABLED) return;
+  if (getShellQueue_().length > 0) {
+    if (relayPairingBtn) relayPairingBtn.disabled = true;
+    setRelayPairingStatus_("Sync the legacy queue with the TEST relay gate disabled before pairing or using relay mode.");
+    return;
+  }
+  const state = getRelayState_();
+  if (state && state.pairedDeviceId) {
+    if (relayDeviceIdInput) {
+      relayDeviceIdInput.value = state.pairedDeviceId;
+      relayDeviceIdInput.disabled = true;
+    }
+    if (relayPairingConfirm) relayPairingConfirm.disabled = true;
+    if (relayPairingBtn) relayPairingBtn.disabled = true;
+    setRelayPairingStatus_("This installation is paired to its TEST relay device ID.");
+  }
+}
+
+async function callRelayJson_(path, body, relayToken) {
+  const headers = { "Content-Type": "application/json" };
+  if (relayToken) headers.Authorization = "Bearer " + relayToken;
+  const response = await fetch(TEST_RELAY_WORKER_URL + path, {
+    method: "POST",
+    headers: headers,
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch (_) {}
+  return { httpStatus: response.status, payload: payload };
+}
+
+function readRelaySession_(result, expectedDeviceId) {
+  const payload = result && result.payload;
+  const session = payload && payload.ok === true ? payload.session : null;
+  if (!session || session.deviceId !== expectedDeviceId || !session.ledgerHighWater) {
+    throw new Error("Relay session response did not confirm the paired device.");
+  }
+  const highWater = session.ledgerHighWater;
+  if (highWater.deviceId !== expectedDeviceId || !Number.isSafeInteger(highWater.appliedThroughSequence)) {
+    throw new Error("Relay session response has an invalid ledger high-water mark.");
+  }
+  if (typeof session.relayToken !== "string" || !Number.isSafeInteger(session.expiresAtMs)) {
+    throw new Error("Relay session response is incomplete.");
+  }
+  return session;
+}
+
+function verifyRelayHighWater_(state, appliedThroughSequence) {
+  const lastConfirmed = Number(state.lastConfirmedLedgerHighWater || 0);
+  const highestAllocated = Number(state.highestAllocatedSequence || 0);
+  if (appliedThroughSequence < lastConfirmed) {
+    throw new Error("Relay ledger high-water moved backward. Pairing must be reviewed.");
+  }
+  if (appliedThroughSequence > highestAllocated) {
+    throw new Error("Relay state is stale or conflicts with this installation. Pairing must be reviewed.");
+  }
+  // A lower high-water is expected while immutable local events await delivery.
+  // Their existing IDs and sequences are preserved without renumbering.
+}
+
+function deriveEffectiveRelayShellAuth_(shellAuth) {
+  if (!TEST_RELAY_FEATURE_ENABLED || !shellAuth) return shellAuth;
+  const state = getRelayState_();
+  if (!state || !Array.isArray(state.queue)) return shellAuth;
+  const derived = Object.assign({}, shellAuth);
+  const highWater = Number(state.lastConfirmedLedgerHighWater || 0);
+  const events = state.queue.slice().sort(function (left, right) {
+    return Number(left.deviceSequence) - Number(right.deviceSequence);
+  });
+  derived.relayAttentionRequired = false;
+  for (const event of events) {
+    if (event.status === "terminal") {
+      derived.relayAttentionRequired = true;
+      break;
+    }
+    if (Number(event.deviceSequence) <= highWater) continue;
+    if (event.eventType === "clock_in") {
+      derived.currentShift = {
+        property: event.property,
+        clockInMs: event.submittedAtMs,
+        clockInDisplay: "",
+      };
+    } else if (event.eventType === "clock_out") {
+      derived.currentShift = null;
+    }
+  }
+  return derived;
+}
+
+function assertLegacyQueueIsEmpty_() {
+  if (getShellQueue_().length > 0) {
+    throw new Error("Sync the legacy queue with the TEST relay gate disabled before pairing or using relay mode.");
+  }
+}
+
+function scheduleRelayRetry_(event, nowMs) {
+  const attempts = Math.max(1, Number(event.attemptCount || 0));
+  const delayMs = Math.min(15 * 60 * 1000, 5 * 1000 * 2 ** Math.max(0, attempts - 1));
+  event.status = "retryable";
+  event.attemptCount = attempts;
+  event.nextAttemptAtMs = nowMs + delayMs;
+}
+
+function firstNonAcceptedRelayEvent_(state) {
+  return state.queue.slice().sort(function (left, right) {
+    return Number(left.deviceSequence) - Number(right.deviceSequence);
+  }).find(function (event) {
+    return event.status !== "accepted";
+  }) || null;
+}
+
+function clearRelaySyncTimer_() {
+  if (shellSyncTimer) {
+    clearTimeout(shellSyncTimer);
+    shellSyncTimer = null;
+  }
+}
+
+function scheduleRelaySyncTimer_(nextAttemptAtMs) {
+  clearRelaySyncTimer_();
+  const delayMs = Math.max(0, Number(nextAttemptAtMs || 0) - Date.now());
+  shellSyncTimer = setTimeout(function () {
+    shellSyncTimer = null;
+    retryQueuedSyncIfReady_();
+  }, delayMs);
+}
+
+function applyRelaySession_(state, session) {
+  verifyRelayHighWater_(state, session.ledgerHighWater.appliedThroughSequence);
+  state.lastConfirmedLedgerHighWater = session.ledgerHighWater.appliedThroughSequence;
+  state.relayToken = session.relayToken;
+  state.relayTokenExpiresAtMs = session.expiresAtMs;
+  saveRelayState_(state);
+  saveShellAuth_(getShellAuth_() || {});
+}
+
+async function ensureRelaySessionLocked_(state) {
+  const shellAuth = getShellAuth_() || {};
+  if (!state.pairedDeviceId || !shellAuth.sessionToken) {
+    throw new Error("Pair this installation and refresh its Apps Script session before relay sync.");
+  }
+  const nowMs = Date.now();
+  const expiresAtMs = Number(state.relayTokenExpiresAtMs || 0);
+  if (state.relayToken && expiresAtMs > nowMs + 5 * 60 * 1000) return state;
+  const requestBody = {
+    appsSessionToken: shellAuth.sessionToken,
+    deviceId: state.pairedDeviceId,
+  };
+  if (state.relayToken && expiresAtMs > nowMs) {
+    const renewal = await callRelayJson_("/v1/relay-sessions/renew", requestBody, state.relayToken);
+    if (renewal.payload && renewal.payload.error === "authentication_failed") {
+      state.relayToken = "";
+      state.relayTokenExpiresAtMs = 0;
+      saveRelayState_(state);
+      const enrollment = await callRelayJson_("/v1/relay-sessions/enroll", requestBody, "");
+      applyRelaySession_(state, readRelaySession_(enrollment, state.pairedDeviceId));
+      return state;
+    }
+    applyRelaySession_(state, readRelaySession_(renewal, state.pairedDeviceId));
+    return state;
+  }
+  // Never renew an expired token. One enrollment attempt is allowed instead.
+  state.relayToken = "";
+  state.relayTokenExpiresAtMs = 0;
+  saveRelayState_(state);
+  const enrollment = await callRelayJson_("/v1/relay-sessions/enroll", requestBody, "");
+  applyRelaySession_(state, readRelaySession_(enrollment, state.pairedDeviceId));
+  return state;
+}
+
+async function pairRelayInstallation_() {
+  if (!TEST_RELAY_FEATURE_ENABLED) return;
+  const deviceId = String((relayDeviceIdInput && relayDeviceIdInput.value) || "").trim();
+  if (!isRelayDeviceId_(deviceId) || !relayPairingConfirm || !relayPairingConfirm.checked) {
+    setRelayPairingStatus_("Enter a valid device ID and confirm this ID belongs to only this installation.");
+    return;
+  }
+  try {
+    await withRelayLock_(async function () {
+      if (getRelayState_()) throw new Error("This installation already has relay state and cannot be re-paired here.");
+      assertLegacyQueueIsEmpty_();
+      const shellAuth = getShellAuth_() || {};
+      if (!shellAuth.sessionToken) throw new Error("Refresh the Apps Script session before pairing.");
+      setRelayPairingStatus_("Confirming TEST relay pairing...");
+      const result = await callRelayJson_("/v1/relay-sessions/enroll", {
+        appsSessionToken: shellAuth.sessionToken,
+        deviceId: deviceId,
+      });
+      const session = readRelaySession_(result, deviceId);
+      if (session.ledgerHighWater.appliedThroughSequence !== TEST_RELAY_INITIAL_HIGH_WATER) {
+        throw new Error("Initial pairing requires relay ledger high-water 2; no sequence was initialized.");
+      }
+      saveRelayState_({
+        version: 1,
+        pairedDeviceId: deviceId,
+        relayToken: session.relayToken,
+        relayTokenExpiresAtMs: session.expiresAtMs,
+        lastConfirmedLedgerHighWater: TEST_RELAY_INITIAL_HIGH_WATER,
+        nextSequence: 3,
+        highestAllocatedSequence: 2,
+        queue: [],
+      });
+    });
+    updateRelayPairingUi_();
+    setRelayPairingStatus_("TEST relay pairing confirmed. New events start at sequence 3.");
+  } catch (error) {
+    setRelayPairingStatus_((error && error.message) || "Relay pairing was not completed.");
+  }
+}
+
+async function saveRelayEntry_() {
+  const action = (offlineActionSelect && offlineActionSelect.value || "").trim();
+  const note = (offlineNoteInput && offlineNoteInput.value || "").trim();
+  const property = String((selectedOfflineProperty && selectedOfflineProperty.name) || "");
+  try {
+    await withRelayLock_(async function () {
+      assertLegacyQueueIsEmpty_();
+      const shellAuth = getShellAuth_();
+      const state = getRelayState_();
+      if (!shellAuth || !shellAuth.cleanerName || !action || !property) {
+        throw new Error("Complete the cleaner, property, and action before saving.");
+      }
+      if (!state || !state.pairedDeviceId || !Number.isSafeInteger(state.nextSequence)) {
+        throw new Error("Pair this installation with the TEST relay before saving entries.");
+      }
+      if (shellAuth.relayAttentionRequired || state.queue.some(function (event) { return event.status === "terminal"; })) {
+        throw new Error("TEST relay requires operator attention before another event can be allocated.");
+      }
+      if (!property.trim() || property.length > 500 || Array.from(note).length > 1000) {
+        throw new Error("Property or note exceeds the TEST relay limit.");
+      }
+      if (action !== "clock_in" && action !== "clock_out" && action !== "add_note") {
+        throw new Error("Select a supported action before saving.");
+      }
+      if (action === "add_note" && !note) throw new Error("Please enter a cleaning note.");
+      if (action === "clock_in" && shellAuth.currentShift) {
+        throw new Error("You are already clocked in. Add a note or clock out first.");
+      }
+      if ((action === "add_note" || action === "clock_out") && !shellAuth.currentShift) {
+        throw new Error("Clock in before adding a note or clocking out.");
+      }
+      const submittedAtMs = Date.now();
+      const event = {
+        eventId: makeRelayEventId_(),
+        deviceSequence: state.nextSequence,
+        eventType: action,
+        submittedAtMs: submittedAtMs,
+        property: property,
+        note: note,
+        status: "queued",
+        attemptCount: 0,
+        nextAttemptAtMs: submittedAtMs,
+      };
+      state.queue.push(event);
+      state.highestAllocatedSequence = event.deviceSequence;
+      state.nextSequence = event.deviceSequence + 1;
+      saveRelayState_(state);
+      if (action === "clock_in") {
+        shellAuth.currentShift = { property: property, clockInMs: submittedAtMs, clockInDisplay: "" };
+      } else if (action === "clock_out") {
+        shellAuth.currentShift = null;
+      }
+      saveShellAuth_(shellAuth);
+    });
+    const currentAuth = getShellAuth_();
+    resetOfflineEntryForm_(currentAuth);
+    updateRelayQueueCount_();
+    setOfflineReadyStatusText_("Saved for TEST relay acceptance.");
+    if (navigator.onLine) syncRelayQueue_();
+  } catch (error) {
+    showShellFlashHud_((error && error.message) || "Relay entry was not saved.", false);
+  }
+}
+
+async function syncRelayQueue_() {
+  if (!TEST_RELAY_FEATURE_ENABLED || !navigator.onLine) return;
+  let nextAttemptAtMs = 0;
+  try {
+    await withRelayLock_(async function () {
+      assertLegacyQueueIsEmpty_();
+      const state = getRelayState_();
+      if (!state || !state.pairedDeviceId) return;
+      const event = firstNonAcceptedRelayEvent_(state);
+      if (!event) return;
+      if (event.status === "terminal") {
+        clearRelaySyncTimer_();
+        state.attentionRequired = true;
+        saveRelayState_(state);
+        saveShellAuth_(getShellAuth_() || {});
+        return;
+      }
+      if (Number(event.nextAttemptAtMs || 0) > Date.now()) {
+        nextAttemptAtMs = Number(event.nextAttemptAtMs);
+        return;
+      }
+      event.attemptCount = Number(event.attemptCount || 0) + 1;
+      saveRelayState_(state);
+      try {
+        await ensureRelaySessionLocked_(state);
+      } catch (_) {
+        scheduleRelayRetry_(event, Date.now());
+        saveRelayState_(state);
+        nextAttemptAtMs = event.nextAttemptAtMs;
+        return;
+      }
+      try {
+        const result = await callRelayJson_("/v1/relay-events", {
+          eventId: event.eventId,
+          deviceSequence: event.deviceSequence,
+          eventType: event.eventType,
+          submittedAtMs: event.submittedAtMs,
+          property: event.property,
+          note: event.note,
+        }, state.relayToken);
+        if (result.payload && result.payload.ok === true && result.payload.eventId === event.eventId) {
+          event.status = "accepted";
+          event.nextAttemptAtMs = 0;
+          const nextEvent = firstNonAcceptedRelayEvent_(state);
+          if (nextEvent) {
+            if (nextEvent.status === "terminal") {
+              clearRelaySyncTimer_();
+              state.attentionRequired = true;
+              saveShellAuth_(getShellAuth_() || {});
+            } else {
+              nextAttemptAtMs = Math.max(
+                Date.now(),
+                Number(nextEvent.nextAttemptAtMs || 0)
+              );
+            }
+          }
+        } else if (result.payload && result.payload.error === "authentication_failed") {
+          // Keep the immutable event and make one later enrollment attempt.
+          state.relayToken = "";
+          state.relayTokenExpiresAtMs = 0;
+          scheduleRelayRetry_(event, Date.now());
+          nextAttemptAtMs = event.nextAttemptAtMs;
+        } else if (result.payload && result.payload.retryable === false) {
+          event.status = "terminal";
+          event.failure = String(result.payload.error || "terminal_failure");
+          state.attentionRequired = true;
+          saveShellAuth_(getShellAuth_() || {});
+        } else {
+          scheduleRelayRetry_(event, Date.now());
+          nextAttemptAtMs = event.nextAttemptAtMs;
+        }
+        saveRelayState_(state);
+      } catch (_) {
+        scheduleRelayRetry_(event, Date.now());
+        saveRelayState_(state);
+        nextAttemptAtMs = event.nextAttemptAtMs;
+      }
+    });
+    updateRelayQueueCount_();
+    if (nextAttemptAtMs > 0) scheduleRelaySyncTimer_(nextAttemptAtMs);
+  } catch (error) {
+    setStatusText_((error && error.message) || "TEST relay is unavailable; entries remain saved.");
+  }
+}
+
 function saveOfflineEntry_() {
+  if (TEST_RELAY_FEATURE_ENABLED) {
+    saveRelayEntry_();
+    return;
+  }
   const shellAuth = getShellAuth_();
   const action = (offlineActionSelect && offlineActionSelect.value || "").trim();
   const note = (offlineNoteInput && offlineNoteInput.value || "").trim();
@@ -1425,6 +1872,9 @@ function removeQueuedEntryById_(queuedId) {
 }
 
 async function syncShellQueue_() {
+  if (TEST_RELAY_FEATURE_ENABLED) {
+    return syncRelayQueue_();
+  }
   if (shellSyncInProgress) {
     logShellQueueSync_("skip_in_progress", {
       queueLengthBefore: getShellQueue_().length,
@@ -2193,6 +2643,18 @@ function updateShellUi_() {
     hideElement_(prepSection);
     showElement_(offlineEntrySection);
 
+    if (TEST_RELAY_FEATURE_ENABLED && shellAuth.relayAttentionRequired) {
+      setShellEntryLocked_(true);
+      setStatusText_("TEST relay requires operator attention. No new events will be allocated.");
+      updateOfflineReadyText_(shellAuth);
+      updateOfflineQueueCount_();
+      reconcileShellEntryDraft_(shellAuth);
+      return;
+    }
+    if (TEST_RELAY_FEATURE_ENABLED) {
+      setShellEntryLocked_(false);
+    }
+
     const currentShiftText =
       shellAuth.currentShift && shellAuth.currentShift.property
         ? ` Current shift: ${shellAuth.currentShift.property}.`
@@ -2265,6 +2727,23 @@ function retryQueuedSyncIfReady_() {
   updateShellUi_();
 
   if (!navigator.onLine) {
+    return;
+  }
+
+  if (TEST_RELAY_FEATURE_ENABLED) {
+    const state = getRelayState_();
+    const event = state ? firstNonAcceptedRelayEvent_(state) : null;
+    if (!event) return;
+    if (event.status === "terminal") {
+      clearRelaySyncTimer_();
+      updateShellUi_();
+      return;
+    }
+    if (Number(event.nextAttemptAtMs || 0) > Date.now()) {
+      scheduleRelaySyncTimer_(event.nextAttemptAtMs);
+      return;
+    }
+    syncRelayQueue_();
     return;
   }
 
@@ -2354,6 +2833,10 @@ if (loadPrepBtn) {
   loadPrepBtn.addEventListener("click", loadOfflinePrep_);
 }
 
+if (relayPairingBtn) {
+  relayPairingBtn.addEventListener("click", pairRelayInstallation_);
+}
+
 if (offlinePropertySearch) {
   offlinePropertySearch.addEventListener("input", handleOfflinePropertySearch_);
   offlinePropertySearch.addEventListener("focus", handleOfflinePropertySearch_);
@@ -2409,6 +2892,7 @@ if (shellWorkHistoryBackBtn) {
 
 /* begin[clockin_shell_init] */
 document.addEventListener("DOMContentLoaded", async function () {
+  updateRelayPairingUi_();
   shellUnlocked = false;
   clearShellPin_();
   clearPrepPin_();

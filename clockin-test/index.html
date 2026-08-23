@@ -141,6 +141,19 @@
         </div>
         <!-- end[offline_top_guidance_markup] -->
 
+        <section id="relayPairingPanel" class="relayPairingPanel hidden" aria-live="polite">
+          <div class="relayPairingTitle">TEST Relay Pairing</div>
+          <p>Enter the relay device ID assigned to this client installation. One relay device ID may be paired with only one client installation.</p>
+          <label for="relayDeviceIdInput">Relay device ID</label>
+          <input id="relayDeviceIdInput" class="offlineInput" type="text" autocomplete="off" spellcheck="false" />
+          <label class="relayPairingConfirm">
+            <input id="relayPairingConfirm" type="checkbox" />
+            I confirm this device ID belongs only to this client installation.
+          </label>
+          <button id="relayPairingBtn" class="actionButton" type="button">Confirm TEST Relay Pairing</button>
+          <div id="relayPairingStatus" class="relayPairingStatus"></div>
+        </section>
+
         <label for="offlinePropertySearch">Property</label>
         <input
           id="offlinePropertySearch"
