@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
 
 const LIVE_APP_PREP_URL = "/clockin-test/seed.html";
-const TEST_BUILD_VERSION = "v16";
+const TEST_BUILD_VERSION = "v17";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
@@ -15,8 +15,8 @@ const SHELL_ENTRY_DRAFT_KEY = "ce_shell_test_entry_draft_v1";
 const TEST_RELAY_FEATURE_ENABLED = true;
 const TEST_RELAY_WORKER_URL = "https://ceh-relay-test.kyle-405.workers.dev";
 const TEST_RELAY_STATE_KEY = "ce_shell_test_relay_state_v1";
+const TEST_RELAY_INSTALLATION_ID_KEY = "ce_shell_test_relay_installation_id_v1";
 const TEST_RELAY_LOCK_NAME = "ce-shell-test-relay-v1";
-const TEST_RELAY_INITIAL_HIGH_WATER = 2;
 const TEST_RELAY_HEALTH_TIMEOUT_MS = 5 * 1000;
 const TEST_RELAY_REACHABILITY_RETRY_MS = 30 * 1000;
 /* end[clockin_test_shell_constants] */
@@ -81,9 +81,6 @@ const shellWorkHistoryWeekLabel = document.getElementById("shellWorkHistoryWeekL
 const shellWorkHistoryContent = document.getElementById("shellWorkHistoryContent");
 const shellWorkHistoryTotalValue = document.getElementById("shellWorkHistoryTotalValue");
 const relayPairingPanel = document.getElementById("relayPairingPanel");
-const relayDeviceIdInput = document.getElementById("relayDeviceIdInput");
-const relayPairingConfirm = document.getElementById("relayPairingConfirm");
-const relayPairingBtn = document.getElementById("relayPairingBtn");
 const relayPairingStatus = document.getElementById("relayPairingStatus");
 const relayPairedIndicator = document.getElementById("relayPairedIndicator");
 /* end[clockin_shell_dom_refs] */
@@ -109,6 +106,7 @@ let relayReachabilityState = "unknown";
 let relayHudAttentionMessage = "";
 let relaySubmissionInProgress = false;
 let relaySyncInProgress = 0;
+let relayAutoPairingInProgress = false;
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -1020,6 +1018,50 @@ function isRelayDeviceId_(value) {
   return /^[A-Za-z][A-Za-z0-9._:-]{15,127}$/.test(String(value || ""));
 }
 
+/* begin[test_automatic_relay_installation_identity] */
+function getRelayInstallationId_() {
+  try {
+    const deviceId = localStorage.getItem(TEST_RELAY_INSTALLATION_ID_KEY);
+    return isRelayDeviceId_(deviceId) ? deviceId : "";
+  } catch (_) {
+    return "";
+  }
+}
+
+function saveRelayInstallationId_(deviceId) {
+  if (!isRelayDeviceId_(deviceId)) {
+    throw new Error("This phone could not securely prepare relay setup.");
+  }
+  localStorage.setItem(TEST_RELAY_INSTALLATION_ID_KEY, deviceId);
+  if (getRelayInstallationId_() !== deviceId) {
+    throw new Error("This phone could not securely save relay setup.");
+  }
+}
+
+function getOrCreateRelayInstallationId_() {
+  const existingDeviceId = getRelayInstallationId_();
+  if (existingDeviceId) return existingDeviceId;
+  if (typeof crypto === "undefined" || typeof crypto.randomUUID !== "function") {
+    throw new Error("This browser cannot securely prepare this phone.");
+  }
+  const deviceId = "test-relay-" + crypto.randomUUID();
+  saveRelayInstallationId_(deviceId);
+  return deviceId;
+}
+
+function synchronizeExistingRelayInstallationIdentity_(state) {
+  if (!state || !isRelayDeviceId_(state.pairedDeviceId)) return false;
+  if (getRelayInstallationId_() !== state.pairedDeviceId) {
+    try {
+      saveRelayInstallationId_(state.pairedDeviceId);
+    } catch (_) {
+      // The existing valid pairing remains authoritative if this optional mirror cannot persist.
+    }
+  }
+  return true;
+}
+/* end[test_automatic_relay_installation_identity] */
+
 function makeRelayEventId_() {
   if (!crypto || typeof crypto.randomUUID !== "function") {
     throw new Error("Relay mode requires secure event-ID generation.");
@@ -1037,18 +1079,13 @@ function updateRelayPairingUi_() {
   }
   if (!TEST_RELAY_FEATURE_ENABLED) return;
   if (getShellQueue_().length > 0) {
-    if (relayPairingBtn) relayPairingBtn.disabled = true;
-    setRelayPairingStatus_("Sync the legacy queue with the TEST relay gate disabled before pairing or using relay mode.");
+    setRelayPairingStatus_("Finish syncing saved entries before this phone can finish setup.");
     return;
   }
   if (paired) {
-    if (relayDeviceIdInput) {
-      relayDeviceIdInput.value = state.pairedDeviceId;
-      relayDeviceIdInput.disabled = true;
-    }
-    if (relayPairingConfirm) relayPairingConfirm.disabled = true;
-    if (relayPairingBtn) relayPairingBtn.disabled = true;
-    setRelayPairingStatus_("This installation is paired to its TEST relay device ID.");
+    setRelayPairingStatus_("Phone setup is complete.");
+  } else if (!relayAutoPairingInProgress) {
+    setRelayPairingStatus_("This phone will finish secure setup when it is online.");
   }
 }
 
@@ -1256,50 +1293,53 @@ async function ensureRelaySessionLocked_(state) {
   return state;
 }
 
-async function pairRelayInstallation_() {
-  if (!TEST_RELAY_FEATURE_ENABLED) return;
-  const deviceId = String((relayDeviceIdInput && relayDeviceIdInput.value) || "").trim();
-  if (!isRelayDeviceId_(deviceId) || !relayPairingConfirm || !relayPairingConfirm.checked) {
-    setRelayPairingStatus_("Enter a valid device ID and confirm this ID belongs to only this installation.");
-    return;
-  }
-  if (!(await probeRelayReachability_())) {
-    setRelayPairingStatus_("TEST relay is unreachable; pairing was not completed. Try again when it is reachable.");
-    return;
-  }
+/* begin[test_automatic_relay_pairing] */
+async function pairRelayInstallationAutomatically_() {
+  if (!TEST_RELAY_FEATURE_ENABLED || !navigator.onLine || relayAutoPairingInProgress) return;
+  const existingState = getRelayState_();
+  if (synchronizeExistingRelayInstallationIdentity_(existingState)) return;
+  if (existingState || getShellQueue_().length > 0) return;
+
+  relayAutoPairingInProgress = true;
+  setRelayPairingStatus_("Finishing secure phone setup...");
   try {
+    const deviceId = getOrCreateRelayInstallationId_();
+    if (!(await probeRelayReachability_())) return;
     await withRelayLock_(async function () {
-      if (getRelayState_()) throw new Error("This installation already has relay state and cannot be re-paired here.");
+      const state = getRelayState_();
+      if (synchronizeExistingRelayInstallationIdentity_(state) || state) return;
       assertLegacyQueueIsEmpty_();
       const shellAuth = getShellAuth_() || {};
-      if (!shellAuth.sessionToken) throw new Error("Refresh the Apps Script session before pairing.");
-      setRelayPairingStatus_("Confirming TEST relay pairing...");
+      if (!shellAuth.sessionToken) return;
       const result = await callRelayJson_("/v1/relay-sessions/enroll", {
         appsSessionToken: shellAuth.sessionToken,
         deviceId: deviceId,
       });
       const session = readRelaySession_(result, deviceId);
-      if (session.ledgerHighWater.appliedThroughSequence !== TEST_RELAY_INITIAL_HIGH_WATER) {
-        throw new Error("Initial pairing requires relay ledger high-water 2; no sequence was initialized.");
+      if (session.ledgerHighWater.appliedThroughSequence !== 0) {
+        throw new Error("This phone needs setup attention before it can save entries.");
       }
       saveRelayState_({
         version: 1,
         pairedDeviceId: deviceId,
         relayToken: session.relayToken,
         relayTokenExpiresAtMs: session.expiresAtMs,
-        lastConfirmedLedgerHighWater: TEST_RELAY_INITIAL_HIGH_WATER,
-        nextSequence: 3,
-        highestAllocatedSequence: 2,
+        lastConfirmedLedgerHighWater: 0,
+        nextSequence: 1,
+        highestAllocatedSequence: 0,
         queue: [],
       });
     });
     updateRelayPairingUi_();
     renderRelayStatus_();
-    setRelayPairingStatus_("TEST relay pairing confirmed. New events start at sequence 3.");
   } catch (error) {
-    setRelayPairingStatus_((error && error.message) || "Relay pairing was not completed.");
+    setRelayPairingStatus_("This phone could not finish secure setup. It will try again when online.");
+  } finally {
+    relayAutoPairingInProgress = false;
+    tryTestPwaUpdateReload_();
   }
 }
+/* end[test_automatic_relay_pairing] */
 
 async function saveRelayEntry_() {
   const action = (offlineActionSelect && offlineActionSelect.value || "").trim();
@@ -2461,6 +2501,7 @@ async function unlockShellWithPin_() {
     showShellActionConfirmation_("LOGGED IN", "Ready for " + cleanerName + ".", 500);
 
     if (navigator.onLine) {
+      pairRelayInstallationAutomatically_();
       startShellBackgroundPinValidation_(enteredPin, enteredHash, loginGeneration, shellAuth);
     }
     enteredPin = "";
@@ -2607,6 +2648,7 @@ async function loadOfflinePrep_() {
     };
 
     saveShellAuth_(shellAuth);
+    pairRelayInstallationAutomatically_();
     clearShellEntryDraft_();
     shellLoginGeneration += 1;
     shellUnlocked = false;
@@ -2970,6 +3012,7 @@ function isTestPwaUpdateReloadSafe_() {
     shellPinUnlockInProgress ||
     shellBackgroundPinValidationInProgress ||
     shellPrepInProgress ||
+    relayAutoPairingInProgress ||
     relaySubmissionInProgress ||
     relaySyncInProgress > 0 ||
     shellSyncInProgress ||
@@ -3090,6 +3133,7 @@ window.addEventListener("online", function () {
     renderRelayStatus_();
   }
   refreshShellAuthOnForegroundIfNeeded_();
+  pairRelayInstallationAutomatically_();
   syncShellQueue_();
 });
 
@@ -3216,10 +3260,6 @@ if (loadPrepBtn) {
   loadPrepBtn.addEventListener("click", loadOfflinePrep_);
 }
 
-if (relayPairingBtn) {
-  relayPairingBtn.addEventListener("click", pairRelayInstallation_);
-}
-
 if (offlinePropertySearch) {
   offlinePropertySearch.addEventListener("input", handleOfflinePropertySearch_);
   offlinePropertySearch.addEventListener("focus", handleOfflinePropertySearch_);
@@ -3279,6 +3319,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     ceTestBuildIndicator.textContent = "Build " + TEST_BUILD_VERSION;
   }
 
+  synchronizeExistingRelayInstallationIdentity_(getRelayState_());
   updateRelayPairingUi_();
   shellUnlocked = false;
   clearShellPin_();
@@ -3288,6 +3329,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   updateShellUi_();
   updateOfflineQueueCount_();
+  pairRelayInstallationAutomatically_();
   syncShellQueue_();
 });
 /* end[clockin_shell_init] */
