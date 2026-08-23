@@ -1,10 +1,10 @@
-const CACHE_NAME = "ce-clockin-test-shell-v13";
+const CACHE_NAME = "ce-clockin-test-shell-v14";
 
 const APP_SHELL_FILES = [
   "/clockin-test/",
   "/clockin-test/index.html",
-  "/clockin-test/style.css",
-  "/clockin-test/app.js",
+  "/clockin-test/style.css?v=14",
+  "/clockin-test/app.js?v=14",
   "/clockin-test/seed.html",
   "/clockin-test/manifest.webmanifest",
   "/clockin/icon.png"
@@ -43,9 +43,22 @@ self.addEventListener("fetch", function (event) {
   }
 
   const isNavigationRequest = request.mode === "navigate";
+  const requestUrl = new URL(request.url);
+  const isCriticalTestShellAsset =
+    requestUrl.origin === self.location.origin &&
+    (
+      requestUrl.pathname === "/clockin-test/" ||
+      requestUrl.pathname === "/clockin-test/index.html" ||
+      requestUrl.pathname === "/clockin-test/style.css" ||
+      requestUrl.pathname === "/clockin-test/app.js"
+    );
 
   event.respondWith(
-    fetch(request)
+    fetch(
+      isCriticalTestShellAsset
+        ? new Request(request, { cache: "no-store" })
+        : request
+    )
       .then(function (response) {
         return response;
       })

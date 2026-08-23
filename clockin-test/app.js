@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
 
 const LIVE_APP_PREP_URL = "/clockin-test/seed.html";
-const TEST_BUILD_VERSION = "v13";
+const TEST_BUILD_VERSION = "v14";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
@@ -97,6 +97,7 @@ let shellUnlocked = false;
 let shellPinUnlockInProgress = false;
 let shellLoginGeneration = 0;
 let shellBackgroundPinValidationInProgress = false;
+let shellPrepInProgress = false;
 const SHELL_PIN_LENGTH = 4;
 /* end[clockin_shell_state] */
 let shellSyncInProgress = false;
@@ -107,6 +108,7 @@ let relayReachabilityProbe = null;
 let relayReachabilityState = "unknown";
 let relayHudAttentionMessage = "";
 let relaySubmissionInProgress = false;
+let relaySyncInProgress = 0;
 
 /* begin[clockin_shell_helpers] */
 function isStandaloneMode_() {
@@ -1381,6 +1383,9 @@ async function saveRelayEntry_() {
 
 async function syncRelayQueue_() {
   if (!TEST_RELAY_FEATURE_ENABLED) return;
+  relaySyncInProgress += 1;
+
+  try {
   let nextAttemptAtMs = 0;
   const initialState = getRelayState_();
   const initialEvent = initialState ? firstNonAcceptedRelayEvent_(initialState) : null;
@@ -1487,6 +1492,10 @@ async function syncRelayQueue_() {
         "TEST relay requires attention. Event remains saved locally; " + detail
       );
     }
+  }
+  } finally {
+    relaySyncInProgress = Math.max(0, relaySyncInProgress - 1);
+    tryTestPwaUpdateReload_();
   }
 }
 
@@ -2531,6 +2540,7 @@ async function loadOfflinePrep_() {
     return;
   }
 
+  shellPrepInProgress = true;
   setStatusText_("Preparing this phone...");
   if (loadPrepBtn) {
     loadPrepBtn.textContent = "Preparing...";
@@ -2603,10 +2613,12 @@ async function loadOfflinePrep_() {
         ((error && error.message) || String(error) || "Unknown error")
     );
   } finally {
+    shellPrepInProgress = false;
     if (loadPrepBtn) {
       loadPrepBtn.textContent = "Prepare This Phone";
       loadPrepBtn.disabled = false;
     }
+    tryTestPwaUpdateReload_();
   }
 }
 /* end[shell_token_prep_flow] */
@@ -2912,17 +2924,123 @@ function updateShellUi_() {
 }
 /* end[clockin_shell_helpers] */
 
-/* begin[clockin_shell_service_worker] */
+/* begin[clockin_test_pwa_update_lifecycle] */
+const TEST_PWA_UPDATE_RELOAD_GUARD_KEY =
+  "ce_clockin_test_pwa_reload_" + TEST_BUILD_VERSION;
+const TEST_PWA_UPDATE_RELOAD_RETRY_MS = 1000;
+const TEST_PWA_UPDATE_RELOAD_MAX_RETRIES = 30;
+let testPwaUpdateReloadPending = false;
+let testPwaUpdateReloadRetryCount = 0;
+let testPwaUpdateReloadTimer = null;
+let testPwaControllerChangeListening = false;
+
+function isTestPwaUpdateReloadGuardSet_() {
+  try {
+    return sessionStorage.getItem(TEST_PWA_UPDATE_RELOAD_GUARD_KEY) === "1";
+  } catch (_) {
+    // Without a reliable per-session guard, do not risk a reload loop.
+    return true;
+  }
+}
+
+function setTestPwaUpdateReloadGuard_() {
+  try {
+    sessionStorage.setItem(TEST_PWA_UPDATE_RELOAD_GUARD_KEY, "1");
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function isTestPwaUpdateReloadSafe_() {
+  const centeredHudActive =
+    (shellSyncHud && !shellSyncHud.classList.contains("hidden")) ||
+    (shellFlashHud && !shellFlashHud.classList.contains("hidden"));
+
+  return !(
+    shellPinUnlockInProgress ||
+    shellBackgroundPinValidationInProgress ||
+    shellPrepInProgress ||
+    relaySubmissionInProgress ||
+    relaySyncInProgress > 0 ||
+    shellSyncInProgress ||
+    centeredHudActive
+  );
+}
+
+function clearTestPwaUpdateReloadTimer_() {
+  if (!testPwaUpdateReloadTimer) return;
+  clearTimeout(testPwaUpdateReloadTimer);
+  testPwaUpdateReloadTimer = null;
+}
+
+function tryTestPwaUpdateReload_() {
+  if (!testPwaUpdateReloadPending) return;
+
+  if (isTestPwaUpdateReloadGuardSet_()) {
+    testPwaUpdateReloadPending = false;
+    clearTestPwaUpdateReloadTimer_();
+    return;
+  }
+
+  if (isTestPwaUpdateReloadSafe_()) {
+    if (!setTestPwaUpdateReloadGuard_()) {
+      testPwaUpdateReloadPending = false;
+      return;
+    }
+    testPwaUpdateReloadPending = false;
+    clearTestPwaUpdateReloadTimer_();
+    window.location.reload();
+    return;
+  }
+
+  if (
+    testPwaUpdateReloadTimer ||
+    testPwaUpdateReloadRetryCount >= TEST_PWA_UPDATE_RELOAD_MAX_RETRIES
+  ) {
+    return;
+  }
+
+  testPwaUpdateReloadRetryCount += 1;
+  testPwaUpdateReloadTimer = setTimeout(function () {
+    testPwaUpdateReloadTimer = null;
+    tryTestPwaUpdateReload_();
+  }, TEST_PWA_UPDATE_RELOAD_RETRY_MS);
+}
+
+function handleTestPwaControllerChange_() {
+  if (testPwaUpdateReloadPending || isTestPwaUpdateReloadGuardSet_()) return;
+  testPwaUpdateReloadPending = true;
+  testPwaUpdateReloadRetryCount = 0;
+  tryTestPwaUpdateReload_();
+}
+
+function listenForTestPwaControllerChange_() {
+  if (testPwaControllerChangeListening) return;
+  testPwaControllerChangeListening = true;
+  navigator.serviceWorker.addEventListener(
+    "controllerchange",
+    handleTestPwaControllerChange_
+  );
+}
+
 async function registerServiceWorker_() {
   if (!("serviceWorker" in navigator)) {
     return false;
   }
 
   try {
+    listenForTestPwaControllerChange_();
     const registration = await navigator.serviceWorker.register(
       "/clockin-test/service-worker.js",
       { scope: "/clockin-test/" }
     );
+
+    if (navigator.onLine) {
+      registration.update().catch(function () {
+        // Update checks are best effort; the installed shell remains usable.
+      });
+    }
 
     return !!registration;
   } catch (error) {
@@ -2930,7 +3048,7 @@ async function registerServiceWorker_() {
     return false;
   }
 }
-/* end[clockin_shell_service_worker] */
+/* end[clockin_test_pwa_update_lifecycle] */
 
 
 /* begin[clockin_shell_event_wiring] */
