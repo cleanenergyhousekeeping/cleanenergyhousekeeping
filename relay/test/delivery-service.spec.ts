@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type {
   AppsCallOutcome,
@@ -8,6 +8,7 @@ import type {
 import type { RelayConfig } from "../src/config";
 import {
   ATTENTION_REQUIRED_AGE_MS,
+  DELIVERY_BATCH_LIMIT,
   DELIVERY_LEASE_MS,
   runDeliveryBatch,
 } from "../src/delivery-service";
@@ -31,6 +32,20 @@ import type { EventType, RelayLaneRow } from "../src/persistence/types";
 
 /* begin[relay_delivery_service_tests] */
 const NOW_MS = Date.UTC(2026, 7, 15, 20, 0, 0);
+
+beforeEach(async () => {
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM notification_outbox"),
+    env.DB.prepare("DELETE FROM incident_event_membership"),
+    env.DB.prepare("DELETE FROM notification_incidents"),
+    env.DB.prepare("DELETE FROM relay_sequence_gap_resolutions"),
+    env.DB.prepare("DELETE FROM relay_events"),
+    env.DB.prepare("DELETE FROM relay_lanes"),
+    env.DB.prepare("DELETE FROM relay_state_snapshots"),
+    env.DB.prepare("DELETE FROM relay_session_tokens"),
+    env.DB.prepare("DELETE FROM relay_sessions"),
+  ]);
+});
 
 interface EventFixture {
   eventId: string;
@@ -150,7 +165,7 @@ function resultOutcome(response: AppsRelayResponse): AppsCallOutcome {
 }
 
 describe("scheduled delivery bridge", () => {
-  it("delivers strictly one contiguous event at a time per lane", async () => {
+  it("delivers multiple contiguous events from one lane in order in one batch", async () => {
     const config = await makeConfig();
     const first = await createFixture("fifo_1", config);
     const second = await createFixture("fifo_2", config, {
@@ -169,18 +184,12 @@ describe("scheduled delivery bridge", () => {
         now: () => NOW_MS,
         callApps: callApps as never,
       }),
-    ).toMatchObject({ selected: 1, delivered: 1 });
-    expect(await getEvent(env.DB, second.eventId)).toMatchObject({ state: "accepted" });
-    expect(
-      await runDeliveryBatch(env.DB, config, {
-        now: () => NOW_MS + 1,
-        callApps: callApps as never,
-      }),
-    ).toMatchObject({ selected: 1, delivered: 1 });
+    ).toMatchObject({ selected: 2, delivered: 2 });
+    expect(await getEvent(env.DB, second.eventId)).toMatchObject({ state: "delivered" });
     expect(deliveredIds).toEqual([first.eventId, second.eventId]);
   });
 
-  it("processes independent lanes concurrently without exceeding five", async () => {
+  it("processes independent lanes sequentially for the Apps Script lock", async () => {
     const config = await makeConfig();
     for (let index = 0; index < 6; index += 1) {
       await createFixture(`concurrent_${index}`, config);
@@ -204,7 +213,91 @@ describe("scheduled delivery bridge", () => {
     });
 
     expect(summary).toMatchObject({ selected: 6, delivered: 6 });
-    expect(maximum).toBe(5);
+    expect(maximum).toBe(1);
+  });
+
+  it("does not attempt a later sequence after its lane head fails", async () => {
+    const config = await makeConfig();
+    const first = await createFixture("failed_fifo_1", config);
+    const second = await createFixture("failed_fifo_2", config, {
+      lane: first.lane,
+      sequence: 2,
+      eventType: "clock_out",
+    });
+    const attemptedIds: string[] = [];
+    const summary = await runDeliveryBatch(env.DB, config, {
+      now: () => NOW_MS,
+      randomUnit: () => 0,
+      callApps: (async (
+        _config: RelayConfig,
+        _operation: string,
+        payload: Record<string, unknown>,
+      ) => {
+        attemptedIds.push(String(payload.eventId));
+        return { kind: "failure", category: "timeout" };
+      }) as never,
+    });
+
+    expect(summary).toMatchObject({ selected: 1, retryable: 1 });
+    expect(attemptedIds).toEqual([first.eventId]);
+    expect(await getEvent(env.DB, second.eventId)).toMatchObject({ state: "accepted" });
+  });
+
+  it("gives every ready lane one attempt before returning to a busy lane", async () => {
+    const config = await makeConfig();
+    const firstA = await createFixture("fair_a_1", config);
+    const secondA = await createFixture("fair_a_2", config, {
+      lane: firstA.lane,
+      sequence: 2,
+      eventType: "clock_out",
+    });
+    const firstB = await createFixture("fair_b_1", config);
+    const deliveredIds: string[] = [];
+    const summary = await runDeliveryBatch(env.DB, config, {
+      now: () => NOW_MS,
+      callApps: (async (
+        _config: RelayConfig,
+        _operation: string,
+        payload: Record<string, unknown>,
+      ) => {
+        deliveredIds.push(String(payload.eventId));
+        return appsResult("applied", true, String(payload.eventId));
+      }) as never,
+    });
+
+    expect(summary).toMatchObject({ selected: 3, delivered: 3 });
+    expect(deliveredIds).toEqual([firstA.eventId, firstB.eventId, secondA.eventId]);
+  });
+
+  it("enforces the twenty-attempt cap", async () => {
+    const config = await makeConfig();
+    await Promise.all(
+      Array.from({ length: DELIVERY_BATCH_LIMIT + 1 }, (_, index) =>
+        createFixture(`cap_${index}`, config),
+      ),
+    );
+    let calls = 0;
+    const summary = await runDeliveryBatch(env.DB, config, {
+      now: () => NOW_MS,
+      callApps: (async (
+        _config: RelayConfig,
+        _operation: string,
+        payload: Record<string, unknown>,
+      ) => {
+        calls += 1;
+        return appsResult("applied", true, String(payload.eventId));
+      }) as never,
+    });
+    const deliveredCount = await env.DB
+      .prepare("SELECT COUNT(*) AS count FROM relay_events WHERE state = 'delivered'")
+      .first<number>("count");
+
+    expect(summary).toMatchObject({
+      selected: DELIVERY_BATCH_LIMIT,
+      delivered: DELIVERY_BATCH_LIMIT,
+    });
+    expect(calls).toBe(DELIVERY_BATCH_LIMIT);
+    expect(deliveredCount).toBe(DELIVERY_BATCH_LIMIT);
   });
 
   it("drains accepted events after the cleaner's prior device session is revoked", async () => {
