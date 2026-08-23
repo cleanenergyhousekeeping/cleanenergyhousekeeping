@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
 
 const LIVE_APP_PREP_URL = "/clockin-test/seed.html";
-const TEST_BUILD_VERSION = "v15";
+const TEST_BUILD_VERSION = "v16";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
@@ -2458,7 +2458,7 @@ async function unlockShellWithPin_() {
         renderRelayStatus_();
       }
     }
-    showShellActionConfirmation_("LOGGED IN", "Ready for " + cleanerName + ".", 1000);
+    showShellActionConfirmation_("LOGGED IN", "Ready for " + cleanerName + ".", 500);
 
     if (navigator.onLine) {
       startShellBackgroundPinValidation_(enteredPin, enteredHash, loginGeneration, shellAuth);
