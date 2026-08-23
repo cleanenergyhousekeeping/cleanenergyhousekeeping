@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="Clock In TEST">
   <meta name="theme-color" content="#b7791f">
 
-  <link rel="stylesheet" href="/clockin-test/style.css?v=16">
+  <link rel="stylesheet" href="/clockin-test/style.css?v=17">
 </head>
 <body>
   <!-- begin[clockin_test_environment_banner] -->
@@ -145,15 +145,8 @@
         <!-- end[offline_top_guidance_markup] -->
 
         <section id="relayPairingPanel" class="relayPairingPanel hidden" aria-live="polite">
-          <div class="relayPairingTitle">TEST Relay Pairing</div>
-          <p>Enter the relay device ID assigned to this client installation. One relay device ID may be paired with only one client installation.</p>
-          <label for="relayDeviceIdInput">Relay device ID</label>
-          <input id="relayDeviceIdInput" class="offlineInput" type="text" autocomplete="off" spellcheck="false" />
-          <label class="relayPairingConfirm">
-            <input id="relayPairingConfirm" type="checkbox" />
-            I confirm this device ID belongs only to this client installation.
-          </label>
-          <button id="relayPairingBtn" class="actionButton" type="button">Confirm TEST Relay Pairing</button>
+          <div class="relayPairingTitle">Setting Up This Phone</div>
+          <p>This phone completes secure setup automatically when it is online.</p>
           <div id="relayPairingStatus" class="relayPairingStatus"></div>
         </section>
         <div id="relayPairedIndicator" class="relayPairedIndicator hidden" aria-live="polite">TEST relay paired</div>
@@ -299,6 +292,6 @@
     </div>
   </div>
 
-  <script src="/clockin-test/app.js?v=16"></script>
+  <script src="/clockin-test/app.js?v=17"></script>
 </body>
 </html>

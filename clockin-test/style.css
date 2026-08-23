@@ -810,7 +810,6 @@ body.shellWorkHistoryOpen {
 }
 
 .relayPairingPanel p,
-.relayPairingConfirm,
 .relayPairingStatus {
   display: block;
   margin: 8px 0;
