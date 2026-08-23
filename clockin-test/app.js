@@ -92,6 +92,9 @@ let selectedOfflineProperty = null;
 let shellEnteredPin = "";
 let prepEnteredPin = "";
 let shellUnlocked = false;
+let shellPinUnlockInProgress = false;
+let shellLoginGeneration = 0;
+let shellBackgroundPinValidationInProgress = false;
 const SHELL_PIN_LENGTH = 4;
 /* end[clockin_shell_state] */
 let shellSyncInProgress = false;
@@ -1610,7 +1613,6 @@ function hasDuplicatePendingQueueItem_(queue, cleanerName, eventType, propertyNa
 }
 
 /* begin[shell_refresh_and_sync_helpers] */
-/* begin[shell_refresh_and_sync_helpers] */
 function sleepMs_(ms) {
   return new Promise(function (resolve) {
     setTimeout(resolve, Number(ms || 0));
@@ -1692,14 +1694,34 @@ async function refreshShellAuth_() {
     };
   }
 }
-async function refreshShellAuthFromPin_(pin) {
+/* begin[local_first_pin_authorization] */
+function isDefinitivePinAuthorizationFailure_(message) {
+  return /invalid access code|authorization (?:is )?invalid|phone is no longer authorized/i.test(
+    String(message || "")
+  );
+}
+
+function buildShellAuthFromPinValidation_(parsed, pinHash) {
+  return {
+    cleanerName: String(parsed.cleanerName || ""),
+    accessLevel: String(parsed.accessLevel || "LIMITED"),
+    currentShift: parsed.currentShift || null,
+    properties: Array.isArray(parsed.properties) ? parsed.properties : [],
+    sessionToken: String(parsed.sessionToken || ""),
+    clientId: String(parsed.clientId || ""),
+    pinHash: String(pinHash || ""),
+    seededAtMs: Date.now(),
+  };
+}
+
+async function validateShellPinInBackground_(pin, pinHash) {
   const normalizedPin = String(pin || "").trim();
 
-  if (!normalizedPin) {
+  if (!normalizedPin || !pinHash) {
     return {
       ok: false,
       message: "Missing access code.",
-      requiresLogin: false,
+      definitiveInvalidation: false,
     };
   }
 
@@ -1741,31 +1763,17 @@ async function refreshShellAuthFromPin_(pin) {
     }
 
     if (!parsed.ok) {
+      const message = parsed.message || "Could not refresh live permissions.";
       return {
         ok: false,
-        message: parsed.message || "Could not refresh live permissions.",
-        requiresLogin: /invalid access code/i.test(parsed.message || ""),
+        message: message,
+        definitiveInvalidation: isDefinitivePinAuthorizationFailure_(message),
       };
     }
 
-    const pinHash = await hashShellPin_(normalizedPin);
-
-    const freshShellAuth = {
-      cleanerName: String(parsed.cleanerName || ""),
-      accessLevel: String(parsed.accessLevel || "LIMITED"),
-      currentShift: parsed.currentShift || null,
-      properties: Array.isArray(parsed.properties) ? parsed.properties : [],
-      sessionToken: String(parsed.sessionToken || ""),
-      clientId: String(parsed.clientId || ""),
-      pinHash: pinHash,
-      seededAtMs: Date.now(),
-    };
-
-    saveShellAuth_(freshShellAuth);
-
     return {
       ok: true,
-      payload: freshShellAuth,
+      payload: buildShellAuthFromPinValidation_(parsed, pinHash),
     };
   } catch (error) {
     return {
@@ -1773,10 +1781,77 @@ async function refreshShellAuthFromPin_(pin) {
       message:
         "PIN refresh failed: " +
         ((error && error.message) || String(error) || "Unknown error"),
-      requiresLogin: false,
+      definitiveInvalidation: false,
     };
   }
 }
+
+function clearRelayAuthorizationPreservingQueue_() {
+  const relayState = getRelayState_();
+  if (!relayState) return;
+  relayState.relayToken = "";
+  relayState.relayTokenExpiresAtMs = 0;
+  saveRelayState_(relayState);
+}
+
+function invalidateShellAuthorization_(loginGeneration) {
+  if (loginGeneration !== shellLoginGeneration) return;
+
+  shellLoginGeneration += 1;
+  shellUnlocked = false;
+  localStorage.removeItem(SHELL_AUTH_KEY);
+  clearRelayAuthorizationPreservingQueue_();
+  clearShellEntryDraft_();
+  selectedOfflineProperty = null;
+  hideOfflinePropertyInfo_();
+  clearShellPin_();
+  hideShellSyncHud_();
+  updateShellUi_();
+  updateOfflineQueueCount_();
+  setOfflineReadyStatusText_("This phone is no longer authorized. Please prepare it again online.");
+  setStatusText_("This phone is no longer authorized. Please prepare it again online.");
+  showShellFlashHud_("This phone is no longer authorized. Please prepare it again online.", false);
+}
+
+function applyBackgroundPinAuthorization_(freshShellAuth, loginGeneration, expectedShellAuth) {
+  const currentShellAuth = getShellAuth_() || {};
+  if (
+    !shellUnlocked ||
+    loginGeneration !== shellLoginGeneration ||
+    !freshShellAuth ||
+    !freshShellAuth.pinHash ||
+    String(currentShellAuth.pinHash || "") !== String(freshShellAuth.pinHash) ||
+    String(currentShellAuth.sessionToken || "") !== String(expectedShellAuth.sessionToken || "") ||
+    Number(currentShellAuth.seededAtMs || 0) !== Number(expectedShellAuth.seededAtMs || 0)
+  ) {
+    return false;
+  }
+
+  saveShellAuth_(freshShellAuth);
+  const effectiveShellAuth = getShellAuth_() || freshShellAuth;
+  updateOfflineReadyText_(effectiveShellAuth);
+  reconcileShellEntryDraft_(effectiveShellAuth);
+  updateOfflineQueueCount_();
+  return true;
+}
+
+function startShellBackgroundPinValidation_(pin, pinHash, loginGeneration, expectedShellAuth) {
+  if (!navigator.onLine || shellBackgroundPinValidationInProgress) return;
+
+  shellBackgroundPinValidationInProgress = true;
+  validateShellPinInBackground_(pin, pinHash).then(function (result) {
+    if (result && result.ok) {
+      applyBackgroundPinAuthorization_(result.payload, loginGeneration, expectedShellAuth);
+    } else if (result && result.definitiveInvalidation) {
+      invalidateShellAuthorization_(loginGeneration);
+    }
+  }).catch(function () {
+    // A background refresh must never interrupt a locally unlocked shell.
+  }).finally(function () {
+    shellBackgroundPinValidationInProgress = false;
+  });
+}
+/* end[local_first_pin_authorization] */
 
 async function refreshShellAuthWithRetry_(options) {
   const opts = options || {};
@@ -1828,48 +1903,6 @@ async function refreshShellAuthWithRetry_(options) {
       "Could not refresh shell auth after retrying.",
     requiresLogin: !!(lastResult && lastResult.requiresLogin),
     attemptsUsed: maxAttempts,
-  };
-}
-
-async function refreshShellAuthBeforeUnlock_() {
-  if (!navigator.onLine) {
-    return {
-      ok: true,
-      skipped: true,
-      message: "Offline unlock path.",
-    };
-  }
-
-  const refreshResult = await refreshShellAuthWithRetry_({
-    maxAttempts: 4,
-    retryDelayMs: 900,
-    statusPrefix: "Refreshing current permissions",
-    showStatus: true,
-  });
-
-  if (refreshResult && refreshResult.ok) {
-    return {
-      ok: true,
-      skipped: false,
-      payload: refreshResult.payload || null,
-      attemptsUsed: refreshResult.attemptsUsed || 1,
-    };
-  }
-
-  if (refreshResult && refreshResult.requiresLogin) {
-    return {
-      ok: false,
-      requiresLogin: true,
-      message: refreshResult.message || "Session expired. Please log in again.",
-      attemptsUsed: refreshResult.attemptsUsed || 1,
-    };
-  }
-
-  return {
-    ok: true,
-    skipped: true,
-    message: "Live refresh did not complete. Falling back to saved phone data.",
-    attemptsUsed: (refreshResult && refreshResult.attemptsUsed) || 4,
   };
 }
 
@@ -2323,63 +2356,29 @@ async function syncShellQueue_() {
 }
 /* end[shell_queue_sync_safety_and_logging] */
 /* end[shell_refresh_and_sync_helpers] */
-/* end[shell_refresh_and_sync_helpers] */
 
 /* begin[unlock_shell_with_welcome_flash] */
 async function unlockShellWithPin_() {
-  let shellAuth = getShellAuth_() || {};
-  const enteredPin = shellEnteredPin.trim();
+  if (shellPinUnlockInProgress) return;
+  shellPinUnlockInProgress = true;
 
-  if (!shellAuth || !shellAuth.pinHash) {
-    clearShellPin_();
-    hideShellSyncHud_();
-    setOfflineReadyStatusText_("");
-    setStatusText_("This phone is not ready yet. Go online and prepare it first.");
-    return;
-  }
-
-  if (!enteredPin) {
-    hideShellSyncHud_();
-    setOfflineReadyStatusText_("");
-    setStatusText_("Please enter your access code.");
-    return;
-  }
-
-  setStatusText_(navigator.onLine ? "Checking access..." : "Checking access...");
+  let enteredPin = shellEnteredPin.trim();
 
   try {
-    let usedSavedFallback = false;
-
-    if (navigator.onLine) {
-      const livePinRefresh = await refreshShellAuthFromPin_(enteredPin);
-
-      if (livePinRefresh && livePinRefresh.ok) {
-        shellAuth = getShellAuth_() || {};
-      } else {
-        const refreshGate = await refreshShellAuthBeforeUnlock_();
-
-        if (!refreshGate.ok && refreshGate.requiresLogin) {
-          clearShellPin_();
-          hideShellSyncHud_();
-          setOfflineReadyStatusText_("Session expired. Please log in again.");
-          setStatusText_(refreshGate.message || "Session expired. Please log in again.");
-          showShellFlashHud_(refreshGate.message || "Session expired. Please log in again.", false);
-          return;
-        }
-
-        usedSavedFallback = true;
-        shellAuth = getShellAuth_() || {};
-      }
-    } else {
-      usedSavedFallback = true;
-    }
+    const shellAuth = getShellAuth_() || {};
 
     if (!shellAuth || !shellAuth.pinHash) {
       clearShellPin_();
       hideShellSyncHud_();
-      setOfflineReadyStatusText_("This phone is no longer authorized.");
-      setStatusText_("This phone is no longer authorized. Please prepare it again online.");
-      showShellFlashHud_("This phone is no longer authorized.", false);
+      setOfflineReadyStatusText_("");
+      setStatusText_("This phone is not ready yet. Go online and prepare it first.");
+      return;
+    }
+
+    if (!enteredPin) {
+      hideShellSyncHud_();
+      setOfflineReadyStatusText_("");
+      setStatusText_("Please enter your access code.");
       return;
     }
 
@@ -2394,29 +2393,31 @@ async function unlockShellWithPin_() {
       return;
     }
 
+    const loginGeneration = shellLoginGeneration + 1;
+    shellLoginGeneration = loginGeneration;
     shellUnlocked = true;
     clearShellPin_();
+    hideShellSyncHud_();
     updateShellUi_();
     updateOfflineQueueCount_();
 
     const cleanerName = shellAuth.cleanerName || "Cleaner";
     setOfflineReadyStatusText_("");
 
-    let loginConfirmationDetail = "Ready for " + cleanerName + ".";
-    if (usedSavedFallback && navigator.onLine) {
-      setStatusText_("Unlocked for " + cleanerName + " using saved phone data.");
-      loginConfirmationDetail = "Using saved phone data for " + cleanerName + ".";
-    } else if (usedSavedFallback && !navigator.onLine) {
+    if (!navigator.onLine) {
       setStatusText_("Unlocked for " + cleanerName + " offline.");
-      loginConfirmationDetail = "Ready for " + cleanerName + " offline.";
     } else {
-      setStatusText_("Unlocked for " + cleanerName + " with live permissions.");
+      setStatusText_("Unlocked for " + cleanerName + " using saved phone data.");
       if (TEST_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
         renderRelayStatus_();
       }
     }
-    showShellActionConfirmation_("LOGGED IN", loginConfirmationDetail);
+    showShellActionConfirmation_("LOGGED IN", "Ready for " + cleanerName + ".");
 
+    if (navigator.onLine) {
+      startShellBackgroundPinValidation_(enteredPin, enteredHash, loginGeneration, shellAuth);
+    }
+    enteredPin = "";
   } catch (error) {
     clearShellPin_();
     hideShellSyncHud_();
@@ -2426,6 +2427,8 @@ async function unlockShellWithPin_() {
         ((error && error.message) || String(error) || "Unknown error")
     );
     showShellFlashHud_("PIN check failed.", false);
+  } finally {
+    shellPinUnlockInProgress = false;
   }
 }
 /* end[unlock_shell_with_welcome_flash] */
@@ -3100,15 +3103,6 @@ document.addEventListener("DOMContentLoaded", async function () {
   clearPrepPin_();
   setStatusText_("Preparing app shell...");
   await registerServiceWorker_();
-
-  if (navigator.onLine) {
-    await refreshShellAuthWithRetry_({
-      maxAttempts: 4,
-      retryDelayMs: 900,
-      statusPrefix: "Refreshing session",
-      showStatus: true,
-    });
-  }
 
   updateShellUi_();
   updateOfflineQueueCount_();
