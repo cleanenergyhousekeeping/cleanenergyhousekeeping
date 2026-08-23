@@ -4,6 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
 
 const LIVE_APP_PREP_URL = "/clockin-test/seed.html";
+const TEST_BUILD_VERSION = "v13";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
@@ -27,6 +28,7 @@ const offlineBtn = document.getElementById("offlineBtn");
 const installHelp = document.getElementById("installHelp");
 const shellBlueBar = document.getElementById("shellBlueBar");
 const shellWorkHistoryBtn = document.getElementById("shellWorkHistoryBtn");
+const ceTestBuildIndicator = document.getElementById("ceTestBuildIndicator");
 
 const shellUnlockSection = document.getElementById("shellUnlockSection");
 const shellAccessCode = document.getElementById("shellAccessCode");
@@ -439,12 +441,13 @@ function hideShellSyncHud_() {
   }
 }
 
-function showShellActionConfirmation_(title, detail) {
+function showShellActionConfirmation_(title, detail, durationMs) {
+  const confirmationDurationMs = Number.isFinite(durationMs) ? durationMs : 2000;
   showShellSyncHud_(detail, title);
   shellActionHudTimer = setTimeout(function () {
     shellActionHudTimer = null;
     hideShellSyncHud_();
-  }, 2000);
+  }, confirmationDurationMs);
 }
 
 let shellFlashHudTimer = null;
@@ -2439,7 +2442,7 @@ async function unlockShellWithPin_() {
         renderRelayStatus_();
       }
     }
-    showShellActionConfirmation_("LOGGED IN", "Ready for " + cleanerName + ".");
+    showShellActionConfirmation_("LOGGED IN", "Ready for " + cleanerName + ".", 1000);
 
     if (navigator.onLine) {
       startShellBackgroundPinValidation_(enteredPin, enteredHash, loginGeneration, shellAuth);
@@ -3125,6 +3128,10 @@ if (shellWorkHistoryBackBtn) {
 
 /* begin[clockin_shell_init] */
 document.addEventListener("DOMContentLoaded", async function () {
+  if (ceTestBuildIndicator) {
+    ceTestBuildIndicator.textContent = "Build " + TEST_BUILD_VERSION;
+  }
+
   updateRelayPairingUi_();
   shellUnlocked = false;
   clearShellPin_();
