@@ -1204,6 +1204,7 @@ async function saveRelayEntry_() {
     });
     const currentAuth = getShellAuth_();
     resetOfflineEntryForm_(currentAuth);
+    updateShellUi_();
     updateRelayQueueCount_();
     setOfflineReadyStatusText_("Saved for TEST relay acceptance.");
     if (navigator.onLine) syncRelayQueue_();
