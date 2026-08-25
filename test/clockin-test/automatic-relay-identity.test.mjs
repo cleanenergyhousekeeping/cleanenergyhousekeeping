@@ -33,6 +33,7 @@ function makeElement() {
   return {
     classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
     addEventListener() {},
+    setAttribute() {},
     textContent: "",
     value: "",
     disabled: false,
@@ -43,7 +44,7 @@ function response(payload) {
   return { status: 200, json: async () => payload };
 }
 
-function makeHarness({ storage, locks, randomUUID, enroll }) {
+function makeHarness({ storage, locks, randomUUID, enroll, relayEvent }) {
   const elements = new Map();
   const document = {
     getElementById(id) {
@@ -80,11 +81,14 @@ function makeHarness({ storage, locks, randomUUID, enroll }) {
       if (url.endsWith("/v1/relay-sessions/enroll")) {
         return enroll(JSON.parse(options.body).deviceId);
       }
+      if (url.endsWith("/v1/relay-events")) {
+        return relayEvent(JSON.parse(options.body));
+      }
       throw new Error(`unexpected fetch: ${url}`);
     },
   };
   vm.createContext(context);
-  vm.runInContext(`${app}\nglobalThis.__relayIdentityTestApi = { pair: pairRelayInstallationAutomatically_, getState: getRelayState_, getIdentity: getRelayInstallationId_ };`, context);
+  vm.runInContext(`${app}\nglobalThis.__relayIdentityTestApi = { pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, sync: syncRelayQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_ };`, context);
   return context.__relayIdentityTestApi;
 }
 
@@ -188,4 +192,51 @@ test("existing paired state, nonzero high-water, failures, and missing crypto ne
 test("manual device-ID controls are absent from the cleaner interface", () => {
   assert.doesNotMatch(html, /relayDeviceIdInput|relayPairingConfirm|relayPairingBtn|Confirm TEST Relay Pairing/);
   assert.doesNotMatch(app, /relayDeviceIdInput|relayPairingConfirm|relayPairingBtn|pairRelayInstallation_\(/);
+});
+
+test("confirmed TEST relay reachability drains one ready queued event through the serialized path", async () => {
+  const eventIds = [];
+  const queuedState = {
+    version: 1,
+    pairedDeviceId: "test-relay-reconnect-device",
+    relayToken: "relay-token",
+    relayTokenExpiresAtMs: 2_000_000_000_000,
+    lastConfirmedLedgerHighWater: 0,
+    nextSequence: 2,
+    highestAllocatedSequence: 1,
+    queue: [{
+      eventId: "relay-event-reconnect",
+      deviceSequence: 1,
+      eventType: "add_note",
+      submittedAtMs: 1,
+      property: "Test property",
+      note: "Saved offline",
+      status: "retryable",
+      attemptCount: 1,
+      nextAttemptAtMs: 0,
+    }],
+  };
+  const harness = makeHarness({
+    storage: preparedStorage({ ce_shell_test_relay_state_v1: JSON.stringify(queuedState) }),
+    locks: makeLocks(),
+    randomUUID: () => "unused",
+    enroll: () => { throw new Error("existing token must not enroll"); },
+    relayEvent: (event) => {
+      eventIds.push(event.eventId);
+      return response({ ok: true, eventId: event.eventId });
+    },
+  });
+
+  await harness.probe();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.deepEqual(eventIds, ["relay-event-reconnect"]);
+  assert.equal(harness.getState().queue[0].status, "accepted");
+});
+
+test("reconnect drain keeps a single in-progress gate and only shows the sync HUD inside the locked attempt", () => {
+  assert.match(app, /if \(relaySyncInProgress\) return;\s+relaySyncInProgress = 1;/);
+  assert.match(app, /setTimeout\(triggerRelayQueueDrainWhenReachable_, 0\)/);
+  assert.match(app, /showShellSyncHud_\("Please wait\.\.\.", "Syncing Saved Entries"\)/);
+  assert.match(app, /await withRelayLock_\(async function \(\) \{[\s\S]*showShellSyncHud_/);
 });
