@@ -33,5 +33,23 @@
       "database_id": "8804b3a1-8af0-413d-a0c3-37830e0988a0",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "env": {
+    "production": {
+      "name": "ceh-relay-production",
+      "vars": {
+        "CEH_RELAY_ENVIRONMENT": "production",
+        "CEH_RELAY_APPS_ACTIVE_KEY_ID": "production-v1",
+        "CEH_RELAY_PAYLOAD_ACTIVE_KEY_VERSION": "1"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "ceh-relay-production-db",
+          "database_id": "REPLACE_WITH_PROVISIONED_PRODUCTION_D1_DATABASE_ID",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
 }

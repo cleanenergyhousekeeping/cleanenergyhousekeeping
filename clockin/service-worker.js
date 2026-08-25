@@ -1,4 +1,4 @@
-const CACHE_NAME = "ce-clockin-shell-v246";
+const CACHE_NAME = "ce-clockin-shell-v247";
 
 const APP_SHELL_FILES = [
   "/clockin/",
@@ -24,7 +24,7 @@ self.addEventListener("activate", function (event) {
     caches.keys().then(function (keys) {
       return Promise.all(
         keys.map(function (key) {
-          if (key !== CACHE_NAME) {
+          if (key.startsWith("ce-clockin-shell-") && key !== CACHE_NAME) {
             return caches.delete(key);
           }
         })
@@ -42,9 +42,18 @@ self.addEventListener("fetch", function (event) {
   }
 
   const isNavigationRequest = request.mode === "navigate";
+  const requestUrl = new URL(request.url);
+  const isCriticalLiveShellAsset =
+    requestUrl.origin === self.location.origin &&
+    (
+      requestUrl.pathname === "/clockin/" ||
+      requestUrl.pathname === "/clockin/index.html" ||
+      requestUrl.pathname === "/clockin/style.css" ||
+      requestUrl.pathname === "/clockin/app.js"
+    );
 
   event.respondWith(
-    fetch(request)
+    fetch(isCriticalLiveShellAsset ? new Request(request, { cache: "no-store" }) : request)
       .then(function (response) {
         return response;
       })

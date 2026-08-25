@@ -138,6 +138,13 @@
         </div>
         <!-- end[offline_top_guidance_markup] -->
 
+        <section id="relayPairingPanel" class="relayPairingPanel hidden" aria-live="polite">
+          <div class="relayPairingTitle">Setting Up This Phone</div>
+          <p>This phone completes secure setup automatically when it is online.</p>
+          <div id="relayPairingStatus" class="relayPairingStatus"></div>
+        </section>
+        <div id="relayPairedIndicator" class="relayPairedIndicator hidden" aria-live="polite">Phone setup complete</div>
+
         <label for="offlinePropertySearch">Property</label>
         <input
           id="offlinePropertySearch"
@@ -251,7 +258,7 @@
 
       <div id="shellSyncHud" class="shellSyncHud hidden" aria-live="polite" aria-hidden="true">
         <div id="shellSyncHudCard" class="shellSyncHudCard">
-          SYNCING
+          <div id="shellSyncHudTitle">SYNCING</div>
           <span id="shellSyncHudDetail" class="shellSyncHudDetail">Please wait...</span>
         </div>
       </div>

@@ -557,6 +557,31 @@ textarea::placeholder {
   color: #5f6f82;
 }
 
+.relayPairingPanel {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid #c9d7dc;
+  border-radius: 10px;
+  background: #f5f9fa;
+}
+
+.relayPairingPanel p,
+.relayPairingStatus {
+  display: block;
+  margin: 8px 0;
+  color: #31464d;
+}
+
+.relayPairingTitle {
+  font-weight: 700;
+}
+
+.relayPairedIndicator {
+  margin: 10px 0;
+  color: #235d31;
+  font-weight: 600;
+}
+
 .shellFlashHud {
   position: fixed;
   inset: 0;
