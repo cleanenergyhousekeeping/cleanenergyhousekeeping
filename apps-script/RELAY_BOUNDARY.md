@@ -65,6 +65,8 @@ The ledger enters `PROCESSING` before existing queued reconciliation runs. Sprea
 
 ## Production Promotion
 
-Production promotion must use the same reviewed source commit with a separate Apps Script deployment, spreadsheet, Script Properties, cryptographic keys, Worker bindings, D1 database, and Cloudflare resources. No deployment URL, spreadsheet ID, cleaner identity, or key material belongs in source.
+Production promotion must use the same reviewed source commit with a separate Apps Script deployment, spreadsheet, Script Properties, cryptographic keys, Worker name and bindings, D1 database, and Cloudflare resources. No deployment URL, spreadsheet ID, cleaner identity, D1 ID, or key material belongs in source.
 
-Before any production Worker promotion, `relay/src/crypto.ts` must replace its current TEST-only `ceh-relay:test` authenticated-encryption prefix with a validated environment-derived context. That Worker change is intentionally outside this Apps Script PR.
+`relay/src/crypto.ts` already derives authenticated-encryption contexts from the validated relay environment: `ceh-relay:<environment>:event:<eventId>` and `ceh-relay:<environment>:state:<cleanerSubject>`. TEST and production ciphertexts therefore cannot be decrypted across environments when keys or contexts are mixed.
+
+Before activation, provision the production D1 database and replace the deliberately unresolved production database ID in `relay/wrangler.jsonc`; configure the production Worker secrets listed in `relay/README.md`; configure matching production Apps Script properties and key IDs; create the separate Apps Script deployment; and perform a separately approved deployment and migration. This source change does none of those operations.
