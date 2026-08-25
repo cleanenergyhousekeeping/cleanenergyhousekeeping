@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
 
 const LIVE_APP_PREP_URL = "/clockin-test/seed.html";
-const TEST_BUILD_VERSION = "v18";
+const TEST_BUILD_VERSION = "v19";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
@@ -177,7 +177,7 @@ function appendShellPinDigit_(digit) {
     }
     setStatusText_("Checking access...");
     setOfflineReadyStatusText_("Checking access...");
-    showShellSyncHud_("Checking access...", "LOGGING IN");
+    showShellSyncHud_("Checking access...", "Logging In");
     unlockShellWithPin_();
   }
 }
@@ -407,7 +407,7 @@ function showShellSyncHud_(detailText, titleText) {
   setShellEntryLocked_(true);
 
   if (shellSyncHudTitle) {
-    shellSyncHudTitle.textContent = titleText || "SYNCING";
+    shellSyncHudTitle.textContent = titleText || "Syncing";
   }
 
   if (shellSyncHudDetail) {
@@ -437,7 +437,7 @@ function hideShellSyncHud_() {
   }
 
   if (shellSyncHudTitle) {
-    shellSyncHudTitle.textContent = "SYNCING";
+    shellSyncHudTitle.textContent = "Syncing";
   }
 
   tryTestPwaUpdateReload_();
@@ -466,7 +466,7 @@ function showShellFlashHud_(message, isSuccess) {
   shellFlashHud.classList.add(isSuccess ? "success" : "error");
   shellFlashHud.setAttribute("aria-hidden", "false");
 
-  shellFlashHudTitle.textContent = isSuccess ? "SUCCESS" : "ERROR";
+  shellFlashHudTitle.textContent = isSuccess ? "Success" : "Error";
   shellFlashHudDetail.textContent = message || "";
 
   shellFlashHudTimer = setTimeout(function () {
@@ -1135,6 +1135,10 @@ function probeRelayReachability_() {
       payload.storage === "ok"
     );
     setRelayReachabilityState_(reachable ? "reachable" : "unreachable");
+    if (reachable) {
+      // Defer until this shared probe has settled so the drain does not await itself.
+      setTimeout(triggerRelayQueueDrainWhenReachable_, 0);
+    }
     return reachable;
   }).catch(function () {
     setRelayReachabilityState_("unreachable");
@@ -1250,6 +1254,31 @@ function scheduleRelayReachabilityRetry_() {
   scheduleRelaySyncTimer_(Date.now() + TEST_RELAY_REACHABILITY_RETRY_MS);
 }
 
+/* begin[test_reconnect_relay_queue_drain] */
+function triggerRelayQueueDrainWhenReachable_() {
+  if (
+    !TEST_RELAY_FEATURE_ENABLED ||
+    relayReachabilityState !== "reachable" ||
+    relaySyncInProgress ||
+    relaySubmissionInProgress ||
+    relayAutoPairingInProgress
+  ) {
+    return;
+  }
+
+  const state = getRelayState_();
+  const event = state ? firstNonAcceptedRelayEvent_(state) : null;
+  if (!event || event.status === "terminal") return;
+
+  if (Number(event.nextAttemptAtMs || 0) > Date.now()) {
+    scheduleRelaySyncTimer_(event.nextAttemptAtMs);
+    return;
+  }
+
+  syncRelayQueue_(true);
+}
+/* end[test_reconnect_relay_queue_drain] */
+
 function applyRelaySession_(state, session) {
   verifyRelayHighWater_(state, session.ledgerHighWater.appliedThroughSequence);
   state.lastConfirmedLedgerHighWater = session.ledgerHighWater.appliedThroughSequence;
@@ -1346,11 +1375,11 @@ async function saveRelayEntry_() {
   relaySubmissionInProgress = true;
   try {
     if (action === "clock_in" && property) {
-      showShellSyncHud_("Saving your clock-in...", "CLOCKING IN");
+      showShellSyncHud_("Saving your clock-in...", "Clocking In");
     } else if (action === "add_note" && property) {
-      showShellSyncHud_("Saving your note...", "SAVING NOTE");
+      showShellSyncHud_("Saving your note...", "Saving Note");
     } else if (action === "clock_out" && property) {
-      showShellSyncHud_("Saving your clock-out...", "CLOCKING OUT");
+      showShellSyncHud_("Saving your clock-out...", "Clocking Out");
     }
     await withRelayLock_(async function () {
       assertLegacyQueueIsEmpty_();
@@ -1406,11 +1435,11 @@ async function saveRelayEntry_() {
     updateShellUi_();
     renderRelayStatus_();
     if (action === "clock_in") {
-      showShellActionConfirmation_("CLOCKED IN", property);
+      showShellActionConfirmation_("Clocked In", property);
     } else if (action === "add_note") {
-      showShellActionConfirmation_("NOTE SAVED", property);
+      showShellActionConfirmation_("Saved Note", property);
     } else {
-      showShellActionConfirmation_("CLOCKED OUT", property);
+      showShellActionConfirmation_("Clocked Out", property);
     }
     syncRelayQueue_();
     relaySubmissionInProgress = false;
@@ -1423,9 +1452,11 @@ async function saveRelayEntry_() {
   }
 }
 
-async function syncRelayQueue_() {
+async function syncRelayQueue_(showReconnectHud) {
   if (!TEST_RELAY_FEATURE_ENABLED) return;
-  relaySyncInProgress += 1;
+  if (relaySyncInProgress) return;
+  relaySyncInProgress = 1;
+  let relayDrainHudVisible = false;
 
   try {
   let nextAttemptAtMs = 0;
@@ -1462,6 +1493,15 @@ async function syncRelayQueue_() {
       if (Number(event.nextAttemptAtMs || 0) > Date.now()) {
         nextAttemptAtMs = Number(event.nextAttemptAtMs);
         return;
+      }
+      if (
+        showReconnectHud &&
+        !shellActionHudTimer &&
+        (!shellFlashHud || shellFlashHud.classList.contains("hidden")) &&
+        !relayAttentionRequiresEntryLock_()
+      ) {
+        showShellSyncHud_("Please wait...", "Syncing Saved Entries");
+        relayDrainHudVisible = true;
       }
       event.attemptCount = Number(event.attemptCount || 0) + 1;
       saveRelayState_(state);
@@ -1536,7 +1576,8 @@ async function syncRelayQueue_() {
     }
   }
   } finally {
-    relaySyncInProgress = Math.max(0, relaySyncInProgress - 1);
+    relaySyncInProgress = 0;
+    if (relayDrainHudVisible) hideShellSyncHud_();
     tryTestPwaUpdateReload_();
   }
 }
@@ -2175,7 +2216,7 @@ function removeQueuedEntryById_(queuedId) {
 
 async function syncShellQueue_() {
   if (TEST_RELAY_FEATURE_ENABLED) {
-    return syncRelayQueue_();
+    return syncRelayQueue_(true);
   }
   if (shellSyncInProgress) {
     logShellQueueSync_("skip_in_progress", {
@@ -2495,7 +2536,7 @@ async function unlockShellWithPin_() {
         renderRelayStatus_();
       }
     }
-    showShellActionConfirmation_("LOGGED IN", "Ready for " + cleanerName + ".", 500);
+    showShellActionConfirmation_("Logged In", "Ready for " + cleanerName + ".", 500);
 
     if (navigator.onLine) {
       pairRelayInstallationAutomatically_();
@@ -3167,7 +3208,7 @@ function retryQueuedSyncIfReady_() {
       scheduleRelaySyncTimer_(event.nextAttemptAtMs);
       return;
     }
-    syncRelayQueue_();
+    syncRelayQueue_(true);
     return;
   }
 

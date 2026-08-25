@@ -1,10 +1,10 @@
-const CACHE_NAME = "ce-clockin-test-shell-v18";
+const CACHE_NAME = "ce-clockin-test-shell-v19";
 
 const APP_SHELL_FILES = [
   "/clockin-test/",
   "/clockin-test/index.html",
-  "/clockin-test/style.css?v=18",
-  "/clockin-test/app.js?v=18",
+  "/clockin-test/style.css?v=19",
+  "/clockin-test/app.js?v=19",
   "/clockin-test/seed.html",
   "/clockin-test/manifest.webmanifest",
   "/clockin/icon.png"
