@@ -88,7 +88,7 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent }) {
     },
   };
   vm.createContext(context);
-  vm.runInContext(`${app}\nglobalThis.__relayIdentityTestApi = { pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, sync: syncRelayQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_ };`, context);
+  vm.runInContext(`${app}\nglobalThis.__relayIdentityTestApi = { pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_ };`, context);
   return context.__relayIdentityTestApi;
 }
 
@@ -194,9 +194,8 @@ test("manual device-ID controls are absent from the cleaner interface", () => {
   assert.doesNotMatch(app, /relayDeviceIdInput|relayPairingConfirm|relayPairingBtn|pairRelayInstallation_\(/);
 });
 
-test("confirmed TEST relay reachability drains one ready queued event through the serialized path", async () => {
-  const eventIds = [];
-  const queuedState = {
+function readyQueuedRelayState_() {
+  return {
     version: 1,
     pairedDeviceId: "test-relay-reconnect-device",
     relayToken: "relay-token",
@@ -216,8 +215,11 @@ test("confirmed TEST relay reachability drains one ready queued event through th
       nextAttemptAtMs: 0,
     }],
   };
-  const harness = makeHarness({
-    storage: preparedStorage({ ce_shell_test_relay_state_v1: JSON.stringify(queuedState) }),
+}
+
+function reconnectHarness_(eventIds) {
+  return makeHarness({
+    storage: preparedStorage({ ce_shell_test_relay_state_v1: JSON.stringify(readyQueuedRelayState_()) }),
     locks: makeLocks(),
     randomUUID: () => "unused",
     enroll: () => { throw new Error("existing token must not enroll"); },
@@ -226,6 +228,12 @@ test("confirmed TEST relay reachability drains one ready queued event through th
       return response({ ok: true, eventId: event.eventId });
     },
   });
+}
+
+test("confirmed TEST relay reachability drains one ready queued event through the serialized path after unlock", async () => {
+  const eventIds = [];
+  const harness = reconnectHarness_(eventIds);
+  harness.setUnlocked(true);
 
   await harness.probe();
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -234,9 +242,29 @@ test("confirmed TEST relay reachability drains one ready queued event through th
   assert.equal(harness.getState().queue[0].status, "accepted");
 });
 
+test("locked-shell reconnect keeps the ready relay event queued until unlock retries it", async () => {
+  const eventIds = [];
+  const harness = reconnectHarness_(eventIds);
+
+  await harness.probe();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.deepEqual(eventIds, []);
+  assert.equal(harness.getState().queue[0].status, "retryable");
+
+  harness.setUnlocked(true);
+  harness.retry();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.deepEqual(eventIds, ["relay-event-reconnect"]);
+  assert.equal(harness.getState().queue[0].status, "accepted");
+});
+
 test("reconnect drain keeps a single in-progress gate and only shows the sync HUD inside the locked attempt", () => {
+  assert.match(app, /if \(!shellUnlocked\) return;\s+if \(relaySyncInProgress\) return;/);
   assert.match(app, /if \(relaySyncInProgress\) return;\s+relaySyncInProgress = 1;/);
   assert.match(app, /setTimeout\(triggerRelayQueueDrainWhenReachable_, 0\)/);
   assert.match(app, /showShellSyncHud_\("Please wait\.\.\.", "Syncing Saved Entries"\)/);
   assert.match(app, /await withRelayLock_\(async function \(\) \{[\s\S]*showShellSyncHud_/);
+  assert.match(app, /showShellActionConfirmation_\("Logged In",[\s\S]*?retryQueuedSyncIfReady_\(\);/);
 });
