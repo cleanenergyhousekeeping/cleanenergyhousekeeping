@@ -30,13 +30,31 @@ function makeLocks() {
 }
 
 function makeElement() {
+  const classes = new Set();
   return {
-    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    classList: {
+      add(...names) { names.forEach((name) => classes.add(name)); },
+      remove(...names) { names.forEach((name) => classes.delete(name)); },
+      toggle(name, force) {
+        if (force === undefined) {
+          if (classes.has(name)) classes.delete(name);
+          else classes.add(name);
+        } else if (force) {
+          classes.add(name);
+        } else {
+          classes.delete(name);
+        }
+      },
+      contains(name) { return classes.has(name); },
+    },
     addEventListener() {},
     setAttribute() {},
     textContent: "",
     value: "",
     disabled: false,
+    readOnly: false,
+    innerHTML: "",
+    options: [{ value: "" }, { value: "clock_in" }, { value: "add_note" }, { value: "clock_out" }],
   };
 }
 
@@ -52,6 +70,7 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRel
       if (!elements.has(id)) elements.set(id, makeElement());
       return elements.get(id);
     },
+    createElement() { return makeElement(); },
     querySelectorAll() { return []; },
     addEventListener() {},
   };
@@ -96,7 +115,7 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRel
       .replace("const LIVE_RELAY_FEATURE_ENABLED = false;", "const LIVE_RELAY_FEATURE_ENABLED = true;")
       .replace("const LIVE_RELAY_WORKER_URL = \"\";", "const LIVE_RELAY_WORKER_URL = \"https://relay-production.example.test\";")
     : app;
-  vm.runInContext(`${runtimeApp}\nglobalThis.__relayIdentityTestApi = { pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_, getFetchCalls: function () { return globalThis.__fetchCalls; } };`, context);
+  vm.runInContext(`${runtimeApp}\nglobalThis.__relayIdentityTestApi = { pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, reconcileDraft: reconcileShellEntryDraft_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_, getEntryState: function () { return { selectedProperty: selectedOfflineProperty && selectedOfflineProperty.name, propertySearch: offlinePropertySearch.value, propertyPanelHidden: offlinePropertyInfoPanel.classList.contains("hidden"), wifi: offlinePropertyInfoWifi.textContent, action: offlineActionSelect.value, note: offlineNoteInput.value, noteHidden: offlineNoteWrap.classList.contains("hidden") }; }, getFetchCalls: function () { return globalThis.__fetchCalls; } };`, context);
   return context.__relayIdentityTestApi;
 }
 
@@ -146,6 +165,60 @@ test("Live relay is inactive by default and never probes or enrolls", async () =
   assert.equal(harness.getState(), null);
   assert.match(app, /const LIVE_RELAY_FEATURE_ENABLED = false;/);
   assert.match(app, /const LIVE_RELAY_WORKER_URL = "";/);
+});
+
+test("entry draft reconciliation clears a completed-shift property but restores active and unfinished work", () => {
+  const property = {
+    name: "Completed Property",
+    wifiNetwork: "stale-wifi",
+    wifiPassword: "stale-password",
+    ownerNames: "Stale Owner",
+    houseNotes: "Stale notes",
+  };
+  const otherProperty = { name: "Other Draft Property" };
+  const auth = { cleanerName: "Cleaner", properties: [property, otherProperty], currentShift: null };
+  const staleHarness = makeHarness({
+    storage: makeStorage({
+      ce_shell_auth_v1: JSON.stringify(auth),
+      ce_shell_entry_draft_v1: JSON.stringify({ cleanerName: "Cleaner", propertyName: property.name, action: "clock_out", note: "" }),
+    }),
+    locks: makeLocks(), randomUUID: () => "unused", enableRelay: false,
+    enroll: () => { throw new Error("inactive relay must not enroll"); },
+    relayEvent: () => { throw new Error("inactive relay must not submit"); },
+  });
+  staleHarness.reconcileDraft(auth);
+  assert.deepEqual({ ...staleHarness.getEntryState() }, {
+    selectedProperty: null, propertySearch: "", propertyPanelHidden: true, wifi: "", action: "", note: "", noteHidden: true,
+  });
+
+  const activeAuth = { ...auth, currentShift: { property: property.name, clockInMs: 1 } };
+  const activeHarness = makeHarness({
+    storage: makeStorage({
+      ce_shell_auth_v1: JSON.stringify(activeAuth),
+      ce_shell_entry_draft_v1: JSON.stringify({ cleanerName: "Cleaner", propertyName: otherProperty.name, action: "clock_out", note: "" }),
+    }),
+    locks: makeLocks(), randomUUID: () => "unused", enableRelay: false,
+    enroll: () => { throw new Error("inactive relay must not enroll"); },
+    relayEvent: () => { throw new Error("inactive relay must not submit"); },
+  });
+  activeHarness.reconcileDraft(activeAuth);
+  assert.equal(activeHarness.getEntryState().selectedProperty, property.name);
+  assert.equal(activeHarness.getEntryState().propertySearch, property.name);
+  assert.equal(activeHarness.getEntryState().propertyPanelHidden, false);
+  assert.equal(activeHarness.getEntryState().wifi, "stale-wifi");
+
+  const draftHarness = makeHarness({
+    storage: makeStorage({
+      ce_shell_auth_v1: JSON.stringify(auth),
+      ce_shell_entry_draft_v1: JSON.stringify({ cleanerName: "Cleaner", propertyName: property.name, action: "clock_in", note: "" }),
+    }),
+    locks: makeLocks(), randomUUID: () => "unused", enableRelay: false,
+    enroll: () => { throw new Error("inactive relay must not enroll"); },
+    relayEvent: () => { throw new Error("inactive relay must not submit"); },
+  });
+  draftHarness.reconcileDraft(auth);
+  assert.equal(draftHarness.getEntryState().selectedProperty, property.name);
+  assert.equal(draftHarness.getEntryState().action, "clock_in");
 });
 
 test("TEST runtime remains isolated from Live relay identifiers", () => {

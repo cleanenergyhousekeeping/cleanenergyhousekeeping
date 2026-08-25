@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
 
 const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";
-const LIVE_BUILD_VERSION = "v247";
+const LIVE_BUILD_VERSION = "v248";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
@@ -268,15 +268,16 @@ function reconcileShellEntryDraft_(shellAuth) {
   const sameCleaner =
     savedDraft &&
     String(savedDraft.cleanerName || "") === String((shellAuth && shellAuth.cleanerName) || "");
+  const isClockedIn = !!(shellAuth && shellAuth.currentShift);
   const activeShiftProperty = getCurrentPropertyText_(shellAuth);
   const draftPropertyName = sameCleaner ? String(savedDraft.propertyName || "") : "";
-  const propertyName = activeShiftProperty || draftPropertyName;
-  const property = findOfflinePropertyByName_(propertyName, shellAuth);
-  const isClockedIn = !!(shellAuth && shellAuth.currentShift);
   const draftAction = sameCleaner ? String(savedDraft.action || "") : "";
   const actionIsValid =
     (draftAction === "clock_in" && !isClockedIn) ||
     ((draftAction === "add_note" || draftAction === "clock_out") && isClockedIn);
+  const propertyName =
+    activeShiftProperty || (actionIsValid && draftAction === "clock_in" ? draftPropertyName : "");
+  const property = findOfflinePropertyByName_(propertyName, shellAuth);
 
   selectedOfflineProperty = property || null;
   if (offlinePropertySearch) {
