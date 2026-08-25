@@ -270,14 +270,10 @@ function reconcileShellEntryDraft_(shellAuth) {
     String(savedDraft.cleanerName || "") === String((shellAuth && shellAuth.cleanerName) || "");
   const isClockedIn = !!(shellAuth && shellAuth.currentShift);
   const activeShiftProperty = getCurrentPropertyText_(shellAuth);
-  const draftPropertyName = sameCleaner ? String(savedDraft.propertyName || "") : "";
   const draftAction = sameCleaner ? String(savedDraft.action || "") : "";
   const actionIsValid =
-    (draftAction === "clock_in" && !isClockedIn) ||
-    ((draftAction === "add_note" || draftAction === "clock_out") && isClockedIn);
-  const propertyName =
-    activeShiftProperty || (actionIsValid && draftAction === "clock_in" ? draftPropertyName : "");
-  const property = findOfflinePropertyByName_(propertyName, shellAuth);
+    isClockedIn && (draftAction === "add_note" || draftAction === "clock_out");
+  const property = findOfflinePropertyByName_(activeShiftProperty, shellAuth);
 
   selectedOfflineProperty = property || null;
   if (offlinePropertySearch) {

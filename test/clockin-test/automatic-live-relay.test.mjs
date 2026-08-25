@@ -167,7 +167,13 @@ test("Live relay is inactive by default and never probes or enrolls", async () =
   assert.match(app, /const LIVE_RELAY_WORKER_URL = "";/);
 });
 
-test("entry draft reconciliation clears a completed-shift property but restores active and unfinished work", () => {
+function assertBlankEntryState(harness) {
+  assert.deepEqual({ ...harness.getEntryState() }, {
+    selectedProperty: null, propertySearch: "", propertyPanelHidden: true, wifi: "", action: "", note: "", noteHidden: true,
+  });
+}
+
+test("no active shift clears a completed clock-out draft to the default entry state", () => {
   const property = {
     name: "Completed Property",
     wifiNetwork: "stale-wifi",
@@ -175,8 +181,7 @@ test("entry draft reconciliation clears a completed-shift property but restores 
     ownerNames: "Stale Owner",
     houseNotes: "Stale notes",
   };
-  const otherProperty = { name: "Other Draft Property" };
-  const auth = { cleanerName: "Cleaner", properties: [property, otherProperty], currentShift: null };
+  const auth = { cleanerName: "Cleaner", properties: [property], currentShift: null };
   const staleHarness = makeHarness({
     storage: makeStorage({
       ce_shell_auth_v1: JSON.stringify(auth),
@@ -187,11 +192,33 @@ test("entry draft reconciliation clears a completed-shift property but restores 
     relayEvent: () => { throw new Error("inactive relay must not submit"); },
   });
   staleHarness.reconcileDraft(auth);
-  assert.deepEqual({ ...staleHarness.getEntryState() }, {
-    selectedProperty: null, propertySearch: "", propertyPanelHidden: true, wifi: "", action: "", note: "", noteHidden: true,
-  });
+  assertBlankEntryState(staleHarness);
+});
 
-  const activeAuth = { ...auth, currentShift: { property: property.name, clockInMs: 1 } };
+test("no active shift clears an unfinished clock-in draft to the default entry state", () => {
+  const property = { name: "Unfinished Draft Property", wifiNetwork: "draft-wifi" };
+  const auth = { cleanerName: "Cleaner", properties: [property], currentShift: null };
+  const draftHarness = makeHarness({
+    storage: makeStorage({
+      ce_shell_auth_v1: JSON.stringify(auth),
+      ce_shell_entry_draft_v1: JSON.stringify({ cleanerName: "Cleaner", propertyName: property.name, action: "clock_in", note: "" }),
+    }),
+    locks: makeLocks(), randomUUID: () => "unused", enableRelay: false,
+    enroll: () => { throw new Error("inactive relay must not enroll"); },
+    relayEvent: () => { throw new Error("inactive relay must not submit"); },
+  });
+  draftHarness.reconcileDraft(auth);
+  assertBlankEntryState(draftHarness);
+});
+
+test("an active shift restores its current property instead of a saved draft property", () => {
+  const property = { name: "Current Shift Property", wifiNetwork: "current-wifi" };
+  const otherProperty = { name: "Other Draft Property" };
+  const activeAuth = {
+    cleanerName: "Cleaner",
+    properties: [property, otherProperty],
+    currentShift: { property: property.name, clockInMs: 1 },
+  };
   const activeHarness = makeHarness({
     storage: makeStorage({
       ce_shell_auth_v1: JSON.stringify(activeAuth),
@@ -205,20 +232,7 @@ test("entry draft reconciliation clears a completed-shift property but restores 
   assert.equal(activeHarness.getEntryState().selectedProperty, property.name);
   assert.equal(activeHarness.getEntryState().propertySearch, property.name);
   assert.equal(activeHarness.getEntryState().propertyPanelHidden, false);
-  assert.equal(activeHarness.getEntryState().wifi, "stale-wifi");
-
-  const draftHarness = makeHarness({
-    storage: makeStorage({
-      ce_shell_auth_v1: JSON.stringify(auth),
-      ce_shell_entry_draft_v1: JSON.stringify({ cleanerName: "Cleaner", propertyName: property.name, action: "clock_in", note: "" }),
-    }),
-    locks: makeLocks(), randomUUID: () => "unused", enableRelay: false,
-    enroll: () => { throw new Error("inactive relay must not enroll"); },
-    relayEvent: () => { throw new Error("inactive relay must not submit"); },
-  });
-  draftHarness.reconcileDraft(auth);
-  assert.equal(draftHarness.getEntryState().selectedProperty, property.name);
-  assert.equal(draftHarness.getEntryState().action, "clock_in");
+  assert.equal(activeHarness.getEntryState().wifi, "current-wifi");
 });
 
 test("TEST runtime remains isolated from Live relay identifiers", () => {
