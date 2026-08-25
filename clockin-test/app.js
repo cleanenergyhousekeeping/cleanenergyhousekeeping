@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
 
 const LIVE_APP_PREP_URL = "/clockin-test/seed.html";
-const TEST_BUILD_VERSION = "v19";
+const TEST_BUILD_VERSION = "v20";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzATssnUzIbUl1lX_zUzQTxB3_0Jk0UMGjLXuLkCNFj4p40gNOACQS6ybwCBnUJl1uo/exec";
@@ -1454,6 +1454,7 @@ async function saveRelayEntry_() {
 
 async function syncRelayQueue_(showReconnectHud) {
   if (!TEST_RELAY_FEATURE_ENABLED) return;
+  if (!shellUnlocked) return;
   if (relaySyncInProgress) return;
   relaySyncInProgress = 1;
   let relayDrainHudVisible = false;
@@ -2537,6 +2538,7 @@ async function unlockShellWithPin_() {
       }
     }
     showShellActionConfirmation_("Logged In", "Ready for " + cleanerName + ".", 500);
+    retryQueuedSyncIfReady_();
 
     if (navigator.onLine) {
       pairRelayInstallationAutomatically_();
