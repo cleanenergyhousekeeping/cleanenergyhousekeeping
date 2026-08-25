@@ -12,8 +12,9 @@ const APPS_SCRIPT_URL =
 const SHELL_AUTH_KEY = "ce_shell_auth_v1";
 const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
 const SHELL_ENTRY_DRAFT_KEY = "ce_shell_entry_draft_v1";
-const LIVE_RELAY_FEATURE_ENABLED = true;
-const LIVE_RELAY_WORKER_URL = "https://ceh-relay-production.kyle-405.workers.dev";
+// Phase 1 ships the reviewed client dormant. Activation is a separately approved change.
+const LIVE_RELAY_FEATURE_ENABLED = false;
+const LIVE_RELAY_WORKER_URL = "";
 const LIVE_RELAY_STATE_KEY = "ce_shell_live_relay_state_v1";
 const LIVE_RELAY_INSTALLATION_ID_KEY = "ce_shell_live_relay_installation_id_v1";
 const LIVE_RELAY_LOCK_NAME = "ce-shell-live-relay-v1";
@@ -1089,6 +1090,9 @@ function updateRelayPairingUi_() {
 }
 
 async function callRelayJson_(path, body, relayToken) {
+  if (!LIVE_RELAY_FEATURE_ENABLED || !LIVE_RELAY_WORKER_URL) {
+    throw new Error("Live relay is not active.");
+  }
   const headers = { "Content-Type": "application/json" };
   if (relayToken) headers.Authorization = "Bearer " + relayToken;
   const response = await fetch(LIVE_RELAY_WORKER_URL + path, {
@@ -1105,7 +1109,7 @@ async function callRelayJson_(path, body, relayToken) {
 }
 
 function probeRelayReachability_() {
-  if (!navigator.onLine) {
+  if (!LIVE_RELAY_FEATURE_ENABLED || !LIVE_RELAY_WORKER_URL || !navigator.onLine) {
     return Promise.resolve(false);
   }
   if (relayReachabilityProbe) {

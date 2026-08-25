@@ -44,8 +44,9 @@ function response(payload) {
   return { status: 200, json: async () => payload };
 }
 
-function makeHarness({ storage, locks, randomUUID, enroll, relayEvent }) {
+function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRelay = true }) {
   const elements = new Map();
+  const fetchCalls = [];
   const document = {
     getElementById(id) {
       if (!elements.has(id)) elements.set(id, makeElement());
@@ -68,6 +69,7 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent }) {
     Error,
     setTimeout,
     clearTimeout,
+    __fetchCalls: fetchCalls,
     console: { error() {} },
     document,
     localStorage: storage,
@@ -75,6 +77,7 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent }) {
     window: { navigator: { standalone: false }, matchMedia() { return { matches: false }; }, addEventListener() {} },
     crypto: randomUUID ? { randomUUID } : {},
     fetch: async (url, options = {}) => {
+      fetchCalls.push({ url, options });
       if (url.endsWith("/health")) {
         return response({ ok: true, service: "ceh-relay", environment: "production", storage: "ok" });
       }
@@ -88,7 +91,12 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent }) {
     },
   };
   vm.createContext(context);
-  vm.runInContext(`${app}\nglobalThis.__relayIdentityTestApi = { pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_ };`, context);
+  const runtimeApp = enableRelay
+    ? app
+      .replace("const LIVE_RELAY_FEATURE_ENABLED = false;", "const LIVE_RELAY_FEATURE_ENABLED = true;")
+      .replace("const LIVE_RELAY_WORKER_URL = \"\";", "const LIVE_RELAY_WORKER_URL = \"https://relay-production.example.test\";")
+    : app;
+  vm.runInContext(`${runtimeApp}\nglobalThis.__relayIdentityTestApi = { pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_, getFetchCalls: function () { return globalThis.__fetchCalls; } };`, context);
   return context.__relayIdentityTestApi;
 }
 
@@ -112,7 +120,7 @@ function enrolledSession(deviceId, highWater = 0) {
 }
 
 test("Live relay runtime is isolated from TEST and existing Live shell storage", () => {
-  assert.doesNotMatch(app, /ceh-relay-test\.kyle-405\.workers\.dev/);
+  assert.doesNotMatch(app, /ceh-relay-test\.kyle-405\.workers\.dev|ceh-relay-production\.kyle-405\.workers\.dev/);
   assert.doesNotMatch(app, /ce_shell_test_relay_(state|installation_id)_v1/);
   assert.doesNotMatch(app, /\/clockin-test(?:\/|\b)/);
   assert.match(app, /const LIVE_RELAY_STATE_KEY = "ce_shell_live_relay_state_v1"/);
@@ -121,6 +129,23 @@ test("Live relay runtime is isolated from TEST and existing Live shell storage",
   assert.match(app, /const SHELL_AUTH_KEY = "ce_shell_auth_v1"/);
   assert.match(app, /const SHELL_QUEUE_KEY = "ce_shell_queue_v1"/);
   assert.match(app, /const SHELL_ENTRY_DRAFT_KEY = "ce_shell_entry_draft_v1"/);
+});
+
+test("Live relay is inactive by default and never probes or enrolls", async () => {
+  const harness = makeHarness({
+    storage: preparedStorage(),
+    locks: makeLocks(),
+    randomUUID: () => "unused",
+    enableRelay: false,
+    enroll: () => { throw new Error("inactive relay must not enroll"); },
+    relayEvent: () => { throw new Error("inactive relay must not submit"); },
+  });
+  await harness.pair();
+  await harness.probe();
+  assert.deepEqual(harness.getFetchCalls(), []);
+  assert.equal(harness.getState(), null);
+  assert.match(app, /const LIVE_RELAY_FEATURE_ENABLED = false;/);
+  assert.match(app, /const LIVE_RELAY_WORKER_URL = "";/);
 });
 
 test("TEST runtime remains isolated from Live relay identifiers", () => {
