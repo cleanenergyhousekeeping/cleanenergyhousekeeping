@@ -15,6 +15,10 @@ const RELAY_CONFIG_KEYS_ = {
 
 const RELAY_SUPPORTED_ENVIRONMENTS_ = ["test", "production"];
 const RELAY_NONCE_HARD_MAX_ = 500;
+const RELAY_PRODUCTION_CONFIG_ = {
+  expectedSpreadsheetId: "1b1IVRl3GIxFWJM0x7J5RTGmHTl_yrzHqis0O7hdM-wc",
+  ledgerSheetName: "Relay Event Ledger",
+};
 
 function parseRelayPositiveInteger_(value, minimum, maximum) {
   const parsed = Number(value);
@@ -66,17 +70,21 @@ function parseRelayHmacKeys_(rawJson, acceptedKeyIds) {
   return keys;
 }
 
-function loadRelayConfig_() {
+function relayConfigInvalidStatus_(environment) {
+  return environment === "production" ? "production_invalid" : "invalid";
+}
+
+function loadRelayConfigResult_() {
   try {
     const properties = PropertiesService.getScriptProperties();
     const values = properties.getProperties();
     if (values[RELAY_CONFIG_KEYS_.enabled] !== "true") {
-      return null;
+      return { config: null, status: "disabled" };
     }
 
     const environment = safeStr_(values[RELAY_CONFIG_KEYS_.environment]);
     if (RELAY_SUPPORTED_ENVIRONMENTS_.indexOf(environment) === -1) {
-      return null;
+      return { config: null, status: relayConfigInvalidStatus_(environment) };
     }
 
     const expectedSpreadsheetId = safeStr_(
@@ -87,12 +95,22 @@ function loadRelayConfig_() {
       values[RELAY_CONFIG_KEYS_.acceptedKeyIds]
     );
     if (!expectedSpreadsheetId || !ledgerSheetName || !acceptedKeyIds) {
-      return null;
+      return { config: null, status: relayConfigInvalidStatus_(environment) };
+    }
+
+    if (
+      environment === "production" &&
+      (
+        expectedSpreadsheetId !== RELAY_PRODUCTION_CONFIG_.expectedSpreadsheetId ||
+        ledgerSheetName !== RELAY_PRODUCTION_CONFIG_.ledgerSheetName
+      )
+    ) {
+      return { config: null, status: relayConfigInvalidStatus_(environment) };
     }
 
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     if (!spreadsheet || spreadsheet.getId() !== expectedSpreadsheetId) {
-      return null;
+      return { config: null, status: relayConfigInvalidStatus_(environment) };
     }
 
     const hmacKeys = parseRelayHmacKeys_(
@@ -103,7 +121,7 @@ function loadRelayConfig_() {
       safeStr_(values[RELAY_CONFIG_KEYS_.subjectHmacKey])
     );
     if (!hmacKeys || !subjectHmacKey || subjectHmacKey.length !== 32) {
-      return null;
+      return { config: null, status: relayConfigInvalidStatus_(environment) };
     }
 
     const maxClockSkewSeconds = parseRelayPositiveInteger_(
@@ -134,10 +152,10 @@ function loadRelayConfig_() {
       !maxNonceCount ||
       nonceTtlSeconds < maxClockSkewSeconds * 2
     ) {
-      return null;
+      return { config: null, status: relayConfigInvalidStatus_(environment) };
     }
 
-    return {
+    return { config: {
       environment: environment,
       audience: "ceh-relay:" + environment + ":apps-script",
       spreadsheet: spreadsheet,
@@ -149,9 +167,13 @@ function loadRelayConfig_() {
       nonceTtlMs: nonceTtlSeconds * 1000,
       lockTimeoutMs: lockTimeoutMs,
       maxNonceCount: maxNonceCount,
-    };
+    }, status: "ready" };
   } catch (_) {
-    return null;
+    return { config: null, status: "invalid" };
   }
+}
+
+function loadRelayConfig_() {
+  return loadRelayConfigResult_().config;
 }
 /* end[relay_environment_config] */
