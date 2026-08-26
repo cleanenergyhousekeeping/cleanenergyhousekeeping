@@ -35,6 +35,17 @@ CEH_RELAY_MAX_NONCE_COUNT
 
 Only `test` and `production` are valid environment values. Production remains disabled until a separate production deployment and complete production properties are approved. Keys must be generated independently for each environment and stored only in Script Properties and the corresponding Worker secrets.
 
+For the separate production Apps Script deployment, configure these non-secret values only when the approved promotion runbook calls for it:
+
+```text
+CEH_RELAY_ENABLED=false
+CEH_RELAY_ENVIRONMENT=production
+CEH_RELAY_EXPECTED_SPREADSHEET_ID=1b1IVRl3GIxFWJM0x7J5RTGmHTl_yrzHqis0O7hdM-wc
+CEH_RELAY_LEDGER_SHEET_NAME=Relay Event Ledger
+```
+
+Production code accepts only that spreadsheet ID and ledger sheet name. It remains inactive when `CEH_RELAY_ENABLED` is absent or any value other than the exact string `true`. The production deployment must use its own Script Properties; TEST key IDs and cryptographic values must not be copied into production. Missing or malformed secrets are reported as a generic relay configuration failure only after relay handling is explicitly invoked; no property name, value, or secret is returned or logged.
+
 ## Signed Requests
 
 The Worker sends `mode`, `keyId`, a base64url-encoded exact UTF-8 JSON body, and a base64url HMAC-SHA-256 signature over those decoded body bytes. The signed body includes version, key ID, environment, audience, operation, timestamp, nonce, and payload. Context is not secret, but it must be reconstructed exactly.
@@ -65,7 +76,7 @@ The ledger enters `PROCESSING` before existing queued reconciliation runs. Sprea
 
 ## Production Promotion
 
-Production promotion must use the same reviewed source commit with a separate Apps Script deployment, spreadsheet, Script Properties, cryptographic keys, Worker name and bindings, D1 database, and Cloudflare resources. No deployment URL, spreadsheet ID, cleaner identity, D1 ID, or key material belongs in source.
+Production promotion must use the same reviewed source commit with a separate Apps Script deployment, spreadsheet, Script Properties, cryptographic keys, Worker name and bindings, D1 database, and Cloudflare resources. No deployment URL, cleaner identity, D1 ID, or key material belongs in source. The reviewed Live spreadsheet binding above is the only intentionally source-defined production identifier.
 
 `relay/src/crypto.ts` already derives authenticated-encryption contexts from the validated relay environment: `ceh-relay:<environment>:event:<eventId>` and `ceh-relay:<environment>:state:<cleanerSubject>`. TEST and production ciphertexts therefore cannot be decrypted across environments when keys or contexts are mixed.
 

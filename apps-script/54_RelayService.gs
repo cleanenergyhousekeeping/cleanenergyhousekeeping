@@ -313,8 +313,12 @@ function processRelayEvent_(config, operation, payload, nowMs) {
 function handleRelayWorkerRequest_(outerBody) {
   let operation = "";
   try {
-    const config = loadRelayConfig_();
+    const configResult = loadRelayConfigResult_();
+    const config = configResult.config;
     if (!config) {
+      if (configResult.status === "production_invalid") {
+        return buildRelayFailure_(operation, "relay_configuration_invalid", false);
+      }
       return buildRelayFailure_(operation, "authentication_failed", false);
     }
 

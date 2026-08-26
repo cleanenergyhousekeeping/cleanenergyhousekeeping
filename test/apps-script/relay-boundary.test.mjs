@@ -10,6 +10,9 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const HMAC_KEY = Buffer.alloc(32, 17);
 const SECOND_HMAC_KEY = Buffer.alloc(32, 23);
 const SUBJECT_KEY = Buffer.alloc(32, 41);
+const PRODUCTION_HMAC_KEY = Buffer.alloc(32, 43);
+const PRODUCTION_SUBJECT_KEY = Buffer.alloc(32, 47);
+const PRODUCTION_SPREADSHEET_ID = "1b1IVRl3GIxFWJM0x7J5RTGmHTl_yrzHqis0O7hdM-wc";
 const USER_ONE_ID = "8b3f6e44-580d-4dc4-b15d-f1c8821daf38";
 const USER_TWO_ID = "fe2f59f7-df89-40b2-9939-dcfd015ea58c";
 const SESSION_TOKEN = "0f43ea8d-eac5-45d8-a64e-2d61a548dadf";
@@ -221,6 +224,24 @@ function defaultConfigProperties(spreadsheetId) {
   };
 }
 
+function productionConfigProperties() {
+  return {
+    CEH_RELAY_ENABLED: "true",
+    CEH_RELAY_ENVIRONMENT: "production",
+    CEH_RELAY_EXPECTED_SPREADSHEET_ID: PRODUCTION_SPREADSHEET_ID,
+    CEH_RELAY_LEDGER_SHEET_NAME: "Relay Event Ledger",
+    CEH_RELAY_ACCEPTED_KEY_IDS: "prod-v1",
+    CEH_RELAY_HMAC_KEYS_JSON: JSON.stringify({
+      "prod-v1": PRODUCTION_HMAC_KEY.toString("base64url"),
+    }),
+    CEH_RELAY_SUBJECT_HMAC_KEY: PRODUCTION_SUBJECT_KEY.toString("base64url"),
+    CEH_RELAY_MAX_CLOCK_SKEW_SECONDS: "300",
+    CEH_RELAY_NONCE_TTL_SECONDS: "600",
+    CEH_RELAY_LOCK_TIMEOUT_MS: "5000",
+    CEH_RELAY_MAX_NONCE_COUNT: "100",
+  };
+}
+
 function createHarness(options = {}) {
   const spreadsheetId = options.spreadsheetId ?? "test-spreadsheet-id";
   const usersSheet = new FakeSheet(options.usersRows ?? defaultUsersRows());
@@ -231,7 +252,7 @@ function createHarness(options = {}) {
   ]);
   const spreadsheet = new FakeSpreadsheet(spreadsheetId, sheets);
   const properties = new FakeProperties({
-    ...defaultConfigProperties(spreadsheetId),
+    ...(options.defaultConfig === false ? {} : defaultConfigProperties(spreadsheetId)),
     ...(options.properties ?? {}),
   });
   const sessions = new Map([
@@ -361,6 +382,7 @@ function createHarness(options = {}) {
     doPost: doPost,
     handle: handleRelayWorkerRequest_,
     loadConfig: loadRelayConfig_,
+    loadConfigResult: loadRelayConfigResult_,
     reserveNonce: reserveRelayNonce_,
     verify: verifyRelaySignedEnvelope_
   };`, context);
@@ -513,6 +535,102 @@ test("missing configuration and a wrong spreadsheet binding disable only relay",
     clientId: "legacy-client",
     legacy: true,
   });
+});
+
+test("production relay stays disabled until explicitly enabled", () => {
+  const missingEnableFlag = createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: {
+      CEH_RELAY_ENVIRONMENT: "production",
+      CEH_RELAY_EXPECTED_SPREADSHEET_ID: PRODUCTION_SPREADSHEET_ID,
+      CEH_RELAY_LEDGER_SHEET_NAME: "Relay Event Ledger",
+    },
+  });
+  assert.deepEqual({ ...missingEnableFlag.api.loadConfigResult() }, {
+    config: null,
+    status: "disabled",
+  });
+  assert.equal(
+    missingEnableFlag.api.handle(sessionEnvelope({ environment: "production" })).result,
+    "authentication_failed",
+  );
+
+  const harness = createHarness({
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: {
+      ...productionConfigProperties(),
+      CEH_RELAY_ENABLED: "false",
+    },
+  });
+  assert.deepEqual({ ...harness.api.loadConfigResult() }, {
+    config: null,
+    status: "disabled",
+  });
+  assert.equal(
+    harness.api.handle(sessionEnvelope({ environment: "production" })).result,
+    "authentication_failed",
+  );
+});
+
+test("production configuration is bound to the Live spreadsheet and ledger", () => {
+  const testConfigCannotBecomeProduction = createHarness({
+    properties: { CEH_RELAY_ENVIRONMENT: "production" },
+  });
+  assert.deepEqual({ ...testConfigCannotBecomeProduction.api.loadConfigResult() }, {
+    config: null,
+    status: "production_invalid",
+  });
+
+  for (const properties of [
+    { ...productionConfigProperties(), CEH_RELAY_EXPECTED_SPREADSHEET_ID: "other-spreadsheet" },
+    { ...productionConfigProperties(), CEH_RELAY_LEDGER_SHEET_NAME: "Other Ledger" },
+  ]) {
+    assert.deepEqual(
+      { ...createHarness({ spreadsheetId: PRODUCTION_SPREADSHEET_ID, properties }).api.loadConfigResult() },
+      { config: null, status: "production_invalid" },
+    );
+  }
+
+  const harness = createHarness({
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: productionConfigProperties(),
+  });
+  const config = harness.api.loadConfig();
+  assert.equal(config.spreadsheet.getId(), PRODUCTION_SPREADSHEET_ID);
+  assert.equal(config.ledgerSheetName, "Relay Event Ledger");
+  assert.equal(
+    harness.api.handle(sessionEnvelope({
+      environment: "production",
+      audience: "ceh-relay:production:apps-script",
+      keyId: "prod-v1",
+      signingKey: PRODUCTION_HMAC_KEY,
+    })).ok,
+    true,
+  );
+});
+
+test("enabled production relay reports missing secrets as configuration failure", () => {
+  const harness = createHarness({
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: {
+      ...productionConfigProperties(),
+      CEH_RELAY_HMAC_KEYS_JSON: "",
+      CEH_RELAY_SUBJECT_HMAC_KEY: "",
+    },
+  });
+  assert.deepEqual({ ...harness.api.loadConfigResult() }, {
+    config: null,
+    status: "production_invalid",
+  });
+  const result = harness.api.handle(sessionEnvelope({ environment: "production" }));
+  assert.deepEqual({ ...result }, {
+    ok: false,
+    operation: "",
+    result: "relay_configuration_invalid",
+    retryable: false,
+  });
+  assert.equal(JSON.stringify(result).includes("CEH_RELAY_HMAC_KEYS_JSON"), false);
 });
 
 test("User ID is mandatory, immutable-looking, unique, and never falls back", () => {
