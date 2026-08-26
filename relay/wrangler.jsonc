@@ -37,6 +37,11 @@
   "env": {
     "production": {
       "name": "ceh-relay-production",
+      "workers_dev": false,
+      "preview_urls": false,
+      "triggers": {
+        "crons": []
+      },
       "vars": {
         "CEH_RELAY_ENVIRONMENT": "production",
         "CEH_RELAY_APPS_ACTIVE_KEY_ID": "production-v1",
