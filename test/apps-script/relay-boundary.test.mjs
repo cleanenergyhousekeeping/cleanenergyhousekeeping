@@ -34,6 +34,7 @@ const LEDGER_HEADERS = [
 class FakeProperties {
   constructor(initial) {
     this.values = { ...initial };
+    this.setPropertiesCalls = [];
   }
 
   getProperties() {
@@ -48,6 +49,18 @@ class FakeProperties {
 
   setProperty(key, value) {
     this.values[key] = String(value);
+    return this;
+  }
+
+  setProperties(values, deleteAllOthers) {
+    this.setPropertiesCalls.push({
+      names: Object.keys(values),
+      deleteAllOthers,
+    });
+    if (deleteAllOthers) this.values = {};
+    Object.entries(values).forEach(([key, value]) => {
+      this.values[key] = String(value);
+    });
     return this;
   }
 
@@ -368,6 +381,7 @@ function createHarness(options = {}) {
   const sourceFiles = [
     "apps-script/51_RelayConfig.gs",
     "apps-script/52_RelaySecurity.gs",
+    "apps-script/55_RelayAdminConfig.gs",
     "apps-script/53_RelayLedger.gs",
     "apps-script/54_RelayService.gs",
     "apps-script/40_WebApp.gs",
@@ -381,9 +395,11 @@ function createHarness(options = {}) {
     buildSubject: buildRelayCleanerSubject_,
     doPost: doPost,
     handle: handleRelayWorkerRequest_,
+    installProductionProperties: installProductionRelayPropertiesAdmin,
     loadConfig: loadRelayConfig_,
     loadConfigResult: loadRelayConfigResult_,
     reserveNonce: reserveRelayNonce_,
+    verifyProductionProperties: verifyProductionRelayPropertiesAdmin,
     verify: verifyRelaySignedEnvelope_
   };`, context);
 
@@ -631,6 +647,149 @@ test("enabled production relay reports missing secrets as configuration failure"
     retryable: false,
   });
   assert.equal(JSON.stringify(result).includes("CEH_RELAY_HMAC_KEYS_JSON"), false);
+});
+
+test("production property installer preserves sessions and returns no secret values", () => {
+  const hmacKeysJson = JSON.stringify({
+    "production-v1": PRODUCTION_HMAC_KEY.toString("base64url"),
+  });
+  const subjectKey = PRODUCTION_SUBJECT_KEY.toString("base64url");
+  const harness = createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: {
+      "ce_session_preserve": "synthetic-session-value",
+    },
+  });
+
+  const result = harness.api.installProductionProperties(hmacKeysJson, subjectKey);
+  const stored = harness.state.properties.getProperties();
+
+  assert.equal(stored.ce_session_preserve, "synthetic-session-value");
+  assert.equal(stored.CEH_RELAY_ENABLED, "false");
+  assert.equal(stored.CEH_RELAY_ENVIRONMENT, "production");
+  assert.equal(stored.CEH_RELAY_EXPECTED_SPREADSHEET_ID, PRODUCTION_SPREADSHEET_ID);
+  assert.equal(stored.CEH_RELAY_LEDGER_SHEET_NAME, "Relay Event Ledger");
+  assert.equal(stored.CEH_RELAY_ACCEPTED_KEY_IDS, "production-v1");
+  assert.equal(stored.CEH_RELAY_MAX_CLOCK_SKEW_SECONDS, "300");
+  assert.equal(stored.CEH_RELAY_NONCE_TTL_SECONDS, "600");
+  assert.equal(stored.CEH_RELAY_LOCK_TIMEOUT_MS, "5000");
+  assert.equal(stored.CEH_RELAY_MAX_NONCE_COUNT, "100");
+  assert.deepEqual(harness.state.properties.setPropertiesCalls, [{
+    names: [
+      "CEH_RELAY_ENABLED",
+      "CEH_RELAY_ENVIRONMENT",
+      "CEH_RELAY_EXPECTED_SPREADSHEET_ID",
+      "CEH_RELAY_LEDGER_SHEET_NAME",
+      "CEH_RELAY_ACCEPTED_KEY_IDS",
+      "CEH_RELAY_MAX_CLOCK_SKEW_SECONDS",
+      "CEH_RELAY_NONCE_TTL_SECONDS",
+      "CEH_RELAY_LOCK_TIMEOUT_MS",
+      "CEH_RELAY_MAX_NONCE_COUNT",
+      "CEH_RELAY_HMAC_KEYS_JSON",
+      "CEH_RELAY_SUBJECT_HMAC_KEY",
+    ],
+    deleteAllOthers: false,
+  }]);
+  assert.deepEqual({ ...result.nonSecretValues }, {
+    CEH_RELAY_ENABLED: "false",
+    CEH_RELAY_ENVIRONMENT: "production",
+    CEH_RELAY_EXPECTED_SPREADSHEET_ID: PRODUCTION_SPREADSHEET_ID,
+    CEH_RELAY_LEDGER_SHEET_NAME: "Relay Event Ledger",
+    CEH_RELAY_ACCEPTED_KEY_IDS: "production-v1",
+    CEH_RELAY_MAX_CLOCK_SKEW_SECONDS: "300",
+    CEH_RELAY_NONCE_TTL_SECONDS: "600",
+    CEH_RELAY_LOCK_TIMEOUT_MS: "5000",
+    CEH_RELAY_MAX_NONCE_COUNT: "100",
+  });
+  assert.equal(result.relayEnabledStatus, "disabled");
+  assert.deepEqual(result.missingPropertyNames, []);
+  assert.deepEqual(result.presentPropertyNames, result.expectedPropertyNames);
+  assert.equal(result.signingRingStructurallyValid, true);
+  assert.equal(result.productionKeyIdPresent, true);
+  assert.equal(result.signingKeyLengthValid, true);
+  assert.equal(result.subjectKeyLengthValid, true);
+  assert.equal(JSON.stringify(result).includes(PRODUCTION_HMAC_KEY.toString("base64url")), false);
+  assert.equal(JSON.stringify(result).includes(subjectKey), false);
+});
+
+test("production property installer rejects invalid secrets before any write", () => {
+  const validSigningKey = PRODUCTION_HMAC_KEY.toString("base64url");
+  const validSubjectKey = PRODUCTION_SUBJECT_KEY.toString("base64url");
+  const invalidInputs = [
+    ["", validSubjectKey],
+    ["not-json", validSubjectKey],
+    [JSON.stringify({ "other-v1": validSigningKey }), validSubjectKey],
+    [JSON.stringify({ "production-v1": Buffer.alloc(31, 1).toString("base64url") }), validSubjectKey],
+    [JSON.stringify({ "production-v1": `${validSigningKey}=` }), validSubjectKey],
+    [JSON.stringify({ "production-v1": validSigningKey }), ""],
+    [JSON.stringify({ "production-v1": validSigningKey }), Buffer.alloc(31, 2).toString("base64url")],
+    [JSON.stringify({ "production-v1": validSigningKey }), `${validSubjectKey}=`],
+  ];
+
+  invalidInputs.forEach(([hmacKeysJson, subjectKey]) => {
+    const harness = createHarness({
+      defaultConfig: false,
+      spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+      properties: { "ce_session_preserve": "synthetic-session-value" },
+    });
+    assert.throws(
+      () => harness.api.installProductionProperties(hmacKeysJson, subjectKey),
+      { message: "Production relay property installation failed" },
+    );
+    assert.deepEqual(harness.state.properties.getProperties(), {
+      "ce_session_preserve": "synthetic-session-value",
+    });
+    assert.equal(harness.state.properties.setPropertiesCalls.length, 0);
+  });
+});
+
+test("production property installer refuses the TEST spreadsheet", () => {
+  const hmacKeysJson = JSON.stringify({
+    "production-v1": PRODUCTION_HMAC_KEY.toString("base64url"),
+  });
+  const subjectKey = PRODUCTION_SUBJECT_KEY.toString("base64url");
+  const harness = createHarness({
+    defaultConfig: false,
+    properties: { "ce_session_preserve": "synthetic-session-value" },
+  });
+
+  assert.throws(
+    () => harness.api.installProductionProperties(hmacKeysJson, subjectKey),
+    { message: "Production relay property installation failed" },
+  );
+  assert.deepEqual(harness.state.properties.getProperties(), {
+    "ce_session_preserve": "synthetic-session-value",
+  });
+  assert.equal(harness.state.properties.setPropertiesCalls.length, 0);
+});
+
+test("production property verifier reports names and structure without secret strings", () => {
+  const hmacKeysJson = JSON.stringify({
+    "production-v1": PRODUCTION_HMAC_KEY.toString("base64url"),
+  });
+  const subjectKey = PRODUCTION_SUBJECT_KEY.toString("base64url");
+  const harness = createHarness({
+    defaultConfig: false,
+    properties: {
+      CEH_RELAY_ENABLED: "false",
+      CEH_RELAY_ENVIRONMENT: "production",
+      CEH_RELAY_HMAC_KEYS_JSON: hmacKeysJson,
+      CEH_RELAY_SUBJECT_HMAC_KEY: subjectKey,
+    },
+  });
+
+  const result = harness.api.verifyProductionProperties();
+  assert.equal(result.presentPropertyNames.includes("CEH_RELAY_HMAC_KEYS_JSON"), true);
+  assert.equal(result.presentPropertyNames.includes("CEH_RELAY_SUBJECT_HMAC_KEY"), true);
+  assert.equal(result.missingPropertyNames.includes("CEH_RELAY_ACCEPTED_KEY_IDS"), true);
+  assert.equal(result.relayEnabledStatus, "disabled");
+  assert.equal(result.signingRingStructurallyValid, true);
+  assert.equal(result.productionKeyIdPresent, true);
+  assert.equal(result.signingKeyLengthValid, true);
+  assert.equal(result.subjectKeyLengthValid, true);
+  assert.equal(JSON.stringify(result).includes(hmacKeysJson), false);
+  assert.equal(JSON.stringify(result).includes(subjectKey), false);
 });
 
 test("User ID is mandatory, immutable-looking, unique, and never falls back", () => {

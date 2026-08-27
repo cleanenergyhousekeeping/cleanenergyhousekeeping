@@ -46,6 +46,26 @@ CEH_RELAY_LEDGER_SHEET_NAME=Relay Event Ledger
 
 Production code accepts only that spreadsheet ID and ledger sheet name. It remains inactive when `CEH_RELAY_ENABLED` is absent or any value other than the exact string `true`. The production deployment must use its own Script Properties; TEST key IDs and cryptographic values must not be copied into production. Missing or malformed secrets are reported as a generic relay configuration failure only after relay handling is explicitly invoked; no property name, value, or secret is returned or logged.
 
+### Production property installer
+
+`installProductionRelayPropertiesAdmin(hmacKeysJson, subjectHmacKey)` is the
+admin-only path for installing the complete production relay property set when the
+Apps Script settings UI is at its row limit. It accepts the two secret values as
+direct parameters, validates them before writing, keeps the relay disabled, and
+uses `setProperties(..., false)` so Live session properties are preserved. Its
+return value is the same sanitized report produced by
+`verifyProductionRelayPropertiesAdmin()`; neither function logs or returns a secret
+string.
+
+Do not pass secrets with `clasp run --params`, because they would appear in the
+shell command and history. A separately approved operational phase must use a local
+execution-only wrapper that reads the retained recovery bundle from a protected
+clipboard or anonymous descriptor, clears the clipboard, and sends the two direct
+parameters in the Apps Script Execution API HTTPS request body. The wrapper must
+suppress request and response logging and must never persist the request body. Do
+not paste secret values into source, the Apps Script editor, a shell command,
+environment variables, a spreadsheet, or chat.
+
 ## Signed Requests
 
 The Worker sends `mode`, `keyId`, a base64url-encoded exact UTF-8 JSON body, and a base64url HMAC-SHA-256 signature over those decoded body bytes. The signed body includes version, key ID, environment, audience, operation, timestamp, nonce, and payload. Context is not secret, but it must be reconstructed exactly.
