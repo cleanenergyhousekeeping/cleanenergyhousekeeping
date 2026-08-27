@@ -90,7 +90,7 @@ been approved, the intended operator workflow is:
 
 ```bash
 node scripts/production-relay-secrets.mjs generate
-pbpaste | node scripts/production-relay-secrets.mjs apps-script-next
+pbpaste | node scripts/production-relay-secrets.mjs apps-script-modal
 pbpaste | node scripts/production-relay-secrets.mjs worker-bootstrap
 ```
 
@@ -103,10 +103,17 @@ variable, repository, chat, or shell history.
 
 For either follow-up command, retrieve the recovery bundle to the clipboard and use
 the exact `pbpaste` pipeline above. The helper consumes it from stdin and clears the
-clipboard before continuing. `apps-script-next` hands off one Apps Script property
-at a time and clears the clipboard after each confirmation. `worker-bootstrap`
-requires the operator to type `DEPLOY`, then performs the first dark production
-deployment with the equivalent of:
+clipboard before continuing. Before running `apps-script-modal`, the owner opens
+**Clean Energy > Relay Admin > Install production relay properties (disabled)** in
+the production spreadsheet. The helper then hands off only the two Apps Script
+values, one at a time, for pasting into the matching password fields and clears the
+clipboard after each confirmation. The modal sends those two values through
+`google.script.run`, clears its fields immediately after dispatch, and reports only
+the sanitized verifier status. Opening or cancelling the modal performs no write;
+clicking **Install disabled** requires separate operational approval.
+
+`worker-bootstrap` requires the operator to type `DEPLOY`, then performs the first
+dark production deployment with the equivalent of:
 
 ```bash
 wrangler deploy --env production --strict --secrets-file /dev/fd/3

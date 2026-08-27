@@ -32,6 +32,13 @@ function onOpen() {
     .addSeparator()
     .addItem("Open Properties", "openPropertiesSheet")
     .addItem("Open Users", "openUsersSheet")
+    .addSubMenu(
+      ui.createMenu("Relay Admin")
+        .addItem(
+          "Install production relay properties (disabled)",
+          "showProductionRelayPropertiesAdminDialog"
+        )
+    )
     .addToUi();
 }
 /* end[custom_menu_on_open] */

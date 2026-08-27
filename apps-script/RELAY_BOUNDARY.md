@@ -58,13 +58,22 @@ return value is the same sanitized report produced by
 string.
 
 Do not pass secrets with `clasp run --params`, because they would appear in the
-shell command and history. A separately approved operational phase must use a local
-execution-only wrapper that reads the retained recovery bundle from a protected
-clipboard or anonymous descriptor, clears the clipboard, and sends the two direct
-parameters in the Apps Script Execution API HTTPS request body. The wrapper must
-suppress request and response logging and must never persist the request body. Do
-not paste secret values into source, the Apps Script editor, a shell command,
-environment variables, a spreadsheet, or chat.
+shell command and history. The reviewed invocation path is the owner-operated
+modal opened from **Clean Energy > Relay Admin > Install production relay
+properties (disabled)** in the production spreadsheet. The local secret helper's
+`apps-script-modal` mode reads the retained recovery bundle from piped standard
+input, clears the bundle from the clipboard, and hands off only the two Apps Script
+values one at a time. Each value is pasted into a password field and cleared from
+the clipboard before the next value is exposed. The modal sends the two direct
+parameters through `google.script.run`, immediately clears its fields, suppresses
+raw errors, and displays only the sanitized verifier status. Do not paste secret
+values into source, the Apps Script editor, a shell command, environment variables,
+a spreadsheet cell, or chat.
+
+Opening or cancelling the modal does not change Script Properties. Clicking
+**Install disabled** is the separately approved property-write operation. The
+server validates the production spreadsheet and both secret structures before any
+write, preserves all unrelated properties, and forces `CEH_RELAY_ENABLED=false`.
 
 ## Signed Requests
 
