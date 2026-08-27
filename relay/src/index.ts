@@ -222,7 +222,7 @@ export default {
       if (request.method !== "GET") {
         return methodNotAllowedResponse(corsHeaders, ["GET"]);
       }
-      return healthResponse(env.DB, corsHeaders);
+      return healthResponse(env.DB, env.CEH_RELAY_ENVIRONMENT, corsHeaders);
     }
 
     if (request.method !== "POST") {

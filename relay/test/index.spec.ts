@@ -9,6 +9,7 @@ import { healthResponse } from "../src/health";
 import { loadRelayConfig } from "../src/config";
 import { DELIVERY_CRON } from "../src/delivery-service";
 import { createSession } from "../src/persistence/sessions";
+import type { RelayEnvironment } from "../src/persistence/types";
 
 /* begin[relay_worker_tests] */
 const HEALTH_URL = "https://relay.test/health";
@@ -40,15 +41,20 @@ function workerFetch(path: string, init?: RequestInit): Promise<Response> {
   return exports.default.fetch(new Request(`https://relay.test${path}`, init));
 }
 
-async function makeRouterEnv(database: D1Database = env.DB): Promise<Env> {
+async function makeRouterEnv(
+  database: D1Database = env.DB,
+  environment: RelayEnvironment = "test",
+): Promise<Env> {
   const encodedKey = bytesToBase64Url(new Uint8Array(32).fill(11));
   return {
     DB: database,
-    CEH_RELAY_ENVIRONMENT: "test",
-    CEH_RELAY_APPS_ACTIVE_KEY_ID: "test-v1",
+    CEH_RELAY_ENVIRONMENT: environment,
+    CEH_RELAY_APPS_ACTIVE_KEY_ID: `${environment}-v1`,
     CEH_RELAY_PAYLOAD_ACTIVE_KEY_VERSION: "1",
     CEH_RELAY_APPS_URL: "https://script.google.test/macros/s/synthetic/exec",
-    CEH_RELAY_APPS_HMAC_KEYS_JSON: JSON.stringify({ "test-v1": encodedKey }),
+    CEH_RELAY_APPS_HMAC_KEYS_JSON: JSON.stringify({
+      [`${environment}-v1`]: encodedKey,
+    }),
     CEH_RELAY_TOKEN_HMAC_KEY: encodedKey,
     CEH_RELAY_EVENT_DIGEST_HMAC_KEY: encodedKey,
     CEH_RELAY_PAYLOAD_ENCRYPTION_KEYS_JSON: JSON.stringify({ 1: encodedKey }),
@@ -133,6 +139,19 @@ describe("GET /health", () => {
     expect(response.headers.get("Vary")).toBe("Origin");
   });
 
+  it("reports the configured production environment", async () => {
+    const response = await directWorkerFetch(
+      new Request(HEALTH_URL),
+      await makeRouterEnv(env.DB, "production"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ...HEALTHY_BODY,
+      environment: "production",
+    });
+  });
+
   it("rejects a supplied foreign origin with sanitized JSON", async () => {
     const response = await workerFetch("/health", {
       headers: { Origin: FOREIGN_ORIGIN },
@@ -164,6 +183,7 @@ describe("D1 failures", () => {
 
     const response = await healthResponse(
       unavailableDatabase,
+      "test",
       createCorsHeaders(null),
     );
     const body = await response.text();
@@ -178,6 +198,26 @@ describe("D1 failures", () => {
     expect(body).not.toContain("stack");
     expect(body).not.toContain("database_id");
     expect(body).not.toContain("DB");
+  });
+
+  it("uses the configured production environment when unavailable", async () => {
+    const unavailableDatabase = {
+      prepare(): never {
+        throw new Error("synthetic failure");
+      },
+    } as unknown as D1Database;
+
+    const response = await healthResponse(
+      unavailableDatabase,
+      "production",
+      createCorsHeaders(null),
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      ...UNAVAILABLE_BODY,
+      environment: "production",
+    });
   });
 });
 
