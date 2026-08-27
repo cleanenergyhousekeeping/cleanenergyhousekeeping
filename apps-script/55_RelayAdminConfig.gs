@@ -61,6 +61,29 @@ function inspectProductionRelayAdminSecrets_(hmacKeysJson, subjectHmacKey) {
   };
 }
 
+function requireProductionRelayAdminSpreadsheet_() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (
+    !spreadsheet ||
+    spreadsheet.getId() !== RELAY_PRODUCTION_CONFIG_.expectedSpreadsheetId
+  ) {
+    throw new Error("Production relay property installation failed");
+  }
+  return spreadsheet;
+}
+
+function showProductionRelayPropertiesAdminDialog() {
+  requireProductionRelayAdminSpreadsheet_();
+  const output = HtmlService
+    .createHtmlOutputFromFile("RelayPropertyInstallerAdmin")
+    .setWidth(560)
+    .setHeight(610);
+  SpreadsheetApp.getUi().showModalDialog(
+    output,
+    "Install production relay properties"
+  );
+}
+
 function verifyProductionRelayPropertiesAdmin() {
   const values = PropertiesService.getScriptProperties().getProperties();
   const expectedNonSecretValues = buildProductionRelayAdminProperties_();
@@ -98,13 +121,7 @@ function verifyProductionRelayPropertiesAdmin() {
 }
 
 function installProductionRelayPropertiesAdmin(hmacKeysJson, subjectHmacKey) {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  if (
-    !spreadsheet ||
-    spreadsheet.getId() !== RELAY_PRODUCTION_CONFIG_.expectedSpreadsheetId
-  ) {
-    throw new Error("Production relay property installation failed");
-  }
+  requireProductionRelayAdminSpreadsheet_();
   const secretStatus = inspectProductionRelayAdminSecrets_(
     hmacKeysJson,
     subjectHmacKey

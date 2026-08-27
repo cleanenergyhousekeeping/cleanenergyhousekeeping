@@ -279,7 +279,8 @@ export async function handOffAppsScriptSecrets(bundle, dependencies = {}) {
   for (const secretName of APPS_SCRIPT_SECRET_NAMES) {
     await handOffClipboardValue(
       validated.appsScript[secretName],
-      `Paste ${secretName} into Apps Script properties, then press Enter to clear the clipboard: `,
+      `Paste ${secretName} into the matching field in the owner-operated ` +
+        "modal, then press Enter to clear the clipboard: ",
       dependencies,
     );
   }
@@ -443,10 +444,10 @@ export async function runCommand(command) {
     return;
   }
 
-  if (command === "apps-script-next") {
+  if (command === "apps-script-modal") {
     const bundle = await loadRecoveryBundleFromStdin();
     await handOffAppsScriptSecrets(bundle);
-    process.stdout.write("Apps Script secret handoff completed and the clipboard was cleared.\n");
+    process.stdout.write("Apps Script modal handoff completed and the clipboard was cleared.\n");
     return;
   }
 

@@ -126,6 +126,9 @@ describe("production relay secret helper", () => {
       "",
     ]);
     expect(prompts).toHaveLength(2);
+    expect(
+      prompts.every((prompt) => prompt.includes("owner-operated modal")),
+    ).toBe(true);
     for (const key of allLogicalKeys(bundle)) {
       expect(prompts.join(" ")).not.toContain(key);
     }
@@ -226,6 +229,9 @@ describe("production relay secret helper", () => {
 
   it("refuses an unsafe output mode", async () => {
     await expect(runCommand("print")).rejects.toThrow(
+      "Unsafe or unknown output mode refused",
+    );
+    await expect(runCommand("apps-script-next")).rejects.toThrow(
       "Unsafe or unknown output mode refused",
     );
   });

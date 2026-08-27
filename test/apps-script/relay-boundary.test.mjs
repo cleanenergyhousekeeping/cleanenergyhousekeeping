@@ -281,6 +281,8 @@ function createHarness(options = {}) {
     usersSheet,
     ledgerSheet,
     properties,
+    createdHtmlOutputs: [],
+    dialogCalls: [],
     sessions,
     lockAvailable: options.lockAvailable ?? true,
     lockHeld: false,
@@ -307,6 +309,25 @@ function createHarness(options = {}) {
       },
     },
     Date,
+    HtmlService: {
+      createHtmlOutputFromFile(filename) {
+        const output = {
+          filename,
+          width: null,
+          height: null,
+          setWidth(width) {
+            this.width = width;
+            return this;
+          },
+          setHeight(height) {
+            this.height = height;
+            return this;
+          },
+        };
+        state.createdHtmlOutputs.push(output);
+        return output;
+      },
+    },
     JSON,
     LockService: {
       getScriptLock() {
@@ -333,6 +354,13 @@ function createHarness(options = {}) {
     Set,
     SpreadsheetApp: {
       getActiveSpreadsheet: () => spreadsheet,
+      getUi() {
+        return {
+          showModalDialog(output, title) {
+            state.dialogCalls.push({ output, title });
+          },
+        };
+      },
       flush() {
         state.flushCount += 1;
       },
@@ -399,6 +427,7 @@ function createHarness(options = {}) {
     loadConfig: loadRelayConfig_,
     loadConfigResult: loadRelayConfigResult_,
     reserveNonce: reserveRelayNonce_,
+    showProductionPropertiesDialog: showProductionRelayPropertiesAdminDialog,
     verifyProductionProperties: verifyProductionRelayPropertiesAdmin,
     verify: verifyRelaySignedEnvelope_
   };`, context);
@@ -762,6 +791,62 @@ test("production property installer refuses the TEST spreadsheet", () => {
     "ce_session_preserve": "synthetic-session-value",
   });
   assert.equal(harness.state.properties.setPropertiesCalls.length, 0);
+});
+
+test("production property modal opens only on the production spreadsheet", () => {
+  const productionHarness = createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: { "ce_session_preserve": "synthetic-session-value" },
+  });
+
+  productionHarness.api.showProductionPropertiesDialog();
+
+  assert.equal(productionHarness.state.createdHtmlOutputs.length, 1);
+  assert.deepEqual(productionHarness.state.dialogCalls.map((call) => ({
+    filename: call.output.filename,
+    width: call.output.width,
+    height: call.output.height,
+    title: call.title,
+  })), [{
+    filename: "RelayPropertyInstallerAdmin",
+    width: 560,
+    height: 610,
+    title: "Install production relay properties",
+  }]);
+  assert.deepEqual(productionHarness.state.properties.getProperties(), {
+    "ce_session_preserve": "synthetic-session-value",
+  });
+  assert.equal(productionHarness.state.properties.setPropertiesCalls.length, 0);
+
+  const testHarness = createHarness({
+    defaultConfig: false,
+    properties: { "ce_session_preserve": "synthetic-session-value" },
+  });
+  assert.throws(
+    () => testHarness.api.showProductionPropertiesDialog(),
+    { message: "Production relay property installation failed" },
+  );
+  assert.equal(testHarness.state.createdHtmlOutputs.length, 0);
+  assert.equal(testHarness.state.dialogCalls.length, 0);
+  assert.equal(testHarness.state.properties.setPropertiesCalls.length, 0);
+});
+
+test("production property modal uses non-persistent password fields and sanitized output", () => {
+  const source = fs.readFileSync(
+    path.join(REPO_ROOT, "apps-script/RelayPropertyInstallerAdmin.html"),
+    "utf8",
+  );
+
+  assert.equal(source.match(/type="password"/gu)?.length, 2);
+  assert.match(source, /autocomplete="new-password"/u);
+  assert.match(source, /google\.script\.run/u);
+  assert.match(source, /\.installProductionRelayPropertiesAdmin\(/u);
+  assert.match(source, /clearSecretFields\(\);[\s\S]*hmacKeysJson = "";/u);
+  assert.doesNotMatch(
+    source,
+    /console\.|localStorage|sessionStorage|document\.cookie|innerHTML|fetch\s*\(/u,
+  );
 });
 
 test("production property verifier reports names and structure without secret strings", () => {
