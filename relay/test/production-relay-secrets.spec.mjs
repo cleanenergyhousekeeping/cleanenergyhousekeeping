@@ -7,11 +7,12 @@ import {
   SecretHelperError,
   createRecoveryBundle,
   decodeKey,
+  deployWorkerWithSecrets,
   encodeKey,
   handOffAppsScriptSecrets,
   parseRecoveryBundle,
   runCommand,
-  transportWorkerSecrets,
+  runSelfTest,
   validateRecoveryBundle,
   workerSecretsFromBundle,
 } from "../scripts/production-relay-secrets.mjs";
@@ -144,15 +145,19 @@ describe("production relay secret helper", () => {
     expect(workerSecrets.CEH_RELAY_APPS_URL).toBe(TEST_APPS_URL);
   });
 
-  it("streams synthetic Worker secrets only to child stdin and closes it", async () => {
+  it("uses a dark production deploy and sends secrets only through closed fd 3", async () => {
     const workerSecrets = workerSecretsFromBundle(syntheticBundle());
     let received = "";
+    let spawnArgs;
+    let spawnCommand;
     let spawnOptions;
-    let childStdin;
-    const spawnFunction = (_command, _args, options) => {
+    let secretDescriptor;
+    const spawnFunction = (command, args, options) => {
+      spawnCommand = command;
+      spawnArgs = args;
       spawnOptions = options;
       const child = new EventEmitter();
-      child.stdin = new Writable({
+      secretDescriptor = new Writable({
         write(chunk, _encoding, callback) {
           received += chunk.toString();
           callback();
@@ -162,20 +167,61 @@ describe("production relay secret helper", () => {
           queueMicrotask(() => child.emit("close", 0));
         },
       });
-      childStdin = child.stdin;
+      child.stdio = [null, null, null, secretDescriptor];
       return child;
     };
 
-    await transportWorkerSecrets(workerSecrets, {
-      args: ["synthetic"],
-      command: "synthetic-consumer",
-      cwd: "/synthetic",
-      spawnFunction,
-    });
+    await deployWorkerWithSecrets(workerSecrets, { spawnFunction });
 
     expect(JSON.parse(received)).toEqual(workerSecrets);
-    expect(spawnOptions).toEqual({ cwd: "/synthetic", stdio: ["pipe", "ignore", "ignore"] });
-    expect(childStdin.writableEnded).toBe(true);
+    expect(spawnCommand).toMatch(/node_modules\/\.bin\/wrangler$/u);
+    expect(spawnArgs.slice(0, 7)).toEqual([
+      "deploy",
+      "--env",
+      "production",
+      "--strict",
+      "--secrets-file",
+      "/dev/fd/3",
+      "--config",
+    ]);
+    expect(spawnArgs).toHaveLength(8);
+    expect(spawnArgs[7]).toMatch(/wrangler\.jsonc$/u);
+    expect(spawnArgs).not.toContain("secret");
+    expect(spawnArgs).not.toContain("bulk");
+    expect(spawnOptions.stdio).toEqual(["ignore", "ignore", "ignore", "pipe"]);
+    expect(spawnOptions).not.toHaveProperty("env");
+    expect(secretDescriptor.writableEnded).toBe(true);
+    const commandLine = [spawnCommand, ...spawnArgs].join(" ");
+    for (const value of Object.values(workerSecrets)) {
+      expect(commandLine).not.toContain(value);
+    }
+  });
+
+  it("uses only a local Node consumer in synthetic test mode", async () => {
+    let spawnArgs;
+    let spawnCommand;
+    const spawnFunction = (command, args) => {
+      spawnCommand = command;
+      spawnArgs = args;
+      const child = new EventEmitter();
+      const descriptor = new Writable({
+        write(_chunk, _encoding, callback) {
+          callback();
+        },
+        final(callback) {
+          callback();
+          queueMicrotask(() => child.emit("close", 0));
+        },
+      });
+      child.stdio = [null, null, null, descriptor];
+      return child;
+    };
+
+    await runSelfTest({ spawnFunction });
+
+    expect(spawnCommand).toBe(process.execPath);
+    expect(spawnArgs[0]).toBe("-e");
+    expect(spawnCommand).not.toMatch(/wrangler/u);
   });
 
   it("refuses an unsafe output mode", async () => {

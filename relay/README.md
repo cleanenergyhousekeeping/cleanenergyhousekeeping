@@ -82,7 +82,7 @@ npm run secrets:production:test
 
 The check creates only short-lived test material in memory. It exercises key
 generation and validation, Apps Script clipboard handoff through a fake clipboard,
-and Worker stdin transport through a local fake consumer. It does not access the
+and Worker descriptor transport through a local fake consumer. It does not access the
 macOS Keychain, modify the real clipboard, invoke Wrangler, or contact Cloudflare.
 
 After the helper has been reviewed and a separate production-operation phase has
@@ -105,10 +105,20 @@ For either follow-up command, retrieve the recovery bundle to the clipboard and 
 the exact `pbpaste` pipeline above. The helper consumes it from stdin and clears the
 clipboard before continuing. `apps-script-next` hands off one Apps Script property
 at a time and clears the clipboard after each confirmation. `worker-bootstrap`
-requires the operator to type `INSTALL`, then sends the five secrets to the local
-Wrangler executable through inherited stdin. It does not use command arguments,
-environment variables, or temporary secret files. That command contacts Cloudflare
-and must not be run until production installation is separately approved.
+requires the operator to type `DEPLOY`, then performs the first dark production
+deployment with the equivalent of:
+
+```bash
+wrangler deploy --env production --strict --secrets-file /dev/fd/3
+```
+
+After reading the recovery bundle from its own piped stdin, the helper supplies all
+five secrets to Wrangler through inherited anonymous file descriptor 3. No secret
+value is placed in Wrangler stdin, command arguments, environment variables, or a
+temporary plaintext file. The existing production Wrangler configuration keeps
+`workers_dev` and preview URLs disabled and its Cron schedule empty. This command
+creates the production Worker and contacts Cloudflare, so it must not be run until
+the single dark production deployment is separately reviewed and approved.
 
 The helper intentionally has no mode that reveals or prints secret material. Any
 unknown mode, extra command argument, malformed key, padded base64, mismatched

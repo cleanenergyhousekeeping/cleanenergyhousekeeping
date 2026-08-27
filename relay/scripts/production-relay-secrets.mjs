@@ -13,6 +13,8 @@ const PAYLOAD_KEY_VERSION = "1";
 const ENCODED_KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const MAX_RECOVERY_BUNDLE_BYTES = 64 * 1024;
 const RELAY_DIRECTORY = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const SECRET_DESCRIPTOR_NUMBER = 3;
+const SECRET_DESCRIPTOR_PATH = `/dev/fd/${SECRET_DESCRIPTOR_NUMBER}`;
 
 const APPS_SCRIPT_SECRET_NAMES = [
   "CEH_RELAY_HMAC_KEYS_JSON",
@@ -290,14 +292,16 @@ export function workerSecretsFromBundle(bundle) {
   );
 }
 
-export async function transportWorkerSecrets(
+export async function deployWorkerWithSecrets(
   workerSecrets,
   {
     args = [
-      "secret",
-      "bulk",
+      "deploy",
       "--env",
       "production",
+      "--strict",
+      "--secrets-file",
+      SECRET_DESCRIPTOR_PATH,
       "--config",
       resolve(RELAY_DIRECTORY, "wrangler.jsonc"),
     ],
@@ -312,7 +316,7 @@ export async function transportWorkerSecrets(
   await new Promise((resolvePromise, rejectPromise) => {
     const child = spawnFunction(command, args, {
       cwd,
-      stdio: ["pipe", "ignore", "ignore"],
+      stdio: ["ignore", "ignore", "ignore", "pipe"],
     });
     child.once("error", () =>
       rejectPromise(new SecretHelperError("Worker secret transport failed")),
@@ -324,10 +328,15 @@ export async function transportWorkerSecrets(
         rejectPromise(new SecretHelperError("Worker secret transport failed"));
       }
     });
-    child.stdin.once("error", () =>
+    const secretDescriptor = child.stdio[SECRET_DESCRIPTOR_NUMBER];
+    if (secretDescriptor === undefined || secretDescriptor === null) {
+      rejectPromise(new SecretHelperError("Worker secret transport failed"));
+      return;
+    }
+    secretDescriptor.once("error", () =>
       rejectPromise(new SecretHelperError("Worker secret transport failed")),
     );
-    child.stdin.end(serializedSecrets);
+    secretDescriptor.end(serializedSecrets);
   });
 }
 
@@ -367,7 +376,7 @@ function syntheticRandomBytes() {
   };
 }
 
-export async function runSelfTest() {
+export async function runSelfTest({ spawnFunction = spawn } = {}) {
   const testUrl = "https://script.google.com/macros/s/synthetic-test-id/exec";
   const randomBundle = createRecoveryBundle(testUrl);
   validateRecoveryBundle(randomBundle);
@@ -387,20 +396,17 @@ export async function runSelfTest() {
   }
 
   const consumerScript = [
-    "let input = '';",
-    "process.stdin.setEncoding('utf8');",
-    "process.stdin.on('data', chunk => { input += chunk; });",
-    "process.stdin.on('end', () => {",
-    "  const parsed = JSON.parse(input);",
-    `  const expected = ${JSON.stringify(WORKER_SECRET_NAMES)};`,
-    "  const actual = Object.keys(parsed).sort();",
-    "  if (JSON.stringify(actual) !== JSON.stringify(expected.sort())) process.exitCode = 2;",
-    "});",
+    "const { readFileSync } = require('node:fs');",
+    "const parsed = JSON.parse(readFileSync('/dev/fd/3', 'utf8'));",
+    `const expected = ${JSON.stringify(WORKER_SECRET_NAMES)};`,
+    "const actual = Object.keys(parsed).sort();",
+    "if (JSON.stringify(actual) !== JSON.stringify(expected.sort())) process.exitCode = 2;",
   ].join("\n");
-  await transportWorkerSecrets(workerSecretsFromBundle(syntheticBundle), {
+  await deployWorkerWithSecrets(workerSecretsFromBundle(syntheticBundle), {
     args: ["-e", consumerScript],
     command: process.execPath,
     cwd: RELAY_DIRECTORY,
+    spawnFunction,
   });
 }
 
@@ -447,13 +453,13 @@ export async function runCommand(command) {
   if (command === "worker-bootstrap") {
     const bundle = await loadRecoveryBundleFromStdin();
     const confirmation = await promptOnTty(
-      "Type INSTALL to send all production Worker secrets to Wrangler: ",
+      "Type DEPLOY to create the dark production Worker with all required secrets: ",
     );
-    if (confirmation !== "INSTALL") {
-      throw new SecretHelperError("Worker secret installation was not confirmed");
+    if (confirmation !== "DEPLOY") {
+      throw new SecretHelperError("Dark production deployment was not confirmed");
     }
-    await transportWorkerSecrets(workerSecretsFromBundle(bundle));
-    process.stdout.write("Wrangler reported successful production secret installation.\n");
+    await deployWorkerWithSecrets(workerSecretsFromBundle(bundle));
+    process.stdout.write("Wrangler reported a successful dark production deployment.\n");
     return;
   }
 
