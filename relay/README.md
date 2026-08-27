@@ -69,3 +69,48 @@ npm run deploy:dry-run
 ```
 
 Deployment is intentionally separate from validation and requires explicit approval.
+
+## Production secret preparation helper
+
+`scripts/production-relay-secrets.mjs` prepares the five independent 32-byte
+production keys without writing them to files or printing them. Review and run its
+synthetic-only check before any real generation:
+
+```bash
+npm run secrets:production:test
+```
+
+The check creates only short-lived test material in memory. It exercises key
+generation and validation, Apps Script clipboard handoff through a fake clipboard,
+and Worker stdin transport through a local fake consumer. It does not access the
+macOS Keychain, modify the real clipboard, invoke Wrangler, or contact Cloudflare.
+
+After the helper has been reviewed and a separate production-operation phase has
+been approved, the intended operator workflow is:
+
+```bash
+node scripts/production-relay-secrets.mjs generate
+pbpaste | node scripts/production-relay-secrets.mjs apps-script-next
+pbpaste | node scripts/production-relay-secrets.mjs worker-bootstrap
+```
+
+`generate` prompts for the production Apps Script `/exec` URL, generates all secret
+material in memory, and places one recovery bundle on the clipboard. Save that
+bundle immediately as a secure note in a trusted password manager. The helper waits
+for confirmation and then clears the clipboard. This secure note is the recovery
+storage; do not save the bundle in a plaintext file, terminal command, environment
+variable, repository, chat, or shell history.
+
+For either follow-up command, retrieve the recovery bundle to the clipboard and use
+the exact `pbpaste` pipeline above. The helper consumes it from stdin and clears the
+clipboard before continuing. `apps-script-next` hands off one Apps Script property
+at a time and clears the clipboard after each confirmation. `worker-bootstrap`
+requires the operator to type `INSTALL`, then sends the five secrets to the local
+Wrangler executable through inherited stdin. It does not use command arguments,
+environment variables, or temporary secret files. That command contacts Cloudflare
+and must not be run until production installation is separately approved.
+
+The helper intentionally has no mode that reveals or prints secret material. Any
+unknown mode, extra command argument, malformed key, padded base64, mismatched
+shared signing key, reused logical key, malformed JSON, or invalid/missing Apps
+Script URL fails closed with a generic message.
