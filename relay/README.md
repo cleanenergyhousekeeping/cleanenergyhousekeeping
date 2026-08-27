@@ -69,3 +69,58 @@ npm run deploy:dry-run
 ```
 
 Deployment is intentionally separate from validation and requires explicit approval.
+
+## Production secret preparation helper
+
+`scripts/production-relay-secrets.mjs` prepares the five independent 32-byte
+production keys without writing them to files or printing them. Review and run its
+synthetic-only check before any real generation:
+
+```bash
+npm run secrets:production:test
+```
+
+The check creates only short-lived test material in memory. It exercises key
+generation and validation, Apps Script clipboard handoff through a fake clipboard,
+and Worker descriptor transport through a local fake consumer. It does not access the
+macOS Keychain, modify the real clipboard, invoke Wrangler, or contact Cloudflare.
+
+After the helper has been reviewed and a separate production-operation phase has
+been approved, the intended operator workflow is:
+
+```bash
+node scripts/production-relay-secrets.mjs generate
+pbpaste | node scripts/production-relay-secrets.mjs apps-script-next
+pbpaste | node scripts/production-relay-secrets.mjs worker-bootstrap
+```
+
+`generate` prompts for the production Apps Script `/exec` URL, generates all secret
+material in memory, and places one recovery bundle on the clipboard. Save that
+bundle immediately as a secure note in a trusted password manager. The helper waits
+for confirmation and then clears the clipboard. This secure note is the recovery
+storage; do not save the bundle in a plaintext file, terminal command, environment
+variable, repository, chat, or shell history.
+
+For either follow-up command, retrieve the recovery bundle to the clipboard and use
+the exact `pbpaste` pipeline above. The helper consumes it from stdin and clears the
+clipboard before continuing. `apps-script-next` hands off one Apps Script property
+at a time and clears the clipboard after each confirmation. `worker-bootstrap`
+requires the operator to type `DEPLOY`, then performs the first dark production
+deployment with the equivalent of:
+
+```bash
+wrangler deploy --env production --strict --secrets-file /dev/fd/3
+```
+
+After reading the recovery bundle from its own piped stdin, the helper supplies all
+five secrets to Wrangler through inherited anonymous file descriptor 3. No secret
+value is placed in Wrangler stdin, command arguments, environment variables, or a
+temporary plaintext file. The existing production Wrangler configuration keeps
+`workers_dev` and preview URLs disabled and its Cron schedule empty. This command
+creates the production Worker and contacts Cloudflare, so it must not be run until
+the single dark production deployment is separately reviewed and approved.
+
+The helper intentionally has no mode that reveals or prints secret material. Any
+unknown mode, extra command argument, malformed key, padded base64, mismatched
+shared signing key, reused logical key, malformed JSON, or invalid/missing Apps
+Script URL fails closed with a generic message.
