@@ -1,19 +1,9 @@
 import { jsonResponse } from "./responses";
+import type { RelayEnvironment } from "./persistence/types";
 
 /* begin[relay_health_check] */
-const HEALTHY_RESPONSE = {
-  ok: true,
+const HEALTH_RESPONSE_BASE = {
   service: "ceh-relay",
-  environment: "test",
-  storage: "ok",
-  version: "0.1.0",
-} as const;
-
-const UNAVAILABLE_RESPONSE = {
-  ok: false,
-  service: "ceh-relay",
-  environment: "test",
-  storage: "unavailable",
   version: "0.1.0",
 } as const;
 
@@ -31,12 +21,26 @@ export async function isStorageReachable(database: D1Database): Promise<boolean>
 
 export async function healthResponse(
   database: D1Database,
+  environment: RelayEnvironment,
   headers: HeadersInit,
 ): Promise<Response> {
   if (await isStorageReachable(database)) {
-    return jsonResponse(HEALTHY_RESPONSE, 200, headers);
+    return jsonResponse(
+      { ...HEALTH_RESPONSE_BASE, ok: true, environment, storage: "ok" },
+      200,
+      headers,
+    );
   }
 
-  return jsonResponse(UNAVAILABLE_RESPONSE, 503, headers);
+  return jsonResponse(
+    {
+      ...HEALTH_RESPONSE_BASE,
+      ok: false,
+      environment,
+      storage: "unavailable",
+    },
+    503,
+    headers,
+  );
 }
 /* end[relay_health_check] */
