@@ -120,6 +120,53 @@ function verifyProductionRelayPropertiesAdmin() {
   };
 }
 
+/* begin[production_relay_status_admin] */
+function showProductionRelayStatusAdmin() {
+  requireProductionRelayAdminSpreadsheet_();
+  const verification = verifyProductionRelayPropertiesAdmin();
+  const missingNonSecretPropertyNames = verification.missingPropertyNames.filter(
+    function (name) {
+      return RELAY_PRODUCTION_ADMIN_SECRET_NAMES_.indexOf(name) === -1;
+    }
+  );
+  const missingSecretPropertyCount = verification.missingPropertyNames.length -
+    missingNonSecretPropertyNames.length;
+  const missingPropertyList = missingNonSecretPropertyNames.slice();
+  if (missingSecretPropertyCount > 0) {
+    missingPropertyList.push(
+      "[secret property names withheld: " + missingSecretPropertyCount + "]"
+    );
+  }
+
+  const nonSecretValues = verification.nonSecretValues;
+  const message = [
+    "CEH_RELAY_ENABLED: " + (nonSecretValues.CEH_RELAY_ENABLED || "(missing)"),
+    "CEH_RELAY_ENVIRONMENT: " +
+      (nonSecretValues.CEH_RELAY_ENVIRONMENT || "(missing)"),
+    "CEH_RELAY_EXPECTED_SPREADSHEET_ID: " +
+      (nonSecretValues.CEH_RELAY_EXPECTED_SPREADSHEET_ID || "(missing)"),
+    "CEH_RELAY_LEDGER_SHEET_NAME: " +
+      (nonSecretValues.CEH_RELAY_LEDGER_SHEET_NAME || "(missing)"),
+    "",
+    "Missing property count: " + verification.missingPropertyNames.length,
+    "Missing property list: " +
+      (missingPropertyList.length ? missingPropertyList.join(", ") : "None"),
+    "Relay enabled status: " + verification.relayEnabledStatus,
+    "Signing ring structurally valid: " +
+      (verification.signingRingStructurallyValid ? "yes" : "no"),
+    "Production key ID present: " +
+      (verification.productionKeyIdPresent ? "yes" : "no"),
+    "Signing key length valid: " +
+      (verification.signingKeyLengthValid ? "yes" : "no"),
+    "Subject key length valid: " +
+      (verification.subjectKeyLengthValid ? "yes" : "no"),
+  ].join("\n");
+
+  const ui = SpreadsheetApp.getUi();
+  ui.alert("Production relay status", message, ui.ButtonSet.OK);
+}
+/* end[production_relay_status_admin] */
+
 function installProductionRelayPropertiesAdmin(hmacKeysJson, subjectHmacKey) {
   requireProductionRelayAdminSpreadsheet_();
   const secretStatus = inspectProductionRelayAdminSecrets_(

@@ -38,6 +38,10 @@ function onOpen() {
           "Install production relay properties (disabled)",
           "showProductionRelayPropertiesAdminDialog"
         )
+        .addItem(
+          "Verify production relay status",
+          "showProductionRelayStatusAdmin"
+        )
     )
     .addToUi();
 }
