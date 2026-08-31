@@ -120,6 +120,7 @@ function verifyProductionRelayPropertiesAdmin() {
   };
 }
 
+/* begin[production_relay_status_admin] */
 function showProductionRelayStatusAdmin() {
   requireProductionRelayAdminSpreadsheet_();
   const verification = verifyProductionRelayPropertiesAdmin();
@@ -164,6 +165,7 @@ function showProductionRelayStatusAdmin() {
   const ui = SpreadsheetApp.getUi();
   ui.alert("Production relay status", message, ui.ButtonSet.OK);
 }
+/* end[production_relay_status_admin] */
 
 function installProductionRelayPropertiesAdmin(hmacKeysJson, subjectHmacKey) {
   requireProductionRelayAdminSpreadsheet_();
