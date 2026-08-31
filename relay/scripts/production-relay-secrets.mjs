@@ -13,8 +13,7 @@ const PAYLOAD_KEY_VERSION = "1";
 const ENCODED_KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const MAX_RECOVERY_BUNDLE_BYTES = 64 * 1024;
 const RELAY_DIRECTORY = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const SECRET_DESCRIPTOR_NUMBER = 3;
-const SECRET_DESCRIPTOR_PATH = `/dev/fd/${SECRET_DESCRIPTOR_NUMBER}`;
+const SECRET_INPUT_PATH = "/dev/stdin";
 
 const APPS_SCRIPT_SECRET_NAMES = [
   "CEH_RELAY_HMAC_KEYS_JSON",
@@ -302,7 +301,7 @@ export async function deployWorkerWithSecrets(
       "production",
       "--strict",
       "--secrets-file",
-      SECRET_DESCRIPTOR_PATH,
+      SECRET_INPUT_PATH,
       "--config",
       resolve(RELAY_DIRECTORY, "wrangler.jsonc"),
     ],
@@ -317,7 +316,7 @@ export async function deployWorkerWithSecrets(
   await new Promise((resolvePromise, rejectPromise) => {
     const child = spawnFunction(command, args, {
       cwd,
-      stdio: ["ignore", "ignore", "ignore", "pipe"],
+      stdio: ["pipe", "ignore", "ignore"],
     });
     child.once("error", () =>
       rejectPromise(new SecretHelperError("Worker secret transport failed")),
@@ -329,15 +328,15 @@ export async function deployWorkerWithSecrets(
         rejectPromise(new SecretHelperError("Worker secret transport failed"));
       }
     });
-    const secretDescriptor = child.stdio[SECRET_DESCRIPTOR_NUMBER];
-    if (secretDescriptor === undefined || secretDescriptor === null) {
+    const secretInput = child.stdin;
+    if (secretInput === undefined || secretInput === null) {
       rejectPromise(new SecretHelperError("Worker secret transport failed"));
       return;
     }
-    secretDescriptor.once("error", () =>
+    secretInput.once("error", () =>
       rejectPromise(new SecretHelperError("Worker secret transport failed")),
     );
-    secretDescriptor.end(serializedSecrets);
+    secretInput.end(serializedSecrets);
   });
 }
 
@@ -398,7 +397,7 @@ export async function runSelfTest({ spawnFunction = spawn } = {}) {
 
   const consumerScript = [
     "const { readFileSync } = require('node:fs');",
-    "const parsed = JSON.parse(readFileSync('/dev/fd/3', 'utf8'));",
+    "const parsed = JSON.parse(readFileSync('/dev/stdin', 'utf8'));",
     `const expected = ${JSON.stringify(WORKER_SECRET_NAMES)};`,
     "const actual = Object.keys(parsed).sort();",
     "if (JSON.stringify(actual) !== JSON.stringify(expected.sort())) process.exitCode = 2;",

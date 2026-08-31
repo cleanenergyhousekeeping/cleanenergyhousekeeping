@@ -148,19 +148,19 @@ describe("production relay secret helper", () => {
     expect(workerSecrets.CEH_RELAY_APPS_URL).toBe(TEST_APPS_URL);
   });
 
-  it("uses a dark production deploy and sends secrets only through closed fd 3", async () => {
+  it("uses a dark production deploy and sends secrets only through closed stdin", async () => {
     const workerSecrets = workerSecretsFromBundle(syntheticBundle());
     let received = "";
     let spawnArgs;
     let spawnCommand;
     let spawnOptions;
-    let secretDescriptor;
+    let secretInput;
     const spawnFunction = (command, args, options) => {
       spawnCommand = command;
       spawnArgs = args;
       spawnOptions = options;
       const child = new EventEmitter();
-      secretDescriptor = new Writable({
+      secretInput = new Writable({
         write(chunk, _encoding, callback) {
           received += chunk.toString();
           callback();
@@ -170,7 +170,7 @@ describe("production relay secret helper", () => {
           queueMicrotask(() => child.emit("close", 0));
         },
       });
-      child.stdio = [null, null, null, secretDescriptor];
+      child.stdin = secretInput;
       return child;
     };
 
@@ -184,16 +184,16 @@ describe("production relay secret helper", () => {
       "production",
       "--strict",
       "--secrets-file",
-      "/dev/fd/3",
+      "/dev/stdin",
       "--config",
     ]);
     expect(spawnArgs).toHaveLength(8);
     expect(spawnArgs[7]).toMatch(/wrangler\.jsonc$/u);
     expect(spawnArgs).not.toContain("secret");
     expect(spawnArgs).not.toContain("bulk");
-    expect(spawnOptions.stdio).toEqual(["ignore", "ignore", "ignore", "pipe"]);
+    expect(spawnOptions.stdio).toEqual(["pipe", "ignore", "ignore"]);
     expect(spawnOptions).not.toHaveProperty("env");
-    expect(secretDescriptor.writableEnded).toBe(true);
+    expect(secretInput.writableEnded).toBe(true);
     const commandLine = [spawnCommand, ...spawnArgs].join(" ");
     for (const value of Object.values(workerSecrets)) {
       expect(commandLine).not.toContain(value);
@@ -216,7 +216,7 @@ describe("production relay secret helper", () => {
           queueMicrotask(() => child.emit("close", 0));
         },
       });
-      child.stdio = [null, null, null, descriptor];
+      child.stdin = descriptor;
       return child;
     };
 
