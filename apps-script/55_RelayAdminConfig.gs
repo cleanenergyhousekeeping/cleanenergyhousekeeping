@@ -210,3 +210,62 @@ function installProductionRelayPropertiesAdmin(hmacKeysJson, subjectHmacKey) {
   return verification;
 }
 /* end[production_relay_property_installer] */
+
+/* begin[production_relay_activation_controls] */
+function productionRelayVerificationAllowsEnable_(verification) {
+  const expectedNonSecretValues = buildProductionRelayAdminProperties_();
+  return !!verification &&
+    verification.missingPropertyNames.length === 0 &&
+    verification.relayEnabledStatus === "disabled" &&
+    verification.signingRingStructurallyValid &&
+    verification.productionKeyIdPresent &&
+    verification.signingKeyLengthValid &&
+    verification.subjectKeyLengthValid &&
+    Object.keys(expectedNonSecretValues).every(function (name) {
+      return verification.nonSecretValues[name] === expectedNonSecretValues[name];
+    });
+}
+
+function enableProductionRelayAdmin() {
+  requireProductionRelayAdminSpreadsheet_();
+  const verification = verifyProductionRelayPropertiesAdmin();
+  if (!productionRelayVerificationAllowsEnable_(verification)) {
+    throw new Error("Production relay activation failed");
+  }
+
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    "Enable production relay",
+    "Enable production relay request handling for the Live spreadsheet? " +
+      "This changes only CEH_RELAY_ENABLED. Automatic Worker delivery remains disabled.",
+    ui.ButtonSet.YES_NO
+  );
+  if (response !== ui.Button.YES) return false;
+
+  const properties = PropertiesService.getScriptProperties();
+  properties.setProperty(RELAY_CONFIG_KEYS_.enabled, "true");
+  if (properties.getProperty(RELAY_CONFIG_KEYS_.enabled) !== "true") {
+    throw new Error("Production relay activation failed");
+  }
+  return true;
+}
+
+function disableProductionRelayAdmin() {
+  requireProductionRelayAdminSpreadsheet_();
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    "Disable production relay",
+    "Disable production relay request handling for the Live spreadsheet? " +
+      "This changes only CEH_RELAY_ENABLED.",
+    ui.ButtonSet.YES_NO
+  );
+  if (response !== ui.Button.YES) return false;
+
+  const properties = PropertiesService.getScriptProperties();
+  properties.setProperty(RELAY_CONFIG_KEYS_.enabled, "false");
+  if (properties.getProperty(RELAY_CONFIG_KEYS_.enabled) !== "false") {
+    throw new Error("Production relay deactivation failed");
+  }
+  return true;
+}
+/* end[production_relay_activation_controls] */

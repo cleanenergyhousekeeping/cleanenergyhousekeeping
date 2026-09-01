@@ -37,7 +37,7 @@
   "env": {
     "production": {
       "name": "ceh-relay-production",
-      "workers_dev": false,
+      "workers_dev": true,
       "preview_urls": false,
       "triggers": {
         "crons": []

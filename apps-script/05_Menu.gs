@@ -42,6 +42,15 @@ function onOpen() {
           "Verify production relay status",
           "showProductionRelayStatusAdmin"
         )
+        .addSeparator()
+        .addItem(
+          "Enable production relay",
+          "enableProductionRelayAdmin"
+        )
+        .addItem(
+          "Disable production relay",
+          "disableProductionRelayAdmin"
+        )
     )
     .addToUi();
 }

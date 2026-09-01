@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
 
 const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";
-const LIVE_BUILD_VERSION = "v248";
+const LIVE_BUILD_VERSION = "v249";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
@@ -12,9 +12,10 @@ const APPS_SCRIPT_URL =
 const SHELL_AUTH_KEY = "ce_shell_auth_v1";
 const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
 const SHELL_ENTRY_DRAFT_KEY = "ce_shell_entry_draft_v1";
-// Phase 1 ships the reviewed client dormant. Activation is a separately approved change.
-const LIVE_RELAY_FEATURE_ENABLED = false;
-const LIVE_RELAY_WORKER_URL = "";
+// Phase A activates the reviewed relay client only for the named Live pilot cleaner.
+const LIVE_RELAY_FEATURE_ENABLED = true;
+const LIVE_RELAY_PILOT_CLEANER_NAME = "Kyle";
+const LIVE_RELAY_WORKER_URL = "https://ceh-relay-production.kyle-405.workers.dev";
 const LIVE_RELAY_STATE_KEY = "ce_shell_live_relay_state_v1";
 const LIVE_RELAY_INSTALLATION_ID_KEY = "ce_shell_live_relay_installation_id_v1";
 const LIVE_RELAY_LOCK_NAME = "ce-shell-live-relay-v1";
@@ -125,6 +126,16 @@ function getShellAuth_() {
     return null;
   }
 }
+
+/* begin[live_relay_pilot_gate] */
+function isLiveRelayPilotCleaner_(shellAuth) {
+  if (!LIVE_RELAY_FEATURE_ENABLED) return false;
+  const candidate = shellAuth || getShellAuth_();
+  return String((candidate && candidate.cleanerName) || "")
+    .trim()
+    .toLowerCase() === LIVE_RELAY_PILOT_CLEANER_NAME.toLowerCase();
+}
+/* end[live_relay_pilot_gate] */
 
 function saveShellAuth_(payload) {
   localStorage.setItem(
@@ -382,7 +393,7 @@ function setShellEntryLocked_(locked) {
 /* end[shell_entry_lock_helper] */
 
 function relayAttentionRequiresEntryLock_() {
-  if (!LIVE_RELAY_FEATURE_ENABLED) return false;
+  if (!isLiveRelayPilotCleaner_()) return false;
   const shellAuth = getShellAuth_() || {};
   const state = getRelayState_();
   return !!(
@@ -663,7 +674,7 @@ function formatOfflineQueueTimestamp_(submittedAtMs) {
 function updateOfflineQueueCount_() {
   if (!offlineQueueCount) return;
 
-  if (LIVE_RELAY_FEATURE_ENABLED) {
+  if (isLiveRelayPilotCleaner_()) {
     updateRelayQueueCount_();
     return;
   }
@@ -952,17 +963,19 @@ function updateRelayQueueCount_() {
 }
 
 function setRelayReachabilityState_(state) {
+  if (!isLiveRelayPilotCleaner_()) return;
   relayReachabilityState = state;
   renderRelayStatus_();
 }
 
 function setRelayHudAttention_(message) {
+  if (!isLiveRelayPilotCleaner_()) return;
   relayHudAttentionMessage = String(message || "");
   renderRelayStatus_();
 }
 
 function renderRelayStatus_() {
-  if (!LIVE_RELAY_FEATURE_ENABLED) return;
+  if (!isLiveRelayPilotCleaner_()) return;
   const state = getRelayState_();
   const queue = state && Array.isArray(state.queue) ? state.queue : [];
   const pending = queue.filter(function (event) {
@@ -1047,6 +1060,7 @@ function getOrCreateRelayInstallationId_() {
 }
 
 function synchronizeExistingRelayInstallationIdentity_(state) {
+  if (!isLiveRelayPilotCleaner_()) return false;
   if (!state || !isRelayDeviceId_(state.pairedDeviceId)) return false;
   if (getRelayInstallationId_() !== state.pairedDeviceId) {
     try {
@@ -1068,13 +1082,18 @@ function makeRelayEventId_() {
 
 function updateRelayPairingUi_() {
   if (!relayPairingPanel) return;
+  const pilotEnabled = isLiveRelayPilotCleaner_();
+  relayPairingPanel.classList.toggle("hidden", !pilotEnabled);
+  if (relayPairedIndicator) {
+    relayPairedIndicator.classList.toggle("hidden", !pilotEnabled);
+  }
+  if (!pilotEnabled) return;
   const state = getRelayState_();
   const paired = !!(state && state.pairedDeviceId);
-  relayPairingPanel.classList.toggle("hidden", !LIVE_RELAY_FEATURE_ENABLED || paired);
+  relayPairingPanel.classList.toggle("hidden", paired);
   if (relayPairedIndicator) {
-    relayPairedIndicator.classList.toggle("hidden", !LIVE_RELAY_FEATURE_ENABLED || !paired);
+    relayPairedIndicator.classList.toggle("hidden", !paired);
   }
-  if (!LIVE_RELAY_FEATURE_ENABLED) return;
   if (getShellQueue_().length > 0) {
     setRelayPairingStatus_("Finish syncing saved entries before this phone can finish setup.");
     return;
@@ -1087,7 +1106,7 @@ function updateRelayPairingUi_() {
 }
 
 async function callRelayJson_(path, body, relayToken) {
-  if (!LIVE_RELAY_FEATURE_ENABLED || !LIVE_RELAY_WORKER_URL) {
+  if (!isLiveRelayPilotCleaner_() || !LIVE_RELAY_WORKER_URL) {
     throw new Error("Live relay is not active.");
   }
   const headers = { "Content-Type": "application/json" };
@@ -1106,7 +1125,7 @@ async function callRelayJson_(path, body, relayToken) {
 }
 
 function probeRelayReachability_() {
-  if (!LIVE_RELAY_FEATURE_ENABLED || !LIVE_RELAY_WORKER_URL || !navigator.onLine) {
+  if (!isLiveRelayPilotCleaner_() || !LIVE_RELAY_WORKER_URL || !navigator.onLine) {
     return Promise.resolve(false);
   }
   if (relayReachabilityProbe) {
@@ -1181,7 +1200,7 @@ function verifyRelayHighWater_(state, appliedThroughSequence) {
 }
 
 function deriveEffectiveRelayShellAuth_(shellAuth) {
-  if (!LIVE_RELAY_FEATURE_ENABLED || !shellAuth) return shellAuth;
+  if (!shellAuth || !isLiveRelayPilotCleaner_(shellAuth)) return shellAuth;
   const state = getRelayState_();
   if (!state || !Array.isArray(state.queue)) return shellAuth;
   const derived = Object.assign({}, shellAuth);
@@ -1257,7 +1276,7 @@ function scheduleRelayReachabilityRetry_() {
 /* begin[live_reconnect_relay_queue_drain] */
 function triggerRelayQueueDrainWhenReachable_() {
   if (
-    !LIVE_RELAY_FEATURE_ENABLED ||
+    !isLiveRelayPilotCleaner_() ||
     relayReachabilityState !== "reachable" ||
     relaySyncInProgress ||
     relaySubmissionInProgress ||
@@ -1324,7 +1343,7 @@ async function ensureRelaySessionLocked_(state) {
 
 /* begin[live_automatic_relay_pairing] */
 async function pairRelayInstallationAutomatically_() {
-  if (!LIVE_RELAY_FEATURE_ENABLED || !navigator.onLine || relayAutoPairingInProgress) return;
+  if (!isLiveRelayPilotCleaner_() || !navigator.onLine || relayAutoPairingInProgress) return;
 
   relayAutoPairingInProgress = true;
   setRelayPairingStatus_("Finishing secure phone setup...");
@@ -1368,6 +1387,7 @@ async function pairRelayInstallationAutomatically_() {
 /* end[live_automatic_relay_pairing] */
 
 async function saveRelayEntry_() {
+  if (!isLiveRelayPilotCleaner_()) return;
   const action = (offlineActionSelect && offlineActionSelect.value || "").trim();
   const note = (offlineNoteInput && offlineNoteInput.value || "").trim();
   const property = String((selectedOfflineProperty && selectedOfflineProperty.name) || "");
@@ -1453,7 +1473,7 @@ async function saveRelayEntry_() {
 }
 
 async function syncRelayQueue_(showReconnectHud) {
-  if (!LIVE_RELAY_FEATURE_ENABLED) return;
+  if (!isLiveRelayPilotCleaner_()) return;
   if (!shellUnlocked) return;
   if (relaySyncInProgress) return;
   relaySyncInProgress = 1;
@@ -1584,7 +1604,7 @@ async function syncRelayQueue_(showReconnectHud) {
 }
 
 function saveOfflineEntry_() {
-  if (LIVE_RELAY_FEATURE_ENABLED) {
+  if (isLiveRelayPilotCleaner_()) {
     saveRelayEntry_();
     return;
   }
@@ -2216,7 +2236,7 @@ function removeQueuedEntryById_(queuedId) {
 }
 
 async function syncShellQueue_() {
-  if (LIVE_RELAY_FEATURE_ENABLED) {
+  if (isLiveRelayPilotCleaner_()) {
     return syncRelayQueue_(true);
   }
   if (shellSyncInProgress) {
@@ -2533,7 +2553,7 @@ async function unlockShellWithPin_() {
       setStatusText_("Unlocked for " + cleanerName + " offline.");
     } else {
       setStatusText_("Unlocked for " + cleanerName + " using saved phone data.");
-      if (LIVE_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
+      if (isLiveRelayPilotCleaner_() && getRelayState_() && getRelayState_().pairedDeviceId) {
         renderRelayStatus_();
       }
     }
@@ -2967,7 +2987,7 @@ function updateShellUi_() {
     hideElement_(prepSection);
     showElement_(offlineEntrySection);
 
-    if (LIVE_RELAY_FEATURE_ENABLED && shellAuth.relayAttentionRequired) {
+    if (isLiveRelayPilotCleaner_(shellAuth) && shellAuth.relayAttentionRequired) {
       setShellEntryLocked_(true);
       setStatusText_("Some entries need help syncing. Your work is still saved.");
       updateOfflineReadyText_(shellAuth);
@@ -2975,9 +2995,7 @@ function updateShellUi_() {
       reconcileShellEntryDraft_(shellAuth);
       return;
     }
-    if (LIVE_RELAY_FEATURE_ENABLED) {
-      setShellEntryLocked_(false);
-    }
+    setShellEntryLocked_(false);
 
     const currentShiftText =
       shellAuth.currentShift && shellAuth.currentShift.property
@@ -2988,7 +3006,7 @@ function updateShellUi_() {
     const queueSuffix =
       queueCount > 0 ? ` Queued entries: ${queueCount}.` : "";
 
-    if (LIVE_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
+    if (isLiveRelayPilotCleaner_(shellAuth) && getRelayState_() && getRelayState_().pairedDeviceId) {
       renderRelayStatus_();
     } else {
       setStatusText_(
@@ -3167,7 +3185,7 @@ window.addEventListener("online", function () {
   requestLivePwaServiceWorkerUpdate_();
   setRelayReachabilityState_("unknown");
   updateShellUi_();
-  if (!LIVE_RELAY_FEATURE_ENABLED || !getRelayState_() || !getRelayState_().pairedDeviceId) {
+  if (!isLiveRelayPilotCleaner_() || !getRelayState_() || !getRelayState_().pairedDeviceId) {
     setStatusText_("Back online. Syncing saved entries...");
   } else {
     renderRelayStatus_();
@@ -3182,7 +3200,7 @@ window.addEventListener("offline", function () {
   shellSyncInProgress = false;
   setRelayReachabilityState_("unknown");
   updateShellUi_();
-  if (LIVE_RELAY_FEATURE_ENABLED && getRelayState_() && getRelayState_().pairedDeviceId) {
+  if (isLiveRelayPilotCleaner_() && getRelayState_() && getRelayState_().pairedDeviceId) {
     renderRelayStatus_();
   } else {
     setStatusText_("Offline. Entries will be saved on phone and synced later.");
@@ -3197,7 +3215,7 @@ function retryQueuedSyncIfReady_() {
     return;
   }
 
-  if (LIVE_RELAY_FEATURE_ENABLED) {
+  if (isLiveRelayPilotCleaner_()) {
     const state = getRelayState_();
     const event = state ? firstNonAcceptedRelayEvent_(state) : null;
     if (!event) return;
@@ -3355,7 +3373,9 @@ if (shellWorkHistoryBackBtn) {
 
 /* begin[clockin_shell_init] */
 document.addEventListener("DOMContentLoaded", async function () {
-  synchronizeExistingRelayInstallationIdentity_(getRelayState_());
+  if (isLiveRelayPilotCleaner_()) {
+    synchronizeExistingRelayInstallationIdentity_(getRelayState_());
+  }
   updateRelayPairingUi_();
   shellUnlocked = false;
   clearShellPin_();

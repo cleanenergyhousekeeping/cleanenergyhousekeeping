@@ -8,6 +8,10 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const app = fs.readFileSync(path.join(repoRoot, "clockin/app.js"), "utf8");
 const html = fs.readFileSync(path.join(repoRoot, "clockin/index.html"), "utf8");
+const serviceWorker = fs.readFileSync(path.join(repoRoot, "clockin/service-worker.js"), "utf8");
+const wranglerConfig = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, "relay/wrangler.jsonc"), "utf8"),
+);
 
 function makeStorage(initial = {}) {
   const values = new Map(Object.entries(initial));
@@ -59,10 +63,15 @@ function makeElement() {
 }
 
 function response(payload) {
-  return { status: 200, json: async () => payload };
+  return {
+    ok: true,
+    status: 200,
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
+  };
 }
 
-function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRelay = true }) {
+function makeHarness({ storage, locks, randomUUID, enroll, relayEvent }) {
   const elements = new Map();
   const fetchCalls = [];
   const document = {
@@ -89,7 +98,7 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRel
     setTimeout,
     clearTimeout,
     __fetchCalls: fetchCalls,
-    console: { error() {} },
+    console: { debug() {}, error() {} },
     document,
     localStorage: storage,
     navigator: { onLine: true, locks, serviceWorker: { addEventListener() {} } },
@@ -97,6 +106,24 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRel
     crypto: randomUUID ? { randomUUID } : {},
     fetch: async (url, options = {}) => {
       fetchCalls.push({ url, options });
+      if (url === "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec") {
+        const request = JSON.parse(options.body);
+        if (request.mode === "refreshShellAuth") {
+          return response({
+            ok: true,
+            payload: {
+              cleanerName: "Cleaner One",
+              sessionToken: request.payload.sessionToken,
+              clientId: request.payload.clientId,
+              properties: [],
+              currentShift: null,
+            },
+          });
+        }
+        if (request.mode === "submitShellQueueEntry") {
+          return response({ ok: true, message: "Legacy entry synced.", currentShift: null });
+        }
+      }
       if (url.endsWith("/health")) {
         return response({ ok: true, service: "ceh-relay", environment: "production", storage: "ok" });
       }
@@ -110,18 +137,13 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRel
     },
   };
   vm.createContext(context);
-  const runtimeApp = enableRelay
-    ? app
-      .replace("const LIVE_RELAY_FEATURE_ENABLED = false;", "const LIVE_RELAY_FEATURE_ENABLED = true;")
-      .replace("const LIVE_RELAY_WORKER_URL = \"\";", "const LIVE_RELAY_WORKER_URL = \"https://relay-production.example.test\";")
-    : app;
-  vm.runInContext(`${runtimeApp}\nglobalThis.__relayIdentityTestApi = { pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, reconcileDraft: reconcileShellEntryDraft_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_, getEntryState: function () { return { selectedProperty: selectedOfflineProperty && selectedOfflineProperty.name, propertySearch: offlinePropertySearch.value, propertyPanelHidden: offlinePropertyInfoPanel.classList.contains("hidden"), wifi: offlinePropertyInfoWifi.textContent, action: offlineActionSelect.value, note: offlineNoteInput.value, noteHidden: offlineNoteWrap.classList.contains("hidden") }; }, getFetchCalls: function () { return globalThis.__fetchCalls; } };`, context);
+  vm.runInContext(`${app}\nglobalThis.__relayIdentityTestApi = { isPilot: isLiveRelayPilotCleaner_, pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, reconcileDraft: reconcileShellEntryDraft_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, syncShell: syncShellQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_, getLegacyQueue: getShellQueue_, getEntryState: function () { return { selectedProperty: selectedOfflineProperty && selectedOfflineProperty.name, propertySearch: offlinePropertySearch.value, propertyPanelHidden: offlinePropertyInfoPanel.classList.contains("hidden"), wifi: offlinePropertyInfoWifi.textContent, action: offlineActionSelect.value, note: offlineNoteInput.value, noteHidden: offlineNoteWrap.classList.contains("hidden") }; }, getFetchCalls: function () { return globalThis.__fetchCalls; } };`, context);
   return context.__relayIdentityTestApi;
 }
 
 function preparedStorage(extra = {}) {
   return makeStorage({
-    ce_shell_auth_v1: JSON.stringify({ sessionToken: "prepared-session" }),
+    ce_shell_auth_v1: JSON.stringify({ cleanerName: "Kyle", sessionToken: "prepared-session" }),
     ...extra,
   });
 }
@@ -139,7 +161,8 @@ function enrolledSession(deviceId, highWater = 0) {
 }
 
 test("Live relay runtime is isolated from TEST and existing Live shell storage", () => {
-  assert.doesNotMatch(app, /ceh-relay-test\.kyle-405\.workers\.dev|ceh-relay-production\.kyle-405\.workers\.dev/);
+  assert.doesNotMatch(app, /ceh-relay-test\.kyle-405\.workers\.dev/);
+  assert.match(app, /const LIVE_RELAY_WORKER_URL = "https:\/\/ceh-relay-production\.kyle-405\.workers\.dev"/);
   assert.doesNotMatch(app, /ce_shell_test_relay_(state|installation_id)_v1/);
   assert.doesNotMatch(app, /\/clockin-test(?:\/|\b)/);
   assert.match(app, /const LIVE_RELAY_STATE_KEY = "ce_shell_live_relay_state_v1"/);
@@ -150,21 +173,81 @@ test("Live relay runtime is isolated from TEST and existing Live shell storage",
   assert.match(app, /const SHELL_ENTRY_DRAFT_KEY = "ce_shell_entry_draft_v1"/);
 });
 
-test("Live relay is inactive by default and never probes or enrolls", async () => {
+test("production Workers.dev ingress is enabled while production cron and previews remain off", () => {
+  assert.equal(wranglerConfig.env.production.name, "ceh-relay-production");
+  assert.equal(wranglerConfig.env.production.workers_dev, true);
+  assert.equal(wranglerConfig.env.production.preview_urls, false);
+  assert.deepEqual(wranglerConfig.env.production.triggers.crons, []);
+});
+
+test("TEST Wrangler settings remain unchanged", () => {
+  assert.equal(wranglerConfig.name, "ceh-relay-test");
+  assert.equal(wranglerConfig.workers_dev, true);
+  assert.equal(wranglerConfig.preview_urls, false);
+  assert.deepEqual(wranglerConfig.triggers.crons, ["* * * * *"]);
+  assert.deepEqual(wranglerConfig.vars, {
+    CEH_RELAY_ENVIRONMENT: "test",
+    CEH_RELAY_APPS_ACTIVE_KEY_ID: "test-v1",
+    CEH_RELAY_PAYLOAD_ACTIVE_KEY_VERSION: "1",
+  });
+  assert.equal(wranglerConfig.d1_databases[0].database_name, "ceh-relay-test-db");
+  assert.equal(wranglerConfig.d1_databases[0].database_id, "8804b3a1-8af0-413d-a0c3-37830e0988a0");
+});
+
+test("Live build and service-worker cache versions agree", () => {
+  const buildVersion = app.match(/const LIVE_BUILD_VERSION = "v(\d+)";/u)?.[1];
+  const cacheVersion = serviceWorker.match(/const CACHE_NAME = "ce-clockin-shell-v(\d+)";/u)?.[1];
+  assert.equal(buildVersion, "249");
+  assert.equal(cacheVersion, buildVersion);
+});
+
+test("non-pilot cleaner stays on the legacy path and makes zero relay Worker fetches", async () => {
+  const legacyEntry = {
+    queuedId: "legacy-entry-1",
+    eventType: "clock_out",
+    property: "Legacy Property",
+    note: "",
+    submittedAtMs: 1,
+  };
+  const relayState = {
+    version: 1,
+    pairedDeviceId: "production-relay-existing-device",
+    relayToken: "must-not-be-used",
+    relayTokenExpiresAtMs: 2_000_000_000_000,
+    lastConfirmedLedgerHighWater: 0,
+    nextSequence: 1,
+    highestAllocatedSequence: 0,
+    queue: [],
+  };
   const harness = makeHarness({
-    storage: preparedStorage(),
+    storage: makeStorage({
+      ce_shell_auth_v1: JSON.stringify({
+        cleanerName: "Cleaner One",
+        sessionToken: "legacy-session",
+        clientId: "legacy-client",
+      }),
+      ce_shell_queue_v1: JSON.stringify([legacyEntry]),
+      ce_shell_live_relay_state_v1: JSON.stringify(relayState),
+    }),
     locks: makeLocks(),
     randomUUID: () => "unused",
-    enableRelay: false,
-    enroll: () => { throw new Error("inactive relay must not enroll"); },
-    relayEvent: () => { throw new Error("inactive relay must not submit"); },
+    enroll: () => { throw new Error("non-pilot relay must not enroll"); },
+    relayEvent: () => { throw new Error("non-pilot relay must not submit"); },
   });
+  assert.equal(harness.isPilot(), false);
   await harness.pair();
   await harness.probe();
-  assert.deepEqual(harness.getFetchCalls(), []);
-  assert.equal(harness.getState(), null);
-  assert.match(app, /const LIVE_RELAY_FEATURE_ENABLED = false;/);
-  assert.match(app, /const LIVE_RELAY_WORKER_URL = "";/);
+  await harness.syncShell();
+
+  const fetchCalls = harness.getFetchCalls();
+  assert.equal(fetchCalls.length >= 2, true);
+  assert.equal(fetchCalls.every((call) => call.url.includes("script.google.com/macros/s/")), true);
+  assert.equal(fetchCalls.some((call) => call.url.includes("workers.dev")), false);
+  assert.deepEqual(harness.getLegacyQueue(), []);
+  assert.deepEqual(harness.getState(), relayState);
+  assert.match(app, /const LIVE_RELAY_FEATURE_ENABLED = true;/);
+  assert.match(app, /const LIVE_RELAY_PILOT_CLEANER_NAME = "Kyle";/);
+  assert.match(app, /function saveOfflineEntry_\(\) \{\s+if \(isLiveRelayPilotCleaner_\(\)\) \{[\s\S]*?\n  const shellAuth = getShellAuth_\(\);/u);
 });
 
 function assertBlankEntryState(harness) {
@@ -243,7 +326,7 @@ test("TEST runtime remains isolated from Live relay identifiers", () => {
   assert.doesNotMatch(testApp, /\/clockin\/(?:service-worker|app)\.js/);
 });
 
-test("two concurrent browser contexts create and enroll one stable installation identity", async () => {
+test("Kyle pilot path activates relay and concurrent contexts enroll one stable installation identity", async () => {
   const storage = preparedStorage();
   const locks = makeLocks();
   const enrollmentIds = [];
@@ -256,6 +339,8 @@ test("two concurrent browser contexts create and enroll one stable installation 
     return enrolledSession(id);
   } });
 
+  assert.equal(first.isPilot(), true);
+  assert.equal(second.isPilot(), true);
   await Promise.all([first.pair(), second.pair()]);
 
   const state = first.getState();
@@ -264,6 +349,12 @@ test("two concurrent browser contexts create and enroll one stable installation 
   assert.equal(second.getIdentity(), enrollmentIds[0]);
   assert.equal(state.pairedDeviceId, enrollmentIds[0]);
   assert.equal(state.nextSequence, 1);
+  assert.equal(
+    first.getFetchCalls().some((call) =>
+      call.url === "https://ceh-relay-production.kyle-405.workers.dev/v1/relay-sessions/enroll"
+    ),
+    true,
+  );
 });
 
 test("a lost enrollment response retries with the same persisted identity", async () => {

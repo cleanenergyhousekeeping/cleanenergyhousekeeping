@@ -34,6 +34,7 @@ const LEDGER_HEADERS = [
 class FakeProperties {
   constructor(initial) {
     this.values = { ...initial };
+    this.setPropertyCalls = [];
     this.setPropertiesCalls = [];
   }
 
@@ -48,6 +49,7 @@ class FakeProperties {
   }
 
   setProperty(key, value) {
+    this.setPropertyCalls.push({ key, value: String(value) });
     this.values[key] = String(value);
     return this;
   }
@@ -255,6 +257,24 @@ function productionConfigProperties() {
   };
 }
 
+function productionAdminProperties(enabled = "false") {
+  return {
+    CEH_RELAY_ENABLED: enabled,
+    CEH_RELAY_ENVIRONMENT: "production",
+    CEH_RELAY_EXPECTED_SPREADSHEET_ID: PRODUCTION_SPREADSHEET_ID,
+    CEH_RELAY_LEDGER_SHEET_NAME: "Relay Event Ledger",
+    CEH_RELAY_ACCEPTED_KEY_IDS: "production-v1",
+    CEH_RELAY_HMAC_KEYS_JSON: JSON.stringify({
+      "production-v1": PRODUCTION_HMAC_KEY.toString("base64url"),
+    }),
+    CEH_RELAY_SUBJECT_HMAC_KEY: PRODUCTION_SUBJECT_KEY.toString("base64url"),
+    CEH_RELAY_MAX_CLOCK_SKEW_SECONDS: "300",
+    CEH_RELAY_NONCE_TTL_SECONDS: "600",
+    CEH_RELAY_LOCK_TIMEOUT_MS: "5000",
+    CEH_RELAY_MAX_NONCE_COUNT: "100",
+  };
+}
+
 function createHarness(options = {}) {
   const spreadsheetId = options.spreadsheetId ?? "test-spreadsheet-id";
   const usersSheet = new FakeSheet(options.usersRows ?? defaultUsersRows());
@@ -283,6 +303,8 @@ function createHarness(options = {}) {
     properties,
     createdHtmlOutputs: [],
     dialogCalls: [],
+    alertCalls: [],
+    alertResponse: options.alertResponse ?? "YES",
     sessions,
     lockAvailable: options.lockAvailable ?? true,
     lockHeld: false,
@@ -356,6 +378,12 @@ function createHarness(options = {}) {
       getActiveSpreadsheet: () => spreadsheet,
       getUi() {
         return {
+          Button: { YES: "YES", NO: "NO", OK: "OK" },
+          ButtonSet: { YES_NO: "YES_NO", OK: "OK" },
+          alert(title, message, buttonSet) {
+            state.alertCalls.push({ title, message, buttonSet });
+            return state.alertResponse;
+          },
           showModalDialog(output, title) {
             state.dialogCalls.push({ output, title });
           },
@@ -424,6 +452,8 @@ function createHarness(options = {}) {
     doPost: doPost,
     handle: handleRelayWorkerRequest_,
     installProductionProperties: installProductionRelayPropertiesAdmin,
+    enableProduction: enableProductionRelayAdmin,
+    disableProduction: disableProductionRelayAdmin,
     loadConfig: loadRelayConfig_,
     loadConfigResult: loadRelayConfigResult_,
     reserveNonce: reserveRelayNonce_,
@@ -875,6 +905,129 @@ test("production property verifier reports names and structure without secret st
   assert.equal(result.subjectKeyLengthValid, true);
   assert.equal(JSON.stringify(result).includes(hmacKeysJson), false);
   assert.equal(JSON.stringify(result).includes(subjectKey), false);
+  assert.deepEqual(harness.state.properties.setPropertyCalls, []);
+  assert.deepEqual(harness.state.properties.setPropertiesCalls, []);
+  assert.deepEqual(harness.state.alertCalls, []);
+});
+
+test("production relay enable refuses an invalid verification before confirmation or write", () => {
+  const invalidProperties = productionAdminProperties();
+  invalidProperties.CEH_RELAY_NONCE_TTL_SECONDS = "";
+  const invalidHarness = createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: invalidProperties,
+  });
+
+  assert.throws(
+    () => invalidHarness.api.enableProduction(),
+    { message: "Production relay activation failed" },
+  );
+  assert.deepEqual(invalidHarness.state.properties.setPropertyCalls, []);
+  assert.deepEqual(invalidHarness.state.properties.setPropertiesCalls, []);
+  assert.deepEqual(invalidHarness.state.alertCalls, []);
+
+  const wrongSpreadsheetHarness = createHarness({
+    defaultConfig: false,
+    properties: productionAdminProperties(),
+  });
+  assert.throws(
+    () => wrongSpreadsheetHarness.api.enableProduction(),
+    { message: "Production relay property installation failed" },
+  );
+  assert.deepEqual(wrongSpreadsheetHarness.state.properties.setPropertyCalls, []);
+  assert.deepEqual(wrongSpreadsheetHarness.state.alertCalls, []);
+});
+
+test("production relay enable confirms and writes only CEH_RELAY_ENABLED", () => {
+  const initial = productionAdminProperties();
+  initial.ce_session_preserve = "synthetic-session-value";
+  const harness = createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: initial,
+  });
+
+  assert.equal(harness.api.enableProduction(), true);
+  assert.deepEqual(harness.state.properties.setPropertyCalls, [{
+    key: "CEH_RELAY_ENABLED",
+    value: "true",
+  }]);
+  assert.deepEqual(harness.state.properties.setPropertiesCalls, []);
+  assert.deepEqual(harness.state.properties.getProperties(), {
+    ...initial,
+    CEH_RELAY_ENABLED: "true",
+  });
+  assert.equal(harness.state.alertCalls.length, 1);
+  assert.equal(harness.state.alertCalls[0].buttonSet, "YES_NO");
+
+  const displayed = JSON.stringify(harness.state.alertCalls);
+  assert.equal(displayed.includes(initial.CEH_RELAY_HMAC_KEYS_JSON), false);
+  assert.equal(displayed.includes(initial.CEH_RELAY_SUBJECT_HMAC_KEY), false);
+});
+
+test("production relay disable confirms and writes only CEH_RELAY_ENABLED", () => {
+  const initial = productionAdminProperties("true");
+  initial.CEH_RELAY_ENVIRONMENT = "intentionally-invalid-but-disable-must-still-work";
+  initial.ce_session_preserve = "synthetic-session-value";
+  const harness = createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: initial,
+  });
+
+  assert.equal(harness.api.disableProduction(), true);
+  assert.deepEqual(harness.state.properties.setPropertyCalls, [{
+    key: "CEH_RELAY_ENABLED",
+    value: "false",
+  }]);
+  assert.deepEqual(harness.state.properties.setPropertiesCalls, []);
+  assert.deepEqual(harness.state.properties.getProperties(), {
+    ...initial,
+    CEH_RELAY_ENABLED: "false",
+  });
+  assert.equal(harness.state.alertCalls.length, 1);
+
+  const displayed = JSON.stringify(harness.state.alertCalls);
+  assert.equal(displayed.includes(initial.CEH_RELAY_HMAC_KEYS_JSON), false);
+  assert.equal(displayed.includes(initial.CEH_RELAY_SUBJECT_HMAC_KEY), false);
+});
+
+test("production relay activation controls require explicit confirmation and expose no secret logs", () => {
+  const enableHarness = createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: productionAdminProperties(),
+    alertResponse: "NO",
+  });
+  assert.equal(enableHarness.api.enableProduction(), false);
+  assert.deepEqual(enableHarness.state.properties.setPropertyCalls, []);
+
+  const disableHarness = createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: productionAdminProperties("true"),
+    alertResponse: "NO",
+  });
+  assert.equal(disableHarness.api.disableProduction(), false);
+  assert.deepEqual(disableHarness.state.properties.setPropertyCalls, []);
+
+  const adminSource = fs.readFileSync(
+    path.join(REPO_ROOT, "apps-script/55_RelayAdminConfig.gs"),
+    "utf8",
+  );
+  const controls = adminSource.match(
+    /\/\* begin\[production_relay_activation_controls\] \*\/[\s\S]*?\/\* end\[production_relay_activation_controls\] \*\//u,
+  )?.[0] ?? "";
+  assert.match(controls, /verifyProductionRelayPropertiesAdmin\(\)/u);
+  assert.doesNotMatch(controls, /Logger\.|console\.|CEH_RELAY_HMAC_KEYS_JSON|CEH_RELAY_SUBJECT_HMAC_KEY/u);
+
+  const menuSource = fs.readFileSync(
+    path.join(REPO_ROOT, "apps-script/05_Menu.gs"),
+    "utf8",
+  );
+  assert.match(menuSource, /"Enable production relay",\s*"enableProductionRelayAdmin"/u);
+  assert.match(menuSource, /"Disable production relay",\s*"disableProductionRelayAdmin"/u);
 });
 
 test("User ID is mandatory, immutable-looking, unique, and never falls back", () => {
