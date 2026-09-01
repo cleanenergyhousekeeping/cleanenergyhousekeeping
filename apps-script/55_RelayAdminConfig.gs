@@ -237,7 +237,7 @@ function enableProductionRelayAdmin() {
   const response = ui.alert(
     "Enable production relay",
     "Enable production relay request handling for the Live spreadsheet? " +
-      "This changes only CEH_RELAY_ENABLED. Automatic Worker delivery remains disabled.",
+      "This changes only CEH_RELAY_ENABLED. Worker delivery is controlled separately.",
     ui.ButtonSet.YES_NO
   );
   if (response !== ui.Button.YES) return false;
