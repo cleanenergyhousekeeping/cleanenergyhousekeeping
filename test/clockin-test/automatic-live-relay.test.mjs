@@ -143,7 +143,7 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent }) {
 
 function preparedStorage(extra = {}) {
   return makeStorage({
-    ce_shell_auth_v1: JSON.stringify({ cleanerName: "Kyle", sessionToken: "prepared-session" }),
+    ce_shell_auth_v1: JSON.stringify({ cleanerName: "Kyle Wescott", sessionToken: "prepared-session" }),
     ...extra,
   });
 }
@@ -197,7 +197,7 @@ test("TEST Wrangler settings remain unchanged", () => {
 test("Live build and service-worker cache versions agree", () => {
   const buildVersion = app.match(/const LIVE_BUILD_VERSION = "v(\d+)";/u)?.[1];
   const cacheVersion = serviceWorker.match(/const CACHE_NAME = "ce-clockin-shell-v(\d+)";/u)?.[1];
-  assert.equal(buildVersion, "249");
+  assert.equal(buildVersion, "250");
   assert.equal(cacheVersion, buildVersion);
 });
 
@@ -246,7 +246,7 @@ test("non-pilot cleaner stays on the legacy path and makes zero relay Worker fet
   assert.deepEqual(harness.getLegacyQueue(), []);
   assert.deepEqual(harness.getState(), relayState);
   assert.match(app, /const LIVE_RELAY_FEATURE_ENABLED = true;/);
-  assert.match(app, /const LIVE_RELAY_PILOT_CLEANER_NAME = "Kyle";/);
+  assert.match(app, /const LIVE_RELAY_PILOT_CLEANER_NAME = "Kyle Wescott";/);
   assert.match(app, /function saveOfflineEntry_\(\) \{\s+if \(isLiveRelayPilotCleaner_\(\)\) \{[\s\S]*?\n  const shellAuth = getShellAuth_\(\);/u);
 });
 
@@ -326,7 +326,7 @@ test("TEST runtime remains isolated from Live relay identifiers", () => {
   assert.doesNotMatch(testApp, /\/clockin\/(?:service-worker|app)\.js/);
 });
 
-test("Kyle pilot path activates relay and concurrent contexts enroll one stable installation identity", async () => {
+test("Kyle Wescott pilot path activates relay and concurrent contexts enroll one stable installation identity", async () => {
   const storage = preparedStorage();
   const locks = makeLocks();
   const enrollmentIds = [];

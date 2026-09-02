@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
 
 const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";
-const LIVE_BUILD_VERSION = "v249";
+const LIVE_BUILD_VERSION = "v250";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
@@ -14,7 +14,7 @@ const SHELL_QUEUE_KEY = "ce_shell_queue_v1";
 const SHELL_ENTRY_DRAFT_KEY = "ce_shell_entry_draft_v1";
 // Phase A activates the reviewed relay client only for the named Live pilot cleaner.
 const LIVE_RELAY_FEATURE_ENABLED = true;
-const LIVE_RELAY_PILOT_CLEANER_NAME = "Kyle";
+const LIVE_RELAY_PILOT_CLEANER_NAME = "Kyle Wescott";
 const LIVE_RELAY_WORKER_URL = "https://ceh-relay-production.kyle-405.workers.dev";
 const LIVE_RELAY_STATE_KEY = "ce_shell_live_relay_state_v1";
 const LIVE_RELAY_INSTALLATION_ID_KEY = "ce_shell_live_relay_installation_id_v1";
