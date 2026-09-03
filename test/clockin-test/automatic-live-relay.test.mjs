@@ -71,7 +71,7 @@ function response(payload) {
   };
 }
 
-function makeHarness({ storage, locks, randomUUID, enroll, relayEvent }) {
+function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRelay = true }) {
   const elements = new Map();
   const fetchCalls = [];
   const document = {
@@ -137,13 +137,16 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent }) {
     },
   };
   vm.createContext(context);
-  vm.runInContext(`${app}\nglobalThis.__relayIdentityTestApi = { isPilot: isLiveRelayPilotCleaner_, pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, reconcileDraft: reconcileShellEntryDraft_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, syncShell: syncShellQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_, getLegacyQueue: getShellQueue_, getEntryState: function () { return { selectedProperty: selectedOfflineProperty && selectedOfflineProperty.name, propertySearch: offlinePropertySearch.value, propertyPanelHidden: offlinePropertyInfoPanel.classList.contains("hidden"), wifi: offlinePropertyInfoWifi.textContent, action: offlineActionSelect.value, note: offlineNoteInput.value, noteHidden: offlineNoteWrap.classList.contains("hidden") }; }, getFetchCalls: function () { return globalThis.__fetchCalls; } };`, context);
+  const harnessApp = enableRelay
+    ? app
+    : app.replace("const LIVE_RELAY_FEATURE_ENABLED = true;", "const LIVE_RELAY_FEATURE_ENABLED = false;");
+  vm.runInContext(`${harnessApp}\nglobalThis.__relayIdentityTestApi = { isEnabled: isLiveRelayEnabledForCleaner_, pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, reconcileDraft: reconcileShellEntryDraft_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, syncShell: syncShellQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_, getLegacyQueue: getShellQueue_, getEntryState: function () { return { selectedProperty: selectedOfflineProperty && selectedOfflineProperty.name, propertySearch: offlinePropertySearch.value, propertyPanelHidden: offlinePropertyInfoPanel.classList.contains("hidden"), wifi: offlinePropertyInfoWifi.textContent, action: offlineActionSelect.value, note: offlineNoteInput.value, noteHidden: offlineNoteWrap.classList.contains("hidden") }; }, getFetchCalls: function () { return globalThis.__fetchCalls; } };`, context);
   return context.__relayIdentityTestApi;
 }
 
 function preparedStorage(extra = {}) {
   return makeStorage({
-    ce_shell_auth_v1: JSON.stringify({ cleanerName: "Kyle Wescott", sessionToken: "prepared-session" }),
+    ce_shell_auth_v1: JSON.stringify({ cleanerName: "Cleaner One", sessionToken: "prepared-session" }),
     ...extra,
   });
 }
@@ -173,11 +176,11 @@ test("Live relay runtime is isolated from TEST and existing Live shell storage",
   assert.match(app, /const SHELL_ENTRY_DRAFT_KEY = "ce_shell_entry_draft_v1"/);
 });
 
-test("production Workers.dev ingress is enabled while production cron and previews remain off", () => {
+test("production Workers.dev ingress and every-minute cron are enabled while previews remain off", () => {
   assert.equal(wranglerConfig.env.production.name, "ceh-relay-production");
   assert.equal(wranglerConfig.env.production.workers_dev, true);
   assert.equal(wranglerConfig.env.production.preview_urls, false);
-  assert.deepEqual(wranglerConfig.env.production.triggers.crons, []);
+  assert.deepEqual(wranglerConfig.env.production.triggers.crons, ["* * * * *"]);
 });
 
 test("TEST Wrangler settings remain unchanged", () => {
@@ -197,11 +200,11 @@ test("TEST Wrangler settings remain unchanged", () => {
 test("Live build and service-worker cache versions agree", () => {
   const buildVersion = app.match(/const LIVE_BUILD_VERSION = "v(\d+)";/u)?.[1];
   const cacheVersion = serviceWorker.match(/const CACHE_NAME = "ce-clockin-shell-v(\d+)";/u)?.[1];
-  assert.equal(buildVersion, "250");
+  assert.equal(buildVersion, "251");
   assert.equal(cacheVersion, buildVersion);
 });
 
-test("non-pilot cleaner stays on the legacy path and makes zero relay Worker fetches", async () => {
+test("the global Live relay switch can deliberately preserve the legacy path", async () => {
   const legacyEntry = {
     queuedId: "legacy-entry-1",
     eventType: "clock_out",
@@ -231,10 +234,11 @@ test("non-pilot cleaner stays on the legacy path and makes zero relay Worker fet
     }),
     locks: makeLocks(),
     randomUUID: () => "unused",
-    enroll: () => { throw new Error("non-pilot relay must not enroll"); },
-    relayEvent: () => { throw new Error("non-pilot relay must not submit"); },
+    enroll: () => { throw new Error("disabled relay must not enroll"); },
+    relayEvent: () => { throw new Error("disabled relay must not submit"); },
+    enableRelay: false,
   });
-  assert.equal(harness.isPilot(), false);
+  assert.equal(harness.isEnabled(), false);
   await harness.pair();
   await harness.probe();
   await harness.syncShell();
@@ -246,8 +250,13 @@ test("non-pilot cleaner stays on the legacy path and makes zero relay Worker fet
   assert.deepEqual(harness.getLegacyQueue(), []);
   assert.deepEqual(harness.getState(), relayState);
   assert.match(app, /const LIVE_RELAY_FEATURE_ENABLED = true;/);
-  assert.match(app, /const LIVE_RELAY_PILOT_CLEANER_NAME = "Kyle Wescott";/);
-  assert.match(app, /function saveOfflineEntry_\(\) \{\s+if \(isLiveRelayPilotCleaner_\(\)\) \{[\s\S]*?\n  const shellAuth = getShellAuth_\(\);/u);
+  assert.match(app, /function saveOfflineEntry_\(\) \{\s+if \(isLiveRelayEnabledForCleaner_\(\)\) \{[\s\S]*?\n  const shellAuth = getShellAuth_\(\);/u);
+});
+
+test("no Kyle-specific Live relay pilot gate remains", () => {
+  assert.match(app, /function isLiveRelayEnabledForCleaner_\(shellAuth\)/);
+  assert.doesNotMatch(app, /Kyle Wescott|LIVE_RELAY_PILOT_CLEANER_NAME|isLiveRelayPilotCleaner_|live_relay_pilot_gate/u);
+  assert.doesNotMatch(app, /\bpilot\b/iu);
 });
 
 function assertBlankEntryState(harness) {
@@ -326,7 +335,7 @@ test("TEST runtime remains isolated from Live relay identifiers", () => {
   assert.doesNotMatch(testApp, /\/clockin\/(?:service-worker|app)\.js/);
 });
 
-test("Kyle Wescott pilot path activates relay and concurrent contexts enroll one stable installation identity", async () => {
+test("ordinary authenticated Live cleaners use production relay and concurrent contexts enroll one stable installation identity", async () => {
   const storage = preparedStorage();
   const locks = makeLocks();
   const enrollmentIds = [];
@@ -339,8 +348,11 @@ test("Kyle Wescott pilot path activates relay and concurrent contexts enroll one
     return enrolledSession(id);
   } });
 
-  assert.equal(first.isPilot(), true);
-  assert.equal(second.isPilot(), true);
+  assert.equal(first.isEnabled(), true);
+  assert.equal(second.isEnabled(), true);
+  assert.equal(first.isEnabled({ cleanerName: "Cleaner Two", sessionToken: "another-session" }), true);
+  assert.equal(first.isEnabled({ cleanerName: "Unprepared Cleaner" }), false);
+  assert.equal(first.isEnabled({ cleanerName: "", sessionToken: "missing-cleaner" }), false);
   await Promise.all([first.pair(), second.pair()]);
 
   const state = first.getState();

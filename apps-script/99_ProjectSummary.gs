@@ -2,10 +2,10 @@
  * Clean Energy Housekeeping System — Current Architecture Summary
  *
  * VERSION NAME:
- * "Operational System + TEST Durable Relay"
+ * "Operational System + Live and TEST Durable Relay"
  *
  * UPDATED:
- * 2026-08-23
+ * 2026-09-02
  *
  * This document describes the system that exists now. It is an architectural
  * summary, not the CEH backlog or a complete project history. The separate CEH
@@ -23,8 +23,8 @@
  * The cleaner-facing clock-in experience is a mobile-oriented installed web
  * shell. It supports local-first PIN unlock, property lookup and restricted
  * property information, current-shift state, clock-in, cleaning notes, and
- * clock-out. The TEST shell also has a durable relay path for reliable online
- * and offline submission.
+ * clock-out. The Live and TEST shells have isolated durable relay paths for
+ * reliable online and offline submission.
  *
  * =====================================================
  * 2. HIGH-LEVEL ARCHITECTURE
@@ -35,11 +35,12 @@
  *   → Time Tracker (shift source of truth)
  *   → Work History, payroll, invoicing, notifications, and property workflows
  *
- * TEST installed clock-in shell
+ * Installed clock-in shells (Live and TEST)
  *   → local prepared-auth and UI state
  *   → local durable relay-event state when relay mode is active
- *   → Cloudflare Worker → D1 relay storage → scheduled delivery
- *   → TEST Apps Script relay service and relay ledger → TEST Time Tracker
+ *   → environment-specific Cloudflare Worker → D1 relay storage
+ *   → scheduled delivery → matching Apps Script relay service and relay ledger
+ *   → matching Time Tracker
  *
  * The relay accepts events durably before Apps Script delivery. A temporarily
  * unavailable spreadsheet service therefore does not discard an accepted field
@@ -58,8 +59,8 @@
  *   Live deployment or Live sync target for TEST deployment/synchronization.
  * - Relay keys, tokens, deployment URLs, Apps Script sessions, property data,
  *   and decrypted relay payloads are not source-controlled or logged.
- * - Production relay rollout is not implied by TEST relay implementation.
- *   TEST remains the supported relay environment described here.
+ * - Live relay is enabled for authenticated cleaners behind a global feature
+ *   switch. TEST relay behavior and resources remain independently isolated.
  *
  * =====================================================
  * 4. CLEANER CLOCK-IN SHELL
@@ -77,13 +78,13 @@
  *   depend on a network request for every screen transition.
  *
  * =====================================================
- * 5. TEST RELAY ARCHITECTURE
+ * 5. LIVE AND TEST RELAY ARCHITECTURE
  * =====================================================
  *
  * Event path:
- *   TEST PWA → Cloudflare Worker → encrypted D1 event storage
- *   → scheduled delivery → TEST Apps Script relay service/ledger
- *   → TEST Time Tracker
+ *   Live or TEST PWA → matching Cloudflare Worker → encrypted D1 event storage
+ *   → scheduled delivery → matching Apps Script relay service/ledger
+ *   → matching Time Tracker
  *
  * Phone behavior
  * - Each clock-in, note, and clock-out receives a stable event ID, immutable
@@ -113,12 +114,12 @@
  * - The every-minute Worker delivery process makes fair, sequential attempts
  *   across ready lanes and can drain multiple contiguous events in one run.
  *   It uses leases, backoff, and attention-required retry scheduling.
- * - TEST Apps Script verifies signed Worker requests, validates relay input,
- *   records processing/outcome in the relay ledger, and reconciles events
- *   idempotently into Time Tracker. The ledger supplies contiguous applied
- *   high-water state for the paired device.
+ * - Each environment's Apps Script verifies signed Worker requests, validates
+ *   relay input, records processing/outcome in the relay ledger, and reconciles
+ *   events idempotently into Time Tracker. The ledger supplies contiguous
+ *   applied high-water state for the paired device.
  *
- * Automatic TEST installation identity
+ * Automatic installation identity
  * - There is no manual device-ID form. A fresh installation creates an opaque
  *   UUID-based installation ID with no cleaner, PIN, property, or timestamp
  *   identity data and persists it before enrollment.
@@ -207,10 +208,13 @@
  * 10. RELIABILITY, OFFLINE USE, AND PWA UPDATES
  * =====================================================
  *
- * - The installed TEST PWA uses service-worker cache versioning. Frontend
- *   build/cache versions are advanced together when publishing a new shell.
- * - Installed TEST updates have been field-tested across multiple versions.
+ * - The installed Live and TEST PWAs use service-worker cache versioning.
+ *   Frontend build/cache versions are advanced together when publishing a new
+ *   shell.
+ * - Installed PWA updates have been field-tested across multiple versions.
  *   Force-close then reopen is the reliable current update path.
+ * - The global Live relay feature switch permits a deliberate production relay
+ *   shutdown without changing TEST configuration or relay infrastructure.
  * - Foreground-resume update detection/reload is optional polish, not a
  *   required operational update mechanism.
  * - Local storage preserves prepared shell state and relay queue state across
@@ -236,8 +240,6 @@
  * 12. CURRENT KNOWN LIMITATIONS
  * =====================================================
  *
- * - The durable relay path summarized here is TEST-only; production relay use
- *   requires its own explicit rollout and validation.
  * - An attention-required relay event is retained and needs review; the system
  *   will not silently skip it to advance later events.
  * - Force-close/reopen is the dependable installed-PWA update instruction;
@@ -249,9 +251,9 @@
  * 13. NEAR-TERM PRIORITIES
  * =====================================================
  *
- * Maintain and verify the operational and TEST relay paths, resolve
+ * Maintain and verify the operational Live and TEST relay paths, resolve
  * attention-required cases without compromising event ordering, and treat any
- * production relay rollout or updater UX refinement as separately scoped work.
+ * updater UX refinement as separately scoped work.
  * The CEH to-do list, rather than this summary, holds detailed priorities.
  *
  * =====================================================
@@ -259,7 +261,7 @@
  * =====================================================
  *
  * CEH has a functioning operational time, payroll, and invoicing system with a
- * field-focused cleaner shell. The TEST relay adds a durable, ordered,
+ * field-focused cleaner shell. The Live and TEST relays add durable, ordered,
  * security-bounded offline delivery architecture without making Apps Script
  * availability a requirement for phone-side event acceptance. The central
  * discipline is to keep Time Tracker authoritative, relay events immutable and
