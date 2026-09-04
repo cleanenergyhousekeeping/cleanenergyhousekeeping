@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
 
 const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";
-const LIVE_BUILD_VERSION = "v251";
+const LIVE_BUILD_VERSION = "v252";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
@@ -56,6 +56,7 @@ const offlineCurrentCleanStartedText = document.getElementById("offlineCurrentCl
 const offlineDirectionsBtn = document.getElementById("offlineDirectionsBtn");
 const offlineActionSelect = document.getElementById("offlineActionSelect");
 const offlinePropertySearch = document.getElementById("offlinePropertySearch");
+const offlinePropertyClearBtn = document.getElementById("offlinePropertyClearBtn");
 const offlinePropertyResults = document.getElementById("offlinePropertyResults");
 const offlinePropertyInfoPanel = document.getElementById("offlinePropertyInfoPanel");
 const offlinePropertyInfoEntranceRow = document.getElementById("offlinePropertyInfoEntranceRow");
@@ -381,6 +382,8 @@ function setShellEntryLocked_(locked) {
     offlinePropertySearch.classList.toggle("shellLocked", isLocked);
   }
 
+  updateOfflinePropertyClearButton_(getShellAuth_());
+
   if (offlineNoteInput) {
     offlineNoteInput.disabled = isLocked;
     offlineNoteInput.classList.toggle("shellLocked", isLocked);
@@ -703,6 +706,7 @@ function updateOfflineQueueCount_() {
 }
 
 function updateOfflineGuidanceText_(shellAuth) {
+  updateOfflinePropertyClearButton_(shellAuth);
   if (!offlineGuidanceText) return;
 
   const hasActiveShift = !!(shellAuth && shellAuth.currentShift);
@@ -896,6 +900,34 @@ function handleOfflinePropertySearch_() {
   updateOfflineGuidanceText_(shellAuth);
 }
 /* end[offline_property_search_with_guidance_refresh] */
+
+/* begin[offline_property_clear] */
+function updateOfflinePropertyClearButton_(shellAuth) {
+  if (!offlinePropertyClearBtn) return;
+  offlinePropertyClearBtn.disabled =
+    !shellUnlocked ||
+    !!(shellAuth && shellAuth.currentShift) ||
+    !offlinePropertySearch ||
+    offlinePropertySearch.readOnly ||
+    offlinePropertySearch.disabled;
+}
+
+function clearOfflinePropertySearch_() {
+  const shellAuth = getShellAuth_();
+  if (
+    !shellUnlocked ||
+    (shellAuth && shellAuth.currentShift) ||
+    !offlinePropertySearch ||
+    offlinePropertySearch.readOnly ||
+    offlinePropertySearch.disabled
+  ) return;
+
+  offlinePropertySearch.value = "";
+  handleOfflinePropertySearch_();
+  saveShellEntryDraft_();
+  offlinePropertySearch.focus();
+}
+/* end[offline_property_clear] */
 
 /* begin[reset_offline_entry_form_with_guidance_refresh] */
 function resetOfflineEntryForm_(shellAuth) {
@@ -3323,6 +3355,12 @@ if (offlinePropertySearch) {
   offlinePropertySearch.addEventListener("input", handleOfflinePropertySearch_);
   offlinePropertySearch.addEventListener("focus", handleOfflinePropertySearch_);
 }
+
+/* begin[offline_property_clear_binding] */
+if (offlinePropertyClearBtn) {
+  offlinePropertyClearBtn.addEventListener("click", clearOfflinePropertySearch_);
+}
+/* end[offline_property_clear_binding] */
 
 document.addEventListener("click", function (event) {
   if (

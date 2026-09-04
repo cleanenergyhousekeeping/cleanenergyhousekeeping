@@ -145,14 +145,26 @@
         </section>
         <div id="relayPairedIndicator" class="relayPairedIndicator hidden" aria-live="polite">Phone setup complete</div>
 
+        <!-- begin[offline_property_search_controls] -->
         <label for="offlinePropertySearch">Property</label>
-        <input
-          id="offlinePropertySearch"
-          class="offlineInput"
-          type="text"
-          placeholder="Search address..."
-          autocomplete="off"
-        />
+        <div class="offlinePropertySearchRow">
+          <input
+            id="offlinePropertySearch"
+            class="offlineInput"
+            type="text"
+            placeholder="Search address..."
+            autocomplete="off"
+          />
+          <button
+            id="offlinePropertyClearBtn"
+            class="offlinePropertyClearBtn"
+            type="button"
+            aria-label="Clear property"
+            aria-controls="offlinePropertySearch"
+            disabled
+          >Clear</button>
+        </div>
+        <!-- end[offline_property_search_controls] -->
 
         <div id="offlinePropertyResults" class="resultsBox hidden"></div>
 
