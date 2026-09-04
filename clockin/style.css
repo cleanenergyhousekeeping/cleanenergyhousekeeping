@@ -384,6 +384,38 @@ textarea::placeholder {
 }
 /* end[offline_guidance_queue_and_sync_polish_styles] */
 
+/* begin[offline_property_search_controls_styles] */
+.offlinePropertySearchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.offlinePropertySearchRow .offlineInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.offlinePropertyClearBtn {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #d8e2e8;
+  border-radius: 12px;
+  background: #f3f7fa;
+  color: #4d6474;
+  font-size: 14px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.offlinePropertyClearBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* end[offline_property_search_controls_styles] */
+
 .resultsBox {
   background: #f3f7fa;
   border: 1px solid #d8e2e8;

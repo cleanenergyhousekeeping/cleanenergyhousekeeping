@@ -35,6 +35,7 @@ function makeLocks() {
 
 function makeElement() {
   const classes = new Set();
+  const listeners = new Map();
   return {
     classList: {
       add(...names) { names.forEach((name) => classes.add(name)); },
@@ -51,13 +52,22 @@ function makeElement() {
       },
       contains(name) { return classes.has(name); },
     },
-    addEventListener() {},
+    addEventListener(type, listener) {
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(listener);
+    },
+    dispatch(type) { (listeners.get(type) || []).forEach((listener) => listener()); },
+    click() { if (!this.disabled) this.dispatch("click"); },
+    focus() { this.focused = true; this.dispatch("focus"); },
+    appendChild(child) { this.children.push(child); },
+    children: [],
     setAttribute() {},
     textContent: "",
     value: "",
     disabled: false,
     readOnly: false,
-    innerHTML: "",
+    get innerHTML() { return this.html || ""; },
+    set innerHTML(value) { this.html = value; this.children = []; },
     options: [{ value: "" }, { value: "clock_in" }, { value: "add_note" }, { value: "clock_out" }],
   };
 }
@@ -141,7 +151,12 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRel
     ? app
     : app.replace("const LIVE_RELAY_FEATURE_ENABLED = true;", "const LIVE_RELAY_FEATURE_ENABLED = false;");
   vm.runInContext(`${harnessApp}\nglobalThis.__relayIdentityTestApi = { isEnabled: isLiveRelayEnabledForCleaner_, pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, reconcileDraft: reconcileShellEntryDraft_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, syncShell: syncShellQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_, getLegacyQueue: getShellQueue_, getEntryState: function () { return { selectedProperty: selectedOfflineProperty && selectedOfflineProperty.name, propertySearch: offlinePropertySearch.value, propertyPanelHidden: offlinePropertyInfoPanel.classList.contains("hidden"), wifi: offlinePropertyInfoWifi.textContent, action: offlineActionSelect.value, note: offlineNoteInput.value, noteHidden: offlineNoteWrap.classList.contains("hidden") }; }, getFetchCalls: function () { return globalThis.__fetchCalls; } };`, context);
-  return context.__relayIdentityTestApi;
+  vm.runInContext(`globalThis.__propertySearchTestApi = {
+    setEntryLocked: setShellEntryLocked_, resetEntry: resetOfflineEntryForm_
+  };`, context);
+  return Object.assign(context.__relayIdentityTestApi, context.__propertySearchTestApi, {
+    element: (id) => document.getElementById(id),
+  });
 }
 
 function preparedStorage(extra = {}) {
@@ -200,7 +215,7 @@ test("TEST Wrangler settings remain unchanged", () => {
 test("Live build and service-worker cache versions agree", () => {
   const buildVersion = app.match(/const LIVE_BUILD_VERSION = "v(\d+)";/u)?.[1];
   const cacheVersion = serviceWorker.match(/const CACHE_NAME = "ce-clockin-shell-v(\d+)";/u)?.[1];
-  assert.equal(buildVersion, "251");
+  assert.equal(buildVersion, "252");
   assert.equal(cacheVersion, buildVersion);
 });
 
@@ -326,6 +341,145 @@ test("an active shift restores its current property instead of a saved draft pro
   assert.equal(activeHarness.getEntryState().propertyPanelHidden, false);
   assert.equal(activeHarness.getEntryState().wifi, "current-wifi");
 });
+
+/* begin[live_property_clear_tests] */
+function propertySearchHarness(currentShift = null) {
+  const properties = [
+    { name: "10 Oak Street", wifiNetwork: "Oak 10", houseNotes: "First property" },
+    { name: "12 Oak Street", wifiNetwork: "Oak 12", houseNotes: "Second property" },
+  ];
+  const auth = { cleanerName: "Cleaner One", sessionToken: "prepared-session", properties, currentShift };
+  const storage = makeStorage({
+    ce_shell_auth_v1: JSON.stringify(auth),
+    ce_shell_queue_v1: JSON.stringify([{ queuedId: "keep-this-entry" }]),
+  });
+  const harness = makeHarness({ storage, enableRelay: false });
+  harness.setUnlocked(true);
+  harness.reconcileDraft(auth);
+  harness.element("offlineCleanerDisplay").value = auth.cleanerName;
+  return { harness, storage, auth };
+}
+
+function searchProperty(harness, query) {
+  const input = harness.element("offlinePropertySearch");
+  input.value = query;
+  input.dispatch("input");
+  return harness.element("offlinePropertyResults").children;
+}
+
+test("Live Clear removes only the property and supports immediate search and reselection", () => {
+  const { harness, storage, auth } = propertySearchHarness();
+  const clear = harness.element("offlinePropertyClearBtn");
+  const results = harness.element("offlinePropertyResults");
+  const action = harness.element("offlineActionSelect");
+  const note = harness.element("offlineNoteInput");
+  const queueBefore = storage.getItem("ce_shell_queue_v1");
+
+  assert.equal(clear.disabled, false);
+  assert.equal(searchProperty(harness, "oAk").length, 2);
+  results.children[0].click();
+  assert.equal(harness.getEntryState().selectedProperty, "10 Oak Street");
+  assert.equal(harness.getEntryState().propertyPanelHidden, false);
+  assert.equal(harness.getEntryState().wifi, "Oak 10");
+  action.value = "clock_in";
+  action.dispatch("change");
+  note.value = "Keep this entry note";
+  note.dispatch("input");
+  const noteHiddenBefore = harness.getEntryState().noteHidden;
+  harness.element("offlinePropertySearch").focus();
+  assert.equal(results.classList.contains("hidden"), false);
+
+  clear.click();
+
+  assert.equal(harness.getEntryState().selectedProperty, null);
+  assert.equal(harness.getEntryState().propertySearch, "");
+  assert.equal(harness.getEntryState().propertyPanelHidden, true);
+  assert.equal(harness.getEntryState().wifi, "");
+  assert.equal(harness.element("offlinePropertyInfoNotes").textContent, "");
+  assert.equal(harness.element("offlineDirectionsBtn").classList.contains("hidden"), true);
+  assert.equal(results.children.length, 0);
+  assert.equal(results.classList.contains("hidden"), true);
+  assert.equal(harness.element("offlinePropertySearch").focused, true);
+  assert.equal(harness.element("offlineGuidanceText").textContent, "Action selected. Now choose a property from the list.");
+  assert.equal(harness.element("offlineCleanerDisplay").value, auth.cleanerName);
+  assert.equal(storage.getItem("ce_shell_auth_v1"), JSON.stringify(auth));
+  assert.equal(storage.getItem("ce_shell_queue_v1"), queueBefore);
+  assert.equal(action.value, "clock_in");
+  assert.equal(note.value, "Keep this entry note");
+  assert.equal(harness.getEntryState().noteHidden, noteHiddenBefore);
+  assert.deepEqual(JSON.parse(storage.getItem("ce_shell_entry_draft_v1")), {
+    cleanerName: auth.cleanerName, propertyName: "", action: "clock_in", note: "Keep this entry note",
+  });
+
+  searchProperty(harness, "12 Oak")[0].click();
+  assert.equal(harness.getEntryState().selectedProperty, "12 Oak Street");
+  assert.equal(harness.getEntryState().propertySearch, "12 Oak Street");
+  assert.equal(harness.getEntryState().propertyPanelHidden, false);
+  assert.equal(harness.getEntryState().wifi, "Oak 12");
+  assert.equal(results.classList.contains("hidden"), true);
+  assert.equal(JSON.parse(storage.getItem("ce_shell_entry_draft_v1")).propertyName, "12 Oak Street");
+
+  // Manual erasing, unmatched searches, and Clear without a selection still work.
+  searchProperty(harness, "");
+  assert.equal(harness.getEntryState().selectedProperty, null);
+  assert.equal(harness.getEntryState().propertyPanelHidden, true);
+  assert.equal(searchProperty(harness, "Unknown Street").length, 0);
+  clear.click();
+  assert.equal(harness.getEntryState().propertySearch, "");
+});
+
+test("Live Clear is disabled and guarded for an active shift, including after entry unlock", () => {
+  const { harness, storage, auth } = propertySearchHarness({ property: "10 Oak Street", clockInMs: 1 });
+  const clear = harness.element("offlinePropertyClearBtn");
+  const input = harness.element("offlinePropertySearch");
+  const before = harness.getEntryState();
+  const draftBefore = storage.getItem("ce_shell_entry_draft_v1");
+
+  assert.equal(input.readOnly, true);
+  assert.equal(input.classList.contains("lockedProperty"), true);
+  assert.equal(clear.disabled, true);
+  clear.click();
+  clear.dispatch("click"); // The handler also rejects synthetic clicks on a disabled button.
+  harness.setEntryLocked(true);
+  harness.setEntryLocked(false);
+  assert.equal(clear.disabled, true);
+  assert.deepEqual(harness.getEntryState(), before);
+  assert.equal(storage.getItem("ce_shell_entry_draft_v1"), draftBefore);
+
+  // Auth remains authoritative even if the input's read-only flag is stale.
+  input.readOnly = false;
+  clear.dispatch("click");
+  assert.deepEqual(harness.getEntryState(), before);
+  harness.resetEntry(auth);
+  assert.equal(input.readOnly, true);
+  assert.equal(clear.disabled, true);
+
+  const endedAuth = { ...auth, currentShift: null };
+  storage.setItem("ce_shell_auth_v1", JSON.stringify(endedAuth));
+  harness.resetEntry(endedAuth);
+  assert.equal(input.readOnly, false);
+  assert.equal(clear.disabled, false);
+  searchProperty(harness, "12 Oak")[0].click();
+  clear.click();
+  assert.equal(harness.getEntryState().selectedProperty, null);
+});
+
+test("Live Clear respects entry locks and a locked shell", () => {
+  const { harness } = propertySearchHarness();
+  const clear = harness.element("offlinePropertyClearBtn");
+  searchProperty(harness, "10 Oak")[0].click();
+  const before = harness.getEntryState();
+  harness.setEntryLocked(true);
+  assert.equal(clear.disabled, true);
+  clear.dispatch("click");
+  assert.deepEqual(harness.getEntryState(), before);
+  harness.setEntryLocked(false);
+  assert.equal(clear.disabled, false);
+  harness.setUnlocked(false);
+  clear.dispatch("click");
+  assert.deepEqual(harness.getEntryState(), before);
+});
+/* end[live_property_clear_tests] */
 
 test("TEST runtime remains isolated from Live relay identifiers", () => {
   const testApp = fs.readFileSync(path.join(repoRoot, "clockin-test/app.js"), "utf8");
