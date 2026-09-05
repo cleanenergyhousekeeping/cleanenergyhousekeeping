@@ -5,7 +5,7 @@
  * "Operational System + Live and TEST Durable Relay"
  *
  * UPDATED:
- * 2026-09-02
+ * 2026-09-05
  *
  * This document describes the system that exists now. It is an architectural
  * summary, not the CEH backlog or a complete project history. The separate CEH
@@ -25,6 +25,11 @@
  * property information, current-shift state, clock-in, cleaning notes, and
  * clock-out. The Live and TEST shells have isolated durable relay paths for
  * reliable online and offline submission.
+ *
+ * Live shell polish (v253): background refreshes preserve the current entry
+ * within the same login and shift. Automatic update reloads wait while unlocked.
+ * The welcome footer uses the first name, the completed phone-setup badge is
+ * removed, and Get directions uses mobile map links with a web fallback.
  *
  * =====================================================
  * 2. HIGH-LEVEL ARCHITECTURE
