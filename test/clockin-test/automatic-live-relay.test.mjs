@@ -152,7 +152,12 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRel
     : app.replace("const LIVE_RELAY_FEATURE_ENABLED = true;", "const LIVE_RELAY_FEATURE_ENABLED = false;");
   vm.runInContext(`${harnessApp}\nglobalThis.__relayIdentityTestApi = { isEnabled: isLiveRelayEnabledForCleaner_, pair: pairRelayInstallationAutomatically_, probe: probeRelayReachability_, reconcileDraft: reconcileShellEntryDraft_, retry: retryQueuedSyncIfReady_, setUnlocked: function (value) { shellUnlocked = !!value; }, sync: syncRelayQueue_, syncShell: syncShellQueue_, getState: getRelayState_, getIdentity: getRelayInstallationId_, getLegacyQueue: getShellQueue_, getEntryState: function () { return { selectedProperty: selectedOfflineProperty && selectedOfflineProperty.name, propertySearch: offlinePropertySearch.value, propertyPanelHidden: offlinePropertyInfoPanel.classList.contains("hidden"), wifi: offlinePropertyInfoWifi.textContent, action: offlineActionSelect.value, note: offlineNoteInput.value, noteHidden: offlineNoteWrap.classList.contains("hidden") }; }, getFetchCalls: function () { return globalThis.__fetchCalls; } };`, context);
   vm.runInContext(`globalThis.__propertySearchTestApi = {
-    setEntryLocked: setShellEntryLocked_, resetEntry: resetOfflineEntryForm_
+    setEntryLocked: setShellEntryLocked_, resetEntry: resetOfflineEntryForm_,
+    reloadSafe: isLivePwaUpdateReloadSafe_,
+    directions: function (userAgent, destination) {
+      navigator.userAgent = userAgent;
+      return getOfflineDirectionsUrl_(destination);
+    }
   };`, context);
   return Object.assign(context.__relayIdentityTestApi, context.__propertySearchTestApi, {
     element: (id) => document.getElementById(id),
@@ -215,7 +220,7 @@ test("TEST Wrangler settings remain unchanged", () => {
 test("Live build and service-worker cache versions agree", () => {
   const buildVersion = app.match(/const LIVE_BUILD_VERSION = "v(\d+)";/u)?.[1];
   const cacheVersion = serviceWorker.match(/const CACHE_NAME = "ce-clockin-shell-v(\d+)";/u)?.[1];
-  assert.equal(buildVersion, "252");
+  assert.equal(buildVersion, "253");
   assert.equal(cacheVersion, buildVersion);
 });
 
@@ -657,3 +662,56 @@ test("reconnect drain keeps a single in-progress gate and only shows the sync HU
   assert.match(app, /await withRelayLock_\(async function \(\) \{[\s\S]*showShellSyncHud_/);
   assert.match(app, /showShellActionConfirmation_\("Logged In",[\s\S]*?retryQueuedSyncIfReady_\(\);/);
 });
+
+/* begin[live_pwa_polish_tests] */
+test("background reconciliation preserves typing, results and a selected clock-in action", () => {
+  const { harness, auth } = propertySearchHarness();
+  const matches = searchProperty(harness, "oAk");
+  harness.element("offlineActionSelect").value = "clock_in";
+  harness.reconcileDraft(auth);
+  harness.reconcileDraft({ ...auth, properties: [...auth.properties] });
+  assert.equal(harness.getEntryState().propertySearch, "oAk");
+  assert.equal(harness.getEntryState().action, "clock_in");
+  assert.equal(harness.element("offlinePropertyResults").children[0], matches[0]);
+  matches[0].click();
+  harness.reconcileDraft(auth);
+  assert.equal(harness.getEntryState().selectedProperty, "10 Oak Street");
+  assert.equal(harness.getEntryState().action, "clock_in");
+});
+
+test("shift changes and explicit resets still clear the previous property entry", () => {
+  const { harness, auth } = propertySearchHarness();
+  searchProperty(harness, "12 Oak")[0].click();
+  const active = { ...auth, currentShift: { property: "10 Oak Street", clockInMs: 123 } };
+  harness.reconcileDraft(active);
+  assert.equal(harness.getEntryState().propertySearch, "10 Oak Street");
+  assert.equal(harness.element("offlinePropertySearch").readOnly, true);
+  harness.reconcileDraft(auth);
+  assert.equal(harness.getEntryState().propertySearch, "");
+  searchProperty(harness, "12 Oak")[0].click();
+  harness.resetEntry(auth);
+  harness.reconcileDraft(auth);
+  assert.equal(harness.getEntryState().propertySearch, "");
+});
+
+test("automatic update reload is deferred throughout an unlocked session", () => {
+  const { harness } = propertySearchHarness();
+  harness.element("shellSyncHud").classList.add("hidden");
+  harness.element("shellFlashHud").classList.add("hidden");
+  assert.equal(harness.reloadSafe(), false);
+  harness.setUnlocked(false);
+  assert.equal(harness.reloadSafe(), true);
+});
+
+test("directions uses platform handlers and safely encodes the destination", () => {
+  const { harness } = propertySearchHarness();
+  const destination = "10 Oak Street & Main #2";
+  const fallback = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(destination);
+  assert.equal(harness.directions("iPhone", destination), "https://maps.apple.com/?daddr=" + encodeURIComponent(destination));
+  const android = harness.directions("Android", destination);
+  assert.ok(android.startsWith("intent:0,0?q=" + encodeURIComponent(destination) + "#Intent;"));
+  assert.ok(android.includes("S.browser_fallback_url=" + encodeURIComponent(fallback)));
+  assert.ok(!android.includes("package="));
+  assert.equal(harness.directions("Desktop", destination), fallback);
+});
+/* end[live_pwa_polish_tests] */

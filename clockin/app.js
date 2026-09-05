@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
 
 const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";
-const LIVE_BUILD_VERSION = "v252";
+const LIVE_BUILD_VERSION = "v253";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
@@ -83,7 +83,6 @@ const shellWorkHistoryContent = document.getElementById("shellWorkHistoryContent
 const shellWorkHistoryTotalValue = document.getElementById("shellWorkHistoryTotalValue");
 const relayPairingPanel = document.getElementById("relayPairingPanel");
 const relayPairingStatus = document.getElementById("relayPairingStatus");
-const relayPairedIndicator = document.getElementById("relayPairedIndicator");
 /* end[clockin_shell_dom_refs] */
 
 
@@ -250,6 +249,7 @@ function saveShellQueue_(queue) {
 }
 
 /* begin[clockin_live_entry_draft] */
+let shellEntryContext = "";
 function getShellEntryDraft_() {
   try {
     const raw = localStorage.getItem(SHELL_ENTRY_DRAFT_KEY);
@@ -273,10 +273,35 @@ function saveShellEntryDraft_() {
 }
 
 function clearShellEntryDraft_() {
+  shellEntryContext = "";
   localStorage.removeItem(SHELL_ENTRY_DRAFT_KEY);
 }
 
 function reconcileShellEntryDraft_(shellAuth) {
+  const shift = shellAuth && shellAuth.currentShift;
+  const context = JSON.stringify([
+    shellLoginGeneration,
+    String((shellAuth && shellAuth.cleanerName) || ""),
+    !!shift,
+    String((shift && shift.property) || ""),
+    Number((shift && shift.clockInMs) || 0),
+  ]);
+  const refreshedProperty = selectedOfflineProperty &&
+    findOfflinePropertyByName_(selectedOfflineProperty.name, shellAuth);
+
+  // A refresh of the same session must not reset typing, selection or notes.
+  // A changed shift, new login or explicit form reset still reconciles below.
+  if (shellUnlocked && shellEntryContext === context &&
+      (!selectedOfflineProperty || refreshedProperty)) {
+    if (refreshedProperty) {
+      selectedOfflineProperty = refreshedProperty;
+      fillOfflinePropertyInfo_(refreshedProperty);
+    }
+    updateOfflineActionOptions_(shellAuth);
+    updateOfflineGuidanceText_(shellAuth);
+    return;
+  }
+  shellEntryContext = context;
   const savedDraft = getShellEntryDraft_();
   const sameCleaner =
     savedDraft &&
@@ -356,7 +381,7 @@ function setOfflineReadyStatusText_(text) {
 
   const shellAuth = getShellAuth_() || {};
   if (shellAuth && shellAuth.cleanerName) {
-    offlineReadyText.textContent = "Welcome, " + shellAuth.cleanerName + ".";
+    offlineReadyText.textContent = "Welcome, " + String(shellAuth.cleanerName).trim().split(/\s+/)[0] + ".";
     return;
   }
 
@@ -574,6 +599,25 @@ function renderOfflineCurrentCleanStatus_(shellAuth) {
     'Started: ' + startedText + ' • <span class="offlineElapsedText">' + elapsedText + "</span>";
 }
 
+/* begin[offline_native_directions] */
+function getOfflineDirectionsUrl_(destination) {
+  const encoded = encodeURIComponent(destination);
+  const userAgent = String(navigator.userAgent || "");
+  const fallback = "https://www.google.com/maps/dir/?api=1&destination=" + encoded;
+  if (/Android/i.test(userAgent)) {
+    // No package restriction: let Android choose the user's map handler.
+    return "intent:0,0?q=" + encoded +
+      "#Intent;scheme=geo;action=android.intent.action.VIEW;S.browser_fallback_url=" +
+      encodeURIComponent(fallback) + ";end";
+  }
+  if (/iPhone|iPad|iPod/i.test(userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+    return "https://maps.apple.com/?daddr=" + encoded;
+  }
+  return fallback;
+}
+/* end[offline_native_directions] */
+
 function updateOfflineDirectionsButton_(prop) {
   if (!offlineDirectionsBtn) return;
 
@@ -586,7 +630,7 @@ function updateOfflineDirectionsButton_(prop) {
 
   offlineDirectionsBtn.setAttribute(
     "href",
-    "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(destination)
+    getOfflineDirectionsUrl_(destination)
   );
   offlineDirectionsBtn.classList.remove("hidden");
 }
@@ -753,7 +797,7 @@ function updateOfflineReadyText_(shellAuth) {
   }
 
   if (shellAuth && shellAuth.cleanerName) {
-    offlineReadyText.textContent = "Welcome, " + shellAuth.cleanerName + ".";
+    offlineReadyText.textContent = "Welcome, " + String(shellAuth.cleanerName).trim().split(/\s+/)[0] + ".";
     return;
   }
 
@@ -1117,16 +1161,10 @@ function updateRelayPairingUi_() {
   if (!relayPairingPanel) return;
   const relayEnabled = isLiveRelayEnabledForCleaner_();
   relayPairingPanel.classList.toggle("hidden", !relayEnabled);
-  if (relayPairedIndicator) {
-    relayPairedIndicator.classList.toggle("hidden", !relayEnabled);
-  }
   if (!relayEnabled) return;
   const state = getRelayState_();
   const paired = !!(state && state.pairedDeviceId);
   relayPairingPanel.classList.toggle("hidden", paired);
-  if (relayPairedIndicator) {
-    relayPairedIndicator.classList.toggle("hidden", !paired);
-  }
   if (getShellQueue_().length > 0) {
     setRelayPairingStatus_("Finish syncing saved entries before this phone can finish setup.");
     return;
@@ -3100,6 +3138,7 @@ function isLivePwaUpdateReloadSafe_() {
     (shellFlashHud && !shellFlashHud.classList.contains("hidden"));
 
   return !(
+    shellUnlocked ||
     shellPinUnlockInProgress ||
     shellBackgroundPinValidationInProgress ||
     shellPrepInProgress ||
