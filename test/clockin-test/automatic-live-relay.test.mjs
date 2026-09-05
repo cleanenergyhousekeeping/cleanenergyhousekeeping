@@ -220,7 +220,7 @@ test("TEST Wrangler settings remain unchanged", () => {
 test("Live build and service-worker cache versions agree", () => {
   const buildVersion = app.match(/const LIVE_BUILD_VERSION = "v(\d+)";/u)?.[1];
   const cacheVersion = serviceWorker.match(/const CACHE_NAME = "ce-clockin-shell-v(\d+)";/u)?.[1];
-  assert.equal(buildVersion, "253");
+  assert.equal(buildVersion, "254");
   assert.equal(cacheVersion, buildVersion);
 });
 

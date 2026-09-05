@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
 
 const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";
-const LIVE_BUILD_VERSION = "v253";
+const LIVE_BUILD_VERSION = "v254";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
@@ -969,7 +969,8 @@ function clearOfflinePropertySearch_() {
   offlinePropertySearch.value = "";
   handleOfflinePropertySearch_();
   saveShellEntryDraft_();
-  offlinePropertySearch.focus();
+  // Keep the field ready for typing without scrolling it into view.
+  offlinePropertySearch.focus({ preventScroll: true });
 }
 /* end[offline_property_clear] */
 
