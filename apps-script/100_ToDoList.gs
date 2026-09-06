@@ -1,5 +1,33 @@
 	/**
 	
+	SIRI / APPLE WATCH NOTE CAPTURE — TEST ONLY (2026-09-06)
+	
+	Status / experiment results:
+	• Throwaway Shortcut "Raven Note Test" built and physically tested on iPhone iOS 26.6.1 and Apple Watch watchOS 26.6 with active cellular. "Show on Apple Watch" enabled.
+	• Passed: Siri invocation on Apple Watch, dictated-text capture, HTTPS POST to httpbin, returned JSON display/parsing, extraction of returned request_id, spoken confirmation based on returned server data, readback of dictated note before send, and cancel preventing the POST branch from running.
+	• httpbin echo proves request/header transport only. It does NOT prove durable saving, authentication enforcement, exactly-once behavior, or what happened if a response was lost.
+	• Full hands-free spoken Yes/No confirmation was not proven; the Watch displayed the send/cancel menu. This is good enough for the throwaway experiment and is not a blocker for backend investigation.
+	• Cross-run failed-submission persistence/retry was intentionally NOT physically tested. The real design must not depend on temporary Shortcut variables preserving the original note, timestamp, or request ID across separate failed runs. Durable retry/request identity must be explicit in the TEST Siri/relay design.
+	
+	Agreed TEST-only design direction:
+	• Build Siri note intake as a specialized sibling to the existing TEST relay, reusing durability/security/delivery helpers where practical without changing PWA behavior or session lifecycle.
+	• Dedicated Siri credential: note-only authority, revocable, bound to cleaner identity server-side, approximately 90-day pilot expiry. Do not reuse cleaner PINs or PWA relay credentials. No property-information access and no clock-in/out authority.
+	• Shortcut should not send property details. Resolve the active property server-side from backend shift state.
+	• If clock-in/out state is still syncing and current property cannot be resolved safely, reject with a clear retry-shortly response rather than introducing complex cross-lane ordering.
+	• Preserve original note timestamp and cleaner identity. Keep request IDs/idempotency state in backend state, not visible spreadsheet/property cells.
+	• Cleaning note → current clean's existing Time Tracker note path. Existing transitional cleaning-note schema still needs formalization separately.
+	• Deep-clean note → append to the property's Deep Clean Items while preserving existing entries. Visible entry format should include timestamp, cleaner, and note, e.g. [2026-09-03 5:42 PM] Kyle Wescott — Clean upper kitchen cabinet interiors. Future report parsing is desirable but out of scope for initial Siri implementation.
+	• Property note → durable review/email path to Kyle for manual curation. Never automatically edit House Notes. Be explicit that ambiguous email outcomes cannot be promised as exactly-once delivery.
+	• Real cleaner-facing success text should be short and type-specific (for example: "Cleaning note saved", "Deep clean note saved", "Property note received"). Request IDs stay invisible to cleaners.
+	
+	Next step:
+	• Before any implementation, re-check current GitHub main, this to-do, and 99_ProjectSummary.gs as needed.
+	• Form the Triforce and give Blue Dude/Astra a tightly scoped READ-ONLY investigation. No edits, branch, PR, deployment, Live work, PWA behavior changes, refactors, unrelated fixes, or architecture expansion.
+	• Investigation should identify the smallest TEST-only Siri intake seam; exact relay helpers worth reusing; dedicated note-only authentication placement; durable intake/request-ID/original-timestamp handling; server-side cleaner binding; active-property resolution and shift-sync handling; routing for all three note types; exact files/functions that would change; and blockers/unresolved decisions.
+	• After reviewing that report, decide whether to authorize a TEST-only implementation PR.
+	• Once the backend contract is known, evaluate using Blue Dude Astra through iPhone Mirroring to build/polish the real Shortcut and make future Shortcut changes easier. Do not spend effort polishing the disposable Shortcut first.
+	
+	
 	•	Formalize cleaning-note storage. Right now add_note appends into the existing Clock Out Note column as a compatibility move, which works, but it is still a transitional schema.
 	
 	
