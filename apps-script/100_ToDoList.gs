@@ -1,31 +1,48 @@
 	/**
 	
-	SIRI / APPLE WATCH NOTE CAPTURE — TEST ONLY (2026-09-06)
+	SIRI / APPLE WATCH NOTE CAPTURE — TEST ONLY (updated 2026-09-06)
 	
 	Status / experiment results:
-	• Throwaway Shortcut "Raven Note Test" built and physically tested on iPhone iOS 26.6.1 and Apple Watch watchOS 26.6 with active cellular. "Show on Apple Watch" enabled.
+	• Throwaway Shortcut "Raven Note Test" was physically tested on iPhone iOS 26.6.1 and Apple Watch watchOS 26.6 with active cellular. "Show on Apple Watch" enabled.
 	• Passed: Siri invocation on Apple Watch, dictated-text capture, HTTPS POST to httpbin, returned JSON display/parsing, extraction of returned request_id, spoken confirmation based on returned server data, readback of dictated note before send, and cancel preventing the POST branch from running.
-	• httpbin echo proves request/header transport only. It does NOT prove durable saving, authentication enforcement, exactly-once behavior, or what happened if a response was lost.
-	• Full hands-free spoken Yes/No confirmation was not proven; the Watch displayed the send/cancel menu. This is good enough for the throwaway experiment and is not a blocker for backend investigation.
-	• Cross-run failed-submission persistence/retry was intentionally NOT physically tested. The real design must not depend on temporary Shortcut variables preserving the original note, timestamp, or request ID across separate failed runs. Durable retry/request identity must be explicit in the TEST Siri/relay design.
+	• httpbin echo proves request/header transport only. It does NOT prove durable backend saving, authentication enforcement, exactly-once behavior, or what happened if a response was lost.
+	• Full hands-free spoken Yes/No confirmation was not proven; the Watch displayed the send/cancel menu. This is good enough for the throwaway experiment and is not a blocker.
+	• Watch support is useful but secondary. iPhone is the primary target; basic Watch functionality is desirable, but do not spend significant time/credits on Watch-specific polish unless it comes naturally.
+	• iPhone cross-run persistence is now physically PROVEN. A disposable persistence probe saved request_id + captured_at + note_type + note to a fixed Shortcuts text file, ended, and a separate reader Shortcut recovered the exact same request ID, original timestamp, note type, and note unchanged in a later execution.
+	• This proves a later retry can preserve and resend the exact original request after an unknown-outcome/lost-response run. It does NOT yet prove the real CEH backend retry path, automatic success cleanup, or Watch compatibility with the persistence mechanism.
 	
-	Agreed TEST-only design direction:
-	• Build Siri note intake as a specialized sibling to the existing TEST relay, reusing durability/security/delivery helpers where practical without changing PWA behavior or session lifecycle.
+	Agreed TEST-only architecture direction:
+	• Build Siri note intake as a specialized sibling to the existing TEST relay, reusing durability/security/delivery helpers where practical without joining the PWA enrollment/session lifecycle.
 	• Dedicated Siri credential: note-only authority, revocable, bound to cleaner identity server-side, approximately 90-day pilot expiry. Do not reuse cleaner PINs or PWA relay credentials. No property-information access and no clock-in/out authority.
-	• Shortcut should not send property details. Resolve the active property server-side from backend shift state.
-	• If clock-in/out state is still syncing and current property cannot be resolved safely, reject with a clear retry-shortly response rather than introducing complex cross-lane ordering.
+	• Shortcut should not send property details.
+	• Preferred architecture to validate before implementation: authenticate Siri → durably accept the note into TEST D1 immediately → preserve immutable request ID/original timestamp → resolve/pin/apply the correct authoritative shift/property during idempotent Apps Script reconciliation once relevant shift state is available. Do not require property resolution before durable D1 acceptance unless current code proves that is safer/smaller.
+	• If an offline PWA clock-in/out still exists only on the phone, that event is inherently invisible to Worker/Apps Script. Do not invent global cross-lane ordering to hide this physical limitation. Keep the Siri note durable, wait/retry reconciliation, and guide the cleaner to open the CEH app so the phone can sync its queued shift event.
+	• Duplicate retry model: same request ID + same original payload returns the existing request/outcome; same request ID with changed content/time/type is a conflict. A timeout is an unknown outcome, not proof that the note failed.
 	• Preserve original note timestamp and cleaner identity. Keep request IDs/idempotency state in backend state, not visible spreadsheet/property cells.
 	• Cleaning note → current clean's existing Time Tracker note path. Existing transitional cleaning-note schema still needs formalization separately.
 	• Deep-clean note → append to the property's Deep Clean Items while preserving existing entries. Visible entry format should include timestamp, cleaner, and note, e.g. [2026-09-03 5:42 PM] Kyle Wescott — Clean upper kitchen cabinet interiors. Future report parsing is desirable but out of scope for initial Siri implementation.
 	• Property note → durable review/email path to Kyle for manual curation. Never automatically edit House Notes. Be explicit that ambiguous email outcomes cannot be promised as exactly-once delivery.
-	• Real cleaner-facing success text should be short and type-specific (for example: "Cleaning note saved", "Deep clean note saved", "Property note received"). Request IDs stay invisible to cleaners.
 	
-	Next step:
-	• Before any implementation, re-check current GitHub main, this to-do, and 99_ProjectSummary.gs as needed.
-	• Form the Triforce and give Blue Dude/Astra a tightly scoped READ-ONLY investigation. No edits, branch, PR, deployment, Live work, PWA behavior changes, refactors, unrelated fixes, or architecture expansion.
-	• Investigation should identify the smallest TEST-only Siri intake seam; exact relay helpers worth reusing; dedicated note-only authentication placement; durable intake/request-ID/original-timestamp handling; server-side cleaner binding; active-property resolution and shift-sync handling; routing for all three note types; exact files/functions that would change; and blockers/unresolved decisions.
-	• After reviewing that report, decide whether to authorize a TEST-only implementation PR.
-	• Once the backend contract is known, evaluate using Blue Dude Astra through iPhone Mirroring to build/polish the real Shortcut and make future Shortcut changes easier. Do not spend effort polishing the disposable Shortcut first.
+	Agreed cleaner-facing Siri wording / HUD behavior:
+	• Normal type-specific completion wording remains short: "Cleaning note saved", "Deep clean note saved", "Property note received". Request IDs stay invisible to cleaners.
+	• If Siri reaches Cloudflare but the cleaner's offline clock-in is still waiting on the phone, durably queue the note and say exactly: "Note queued. Your clock-in is still waiting to sync. Please open the Clean Energy app now to send your clock-in and this note."
+	• The Siri note should remain safely accepted while the cleaner opens the CEH app; the cleaner should not have to dictate the note again.
+	
+	Agreed TEST PWA relay-recovery polish:
+	• When the app is opened/focused, inspect local relay state before PIN entry.
+	• If there are NO locally queued PWA relay items, preserve today's fast local-first PIN/unlock behavior with no added network wait.
+	• If locally queued relay items DO exist and connectivity is available, sync them before allowing PIN entry. Temporarily disable/freeze the PIN keypad only for the actual queued-sync operation so the cleaner cannot enter the PIN while that recovery sync is in progress.
+	• Recovery HUD wording: show "Syncing queued items…" while the pre-PIN relay flush is running, then "All queued items synced." when the queued PWA items have been successfully delivered/accepted.
+	• Offline clock-in feedback should clearly distinguish clock-in from login/authentication. Preferred wording concept: "Clock-in saved. You're offline. It will sync when you reconnect."
+	• Terminology rule: log in = PIN authentication; clock in = begin shift; sync = deliver saved work. Avoid calling a queued clock-in a queued "login".
+	• The PWA does not need a Siri-specific "Siri note sent" HUD in v1. Keep the PWA recovery wording generic; after the phone's queued shift event syncs, the already-durable Siri note can reconcile independently.
+	• Treat this as TEST-only companion behavior first. Prefer a small separate TEST PWA PR from the Siri backend PR unless implementation review proves they must be coupled for safe validation. Any frontend PR must bump the TEST service-worker/cache version.
+	
+	Next Triforce step:
+	• Blue Dude should re-check current main/to-do/99_ProjectSummary and return a focused follow-up recommendation comparing the original pre-resolution design against the durable-accept-first design above.
+	• Blue Dude should identify the exact TEST PWA app-load/focus/visibility hook, relay queue state, PIN-lock mechanism, and existing HUD functions for the pre-PIN queued-sync behavior; no implementation until Raven/Kyle approve the plan.
+	• With iPhone persistence now proven, the main client persistence blocker is closed for an iPhone-first pilot. Do not spend another Astra session on the disposable probe. Astra remains useful later for constructing/polishing the real Shortcut after the backend contract is frozen.
+	• After Triforce review, authorize the smallest TEST-only Siri backend PR and, if still preferred, a separate small TEST PWA recovery/HUD PR. No Live changes until TEST is physically validated.
 	
 	
 	•	Formalize cleaning-note storage. Right now add_note appends into the existing Clock Out Note column as a compatibility move, which works, but it is still a transitional schema.
