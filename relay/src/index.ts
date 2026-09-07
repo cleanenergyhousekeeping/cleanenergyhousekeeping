@@ -1,3 +1,5 @@
+import { siriRequestResponse } from "./siri-request-service";
+import { runSiriDeliveryBatch } from "./siri-delivery-service";
 import {
   createCorsHeaders,
   isUnauthorizedOrigin,
@@ -199,10 +201,11 @@ export default {
 
     const corsHeaders = createCorsHeaders(origin);
 
+    const isSiri = url.pathname === "/v1/siri-notes" && env.CEH_RELAY_ENVIRONMENT === "test";
     const isHealth = url.pathname === HEALTH_PATH;
     const isSession = url.pathname === ENROLL_PATH || url.pathname === RENEW_PATH;
     const isEvent = url.pathname === EVENT_PATH;
-    if (!isHealth && !isSession && !isEvent) {
+    if (!isHealth && !isSession && !isEvent && !isSiri) {
       return notFoundResponse(corsHeaders);
     }
 
@@ -212,7 +215,7 @@ export default {
         : preflightResponse(
             request,
             ["POST"],
-            url.pathname === RENEW_PATH || isEvent
+            url.pathname === RENEW_PATH || isEvent || isSiri
               ? ["Content-Type", "Authorization"]
               : ["Content-Type"],
           );
@@ -228,6 +231,7 @@ export default {
     if (request.method !== "POST") {
       return methodNotAllowedResponse(corsHeaders, ["POST"]);
     }
+    if (isSiri) return siriRequestResponse(request, env, corsHeaders);
     if (isEvent) {
       return eventResponse(request, env, corsHeaders);
     }
@@ -242,8 +246,12 @@ export default {
       (async () => {
         try {
           const config = await loadRelayConfig(env);
-          const summary = await runDeliveryBatch(env.DB, config);
-          console.info(JSON.stringify({ event: "relay_delivery_batch", ...summary }));
+          try {
+            const summary = await runDeliveryBatch(env.DB, config);
+            console.info(JSON.stringify({ event: "relay_delivery_batch", ...summary }));
+          } finally {
+            if (config.environment === "test") await runSiriDeliveryBatch(env.DB, config);
+          }
         } catch (_) {
           console.error(JSON.stringify({ event: "relay_delivery_batch_failed" }));
           throw new Error("relay_delivery_batch_failed");

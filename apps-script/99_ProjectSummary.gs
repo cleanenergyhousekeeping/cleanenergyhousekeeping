@@ -140,6 +140,16 @@
  *   new installation ID and requires a new pairing.
  *
  * =====================================================
+ * TEST Siri backend implementation (not yet deployed):
+ * - Dedicated encrypted D1 requests and independent 90-day note-only credentials.
+ * - D1 acceptance is the saved receipt. Completed capture-time intervals alone
+ *   qualify for pinning; open shifts wait and ambiguous matches require review.
+ * - A separate Siri ledger recovers note appends and stores property review/email
+ *   outcomes. No PWA sessions, lanes, protected calculations, or Live rollout.
+ * - Frozen contract and operator setup: relay/SIRI_TEST.md. TEST deployment,
+ *   physical validation, PWA recovery, and the real Shortcut remain pending.
+ *
+ * =====================================================
  * 6. AUTHENTICATION AND ACCESS CONTROL
  * =====================================================
  *

@@ -159,7 +159,7 @@ describe("Wrangler D1 migrations", () => {
       await env.DB.prepare("SELECT COUNT(*) AS count FROM d1_migrations").first<{
         count: number;
       }>("count"),
-    ).toBe(1);
+    ).toBe(env.TEST_MIGRATIONS.length);
   });
 });
 
