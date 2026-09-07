@@ -12,6 +12,8 @@ const SECOND_HMAC_KEY = Buffer.alloc(32, 23);
 const SUBJECT_KEY = Buffer.alloc(32, 41);
 const PRODUCTION_HMAC_KEY = Buffer.alloc(32, 43);
 const PRODUCTION_SUBJECT_KEY = Buffer.alloc(32, 47);
+const TEST_REPLACEMENT_KEY = Buffer.alloc(32, 53);
+const TEST_SECOND_REPLACEMENT_KEY = Buffer.alloc(32, 59);
 const PRODUCTION_SPREADSHEET_ID = "1b1IVRl3GIxFWJM0x7J5RTGmHTl_yrzHqis0O7hdM-wc";
 const USER_ONE_ID = "8b3f6e44-580d-4dc4-b15d-f1c8821daf38";
 const USER_TWO_ID = "fe2f59f7-df89-40b2-9939-dcfd015ea58c";
@@ -275,6 +277,29 @@ function productionAdminProperties(enabled = "false") {
   };
 }
 
+function testRelayInstallerProperties(overrides = {}) {
+  return {
+    CEH_RELAY_ENABLED: "false",
+    CEH_RELAY_ENVIRONMENT: "test",
+    CEH_RELAY_EXPECTED_SPREADSHEET_ID: "test-spreadsheet-id",
+    CEH_RELAY_ACCEPTED_KEY_IDS: "test-v1,test-v2",
+    CEH_RELAY_HMAC_KEYS_JSON: JSON.stringify({
+      "test-v1": HMAC_KEY.toString("base64url"),
+      "test-v2": SECOND_HMAC_KEY.toString("base64url"),
+    }),
+    ce_session_preserve: "synthetic-session-value",
+    unrelated_property: "untouched",
+    ...overrides,
+  };
+}
+
+function validTestRelayHmacRingJson() {
+  return JSON.stringify({
+    "test-v1": TEST_REPLACEMENT_KEY.toString("base64url"),
+    "test-v2": TEST_SECOND_REPLACEMENT_KEY.toString("base64url"),
+  });
+}
+
 function createHarness(options = {}) {
   const spreadsheetId = options.spreadsheetId ?? "test-spreadsheet-id";
   const usersSheet = new FakeSheet(options.usersRows ?? defaultUsersRows());
@@ -438,6 +463,7 @@ function createHarness(options = {}) {
     "apps-script/51_RelayConfig.gs",
     "apps-script/52_RelaySecurity.gs",
     "apps-script/55_RelayAdminConfig.gs",
+    "apps-script/58_TestRelayHmacInstaller.gs",
     "apps-script/53_RelayLedger.gs",
     "apps-script/54_RelayService.gs",
     "apps-script/40_WebApp.gs",
@@ -452,12 +478,15 @@ function createHarness(options = {}) {
     doPost: doPost,
     handle: handleRelayWorkerRequest_,
     installProductionProperties: installProductionRelayPropertiesAdmin,
+    installTestHmacKeys: installTestRelayHmacKeysAdmin,
     enableProduction: enableProductionRelayAdmin,
     disableProduction: disableProductionRelayAdmin,
     loadConfig: loadRelayConfig_,
     loadConfigResult: loadRelayConfigResult_,
     reserveNonce: reserveRelayNonce_,
     showProductionPropertiesDialog: showProductionRelayPropertiesAdminDialog,
+    showTestHmacDialog: showTestRelayHmacInstallerAdminDialog,
+    testHmacMenuAvailable: isTestRelayHmacInstallerMenuAvailable_,
     verifyProductionProperties: verifyProductionRelayPropertiesAdmin,
     verify: verifyRelaySignedEnvelope_
   };`, context);
@@ -706,6 +735,248 @@ test("enabled production relay reports missing secrets as configuration failure"
     retryable: false,
   });
   assert.equal(JSON.stringify(result).includes("CEH_RELAY_HMAC_KEYS_JSON"), false);
+});
+
+test("TEST signing-ring installer writes only its one property and preserves unrelated properties", () => {
+  const hmacKeysJson = validTestRelayHmacRingJson();
+  const initial = testRelayInstallerProperties();
+  const harness = createHarness({
+    defaultConfig: false,
+    properties: initial,
+  });
+
+  const result = harness.api.installTestHmacKeys(hmacKeysJson);
+  const stored = harness.state.properties.getProperties();
+
+  assert.deepEqual({ ...result }, {
+    ok: true,
+    result: "installed",
+    property: "CEH_RELAY_HMAC_KEYS_JSON",
+  });
+  assert.deepEqual(harness.state.properties.setPropertyCalls, [{
+    key: "CEH_RELAY_HMAC_KEYS_JSON",
+    value: hmacKeysJson,
+  }]);
+  assert.deepEqual(harness.state.properties.setPropertiesCalls, []);
+  assert.equal(stored.CEH_RELAY_HMAC_KEYS_JSON, hmacKeysJson);
+  assert.equal(stored.ce_session_preserve, initial.ce_session_preserve);
+  assert.equal(stored.unrelated_property, initial.unrelated_property);
+  assert.equal(JSON.stringify(result).includes(hmacKeysJson), false);
+  assert.equal(JSON.stringify(result).includes(TEST_REPLACEMENT_KEY.toString("base64url")), false);
+});
+
+test("TEST signing-ring installer refuses the known Live spreadsheet", () => {
+  const hmacKeysJson = validTestRelayHmacRingJson();
+  const initial = testRelayInstallerProperties({
+    CEH_RELAY_EXPECTED_SPREADSHEET_ID: PRODUCTION_SPREADSHEET_ID,
+  });
+  const harness = createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: initial,
+  });
+
+  const result = harness.api.installTestHmacKeys(hmacKeysJson);
+
+  assert.deepEqual({ ...result }, { ok: false, result: "installation_failed" });
+  assert.deepEqual(harness.state.properties.getProperties(), initial);
+  assert.deepEqual(harness.state.properties.setPropertyCalls, []);
+  assert.deepEqual(harness.state.properties.setPropertiesCalls, []);
+  assert.equal(JSON.stringify(result).includes(hmacKeysJson), false);
+});
+
+test("TEST signing-ring installer refuses non-TEST environments", () => {
+  const initial = testRelayInstallerProperties({
+    CEH_RELAY_ENVIRONMENT: "production",
+  });
+  const harness = createHarness({
+    defaultConfig: false,
+    properties: initial,
+  });
+
+  const result = harness.api.installTestHmacKeys(validTestRelayHmacRingJson());
+
+  assert.deepEqual({ ...result }, { ok: false, result: "installation_failed" });
+  assert.deepEqual(harness.state.properties.getProperties(), initial);
+  assert.deepEqual(harness.state.properties.setPropertyCalls, []);
+});
+
+test("TEST signing-ring installer rejects malformed, missing, and invalid key material before any write", () => {
+  const validKey = TEST_REPLACEMENT_KEY.toString("base64url");
+  const invalidInputs = [
+    "not-json",
+    JSON.stringify({ "test-v1": validKey }),
+    JSON.stringify({
+      "test-v1": Buffer.alloc(31, 1).toString("base64url"),
+      "test-v2": validKey,
+    }),
+    JSON.stringify({
+      "test-v1": `${validKey}=`,
+      "test-v2": validKey,
+    }),
+    JSON.stringify({
+      "test-v1": validKey,
+      "test-v2": validKey,
+      "old-v1": "not-a-key",
+    }),
+  ];
+
+  invalidInputs.forEach((hmacKeysJson) => {
+    const initial = testRelayInstallerProperties();
+    const harness = createHarness({
+      defaultConfig: false,
+      properties: initial,
+    });
+
+    const result = harness.api.installTestHmacKeys(hmacKeysJson);
+
+    assert.deepEqual({ ...result }, { ok: false, result: "installation_failed" });
+    assert.deepEqual(harness.state.properties.getProperties(), initial);
+    assert.deepEqual(harness.state.properties.setPropertyCalls, []);
+    assert.deepEqual(harness.state.properties.setPropertiesCalls, []);
+    assert.equal(JSON.stringify(result).includes(hmacKeysJson), false);
+  });
+});
+
+test("TEST signing-ring installer rejects an accepted-key mismatch before any write", () => {
+  const hmacKeysJson = JSON.stringify({
+    "other-v1": TEST_REPLACEMENT_KEY.toString("base64url"),
+  });
+  const initial = testRelayInstallerProperties();
+  const harness = createHarness({
+    defaultConfig: false,
+    properties: initial,
+  });
+
+  const result = harness.api.installTestHmacKeys(hmacKeysJson);
+
+  assert.deepEqual({ ...result }, { ok: false, result: "installation_failed" });
+  assert.deepEqual(harness.state.properties.getProperties(), initial);
+  assert.deepEqual(harness.state.properties.setPropertyCalls, []);
+  assert.deepEqual(harness.state.properties.setPropertiesCalls, []);
+  assert.equal(JSON.stringify(result).includes(hmacKeysJson), false);
+});
+
+test("TEST signing-ring installer rejects an extra valid key ID before any write", () => {
+  const hmacKeysJson = JSON.stringify({
+    "test-v1": TEST_REPLACEMENT_KEY.toString("base64url"),
+    "test-v2": TEST_SECOND_REPLACEMENT_KEY.toString("base64url"),
+    "extra-valid-key": Buffer.alloc(32, 61).toString("base64url"),
+  });
+  const initial = testRelayInstallerProperties();
+  const harness = createHarness({
+    defaultConfig: false,
+    properties: initial,
+  });
+
+  const result = harness.api.installTestHmacKeys(hmacKeysJson);
+
+  assert.deepEqual({ ...result }, { ok: false, result: "installation_failed" });
+  assert.deepEqual(harness.state.properties.getProperties(), initial);
+  assert.deepEqual(harness.state.properties.setPropertyCalls, []);
+  assert.deepEqual(harness.state.properties.setPropertiesCalls, []);
+  assert.equal(JSON.stringify(result).includes(hmacKeysJson), false);
+});
+
+test("TEST signing-ring installer refuses missing or invalid relay configuration before any write", () => {
+  const missingAcceptedKeyIds = testRelayInstallerProperties();
+  delete missingAcceptedKeyIds.CEH_RELAY_ACCEPTED_KEY_IDS;
+  const invalidConfigurations = [
+    missingAcceptedKeyIds,
+    testRelayInstallerProperties({ CEH_RELAY_ACCEPTED_KEY_IDS: "" }),
+    testRelayInstallerProperties({ CEH_RELAY_ACCEPTED_KEY_IDS: "test-v1,test-v1" }),
+    testRelayInstallerProperties({ CEH_RELAY_ENVIRONMENT: "" }),
+  ];
+
+  invalidConfigurations.forEach((initial) => {
+    const harness = createHarness({
+      defaultConfig: false,
+      properties: initial,
+    });
+
+    const result = harness.api.installTestHmacKeys(validTestRelayHmacRingJson());
+
+    assert.deepEqual({ ...result }, { ok: false, result: "installation_failed" });
+    assert.deepEqual(harness.state.properties.getProperties(), initial);
+    assert.deepEqual(harness.state.properties.setPropertyCalls, []);
+  });
+});
+
+test("TEST signing-ring modal is guarded, password-only, and sanitized", () => {
+  const harness = createHarness({
+    defaultConfig: false,
+    properties: testRelayInstallerProperties(),
+  });
+
+  harness.api.showTestHmacDialog();
+
+  assert.deepEqual(harness.state.dialogCalls.map((call) => ({
+    filename: call.output.filename,
+    width: call.output.width,
+    height: call.output.height,
+    title: call.title,
+  })), [{
+    filename: "TestRelayHmacInstallerAdmin",
+    width: 560,
+    height: 420,
+    title: "Install TEST relay signing ring",
+  }]);
+  assert.deepEqual(harness.state.properties.setPropertyCalls, []);
+
+  const source = fs.readFileSync(
+    path.join(REPO_ROOT, "apps-script/TestRelayHmacInstallerAdmin.html"),
+    "utf8",
+  );
+  assert.equal(source.match(/type="password"/gu)?.length, 1);
+  assert.match(source, /autocomplete="new-password"/u);
+  assert.match(source, /google\.script\.run/u);
+  assert.match(source, /\.installTestRelayHmacKeysAdmin\(/u);
+  assert.match(source, /clearSecretField\(\);[\s\S]*hmacKeysJson = "";/u);
+  assert.doesNotMatch(
+    source,
+    /console\.|localStorage|sessionStorage|document\.cookie|innerHTML|fetch\s*\(/u,
+  );
+});
+
+test("TEST signing-ring modal refuses the known Live spreadsheet without writing", () => {
+  const harness = createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: testRelayInstallerProperties({
+      CEH_RELAY_EXPECTED_SPREADSHEET_ID: PRODUCTION_SPREADSHEET_ID,
+    }),
+  });
+
+  assert.throws(
+    () => harness.api.showTestHmacDialog(),
+    { message: "TEST relay signing-ring installation failed" },
+  );
+  assert.equal(harness.state.createdHtmlOutputs.length, 0);
+  assert.equal(harness.state.dialogCalls.length, 0);
+  assert.deepEqual(harness.state.properties.setPropertyCalls, []);
+});
+
+test("Relay Admin menu exposes the guarded TEST signing-ring installer", () => {
+  const source = fs.readFileSync(
+    path.join(REPO_ROOT, "apps-script/05_Menu.gs"),
+    "utf8",
+  );
+  assert.match(
+    source,
+    /if \(isTestRelayHmacInstallerMenuAvailable_\(\)\)[\s\S]*?"Install TEST relay signing ring",\s*"showTestRelayHmacInstallerAdminDialog"/u,
+  );
+
+  assert.equal(createHarness({
+    defaultConfig: false,
+    properties: testRelayInstallerProperties(),
+  }).api.testHmacMenuAvailable(), true);
+  assert.equal(createHarness({
+    defaultConfig: false,
+    spreadsheetId: PRODUCTION_SPREADSHEET_ID,
+    properties: testRelayInstallerProperties({
+      CEH_RELAY_EXPECTED_SPREADSHEET_ID: PRODUCTION_SPREADSHEET_ID,
+    }),
+  }).api.testHmacMenuAvailable(), false);
 });
 
 test("production property installer preserves sessions and returns no secret values", () => {

@@ -1,6 +1,33 @@
 /* begin[custom_menu_on_open] */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
+  const relayAdminMenu = ui.createMenu("Relay Admin");
+
+  if (isTestRelayHmacInstallerMenuAvailable_()) {
+    relayAdminMenu.addItem(
+      "Install TEST relay signing ring",
+      "showTestRelayHmacInstallerAdminDialog"
+    );
+  }
+
+  relayAdminMenu
+    .addItem(
+      "Install production relay properties (disabled)",
+      "showProductionRelayPropertiesAdminDialog"
+    )
+    .addItem(
+      "Verify production relay status",
+      "showProductionRelayStatusAdmin"
+    )
+    .addSeparator()
+    .addItem(
+      "Enable production relay",
+      "enableProductionRelayAdmin"
+    )
+    .addItem(
+      "Disable production relay",
+      "disableProductionRelayAdmin"
+    );
 
   ui.createMenu("Clean Energy")
     .addSubMenu(
@@ -32,26 +59,7 @@ function onOpen() {
     .addSeparator()
     .addItem("Open Properties", "openPropertiesSheet")
     .addItem("Open Users", "openUsersSheet")
-    .addSubMenu(
-      ui.createMenu("Relay Admin")
-        .addItem(
-          "Install production relay properties (disabled)",
-          "showProductionRelayPropertiesAdminDialog"
-        )
-        .addItem(
-          "Verify production relay status",
-          "showProductionRelayStatusAdmin"
-        )
-        .addSeparator()
-        .addItem(
-          "Enable production relay",
-          "enableProductionRelayAdmin"
-        )
-        .addItem(
-          "Disable production relay",
-          "disableProductionRelayAdmin"
-        )
-    )
+    .addSubMenu(relayAdminMenu)
     .addToUi();
 }
 /* end[custom_menu_on_open] */
