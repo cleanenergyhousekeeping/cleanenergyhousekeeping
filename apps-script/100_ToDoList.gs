@@ -30,6 +30,14 @@
 	• Deep-clean note → append to the property's Deep Clean Items while preserving existing entries. Visible entry format should include timestamp, cleaner, and note, e.g. [2026-09-03 5:42 PM] Kyle Wescott — Clean upper kitchen cabinet interiors. Future report parsing is desirable but out of scope for initial Siri implementation.
 	• Property note → durable review/email path to Kyle for manual curation. Never automatically edit House Notes. Be explicit that ambiguous email outcomes cannot be promised as exactly-once delivery.
 	
+	Post-Kyle-pilot Siri crew onboarding investigation:
+	• If Kyle's physical pilot proves Siri useful, investigate whether crew onboarding can be simplified to one shared note-only Siri credential plus a first-run dynamic cleaner picker.
+	• Preferred setup concept: shared Shortcut link → cleaner approves permissions → first run fetches current active cleaner names → cleaner selects their name once → Shortcut stores the corresponding stable User ID locally for later note/shift resolution.
+	• Do NOT use or store cleaner PINs as Siri identity. Keep PIN authentication separate from non-secret User ID selection.
+	• Evaluate the minimum safe read/setup endpoint needed for the dynamic cleaner list, whether the shared credential may authorize it, and whether exposing active cleaner names is acceptable.
+	• Evaluate accepted-risk tradeoffs before implementation: a holder of the shared note-only credential could submit bogus notes or claim another cleaner's User ID; one leaked/rotated shared credential would affect every installed crew Shortcut. Confirm that note-only authority remains unable to clock in/out or read property information.
+	• Compare this shared-credential approach against individual Siri credentials for onboarding effort, selective revocation, rotation/recovery, and long-term maintenance. No crew rollout or Live change until the Kyle-only TEST pilot is physically validated and this tradeoff is explicitly approved.
+	
 	Agreed cleaner-facing Siri wording / HUD behavior:
 	• Normal type-specific completion wording remains short: "Cleaning note saved", "Deep clean note saved", "Property note received". Request IDs stay invisible to cleaners.
 	• If Siri reaches Cloudflare but the cleaner's offline clock-in is still waiting on the phone, durably queue the note and say exactly: "Note queued. Please open the Clean Energy app now so any saved clock-in can sync."
