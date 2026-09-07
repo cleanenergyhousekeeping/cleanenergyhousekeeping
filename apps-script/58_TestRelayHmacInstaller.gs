@@ -60,10 +60,11 @@ function isValidTestRelayHmacRing_(hmacKeysJson, acceptedKeyIds) {
   }
 
   const suppliedKeyIds = Object.keys(parsed);
-  const acceptedKeysPresent = acceptedKeyIds.every(function (keyId) {
-    return Object.prototype.hasOwnProperty.call(parsed, keyId);
-  });
-  return acceptedKeysPresent && !!parseRelayHmacKeys_(
+  const acceptedKeySetMatches = suppliedKeyIds.length === acceptedKeyIds.length &&
+    acceptedKeyIds.every(function (keyId) {
+      return Object.prototype.hasOwnProperty.call(parsed, keyId);
+    });
+  return acceptedKeySetMatches && !!parseRelayHmacKeys_(
     hmacKeysJson,
     suppliedKeyIds
   );

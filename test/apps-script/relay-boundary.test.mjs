@@ -857,6 +857,27 @@ test("TEST signing-ring installer rejects an accepted-key mismatch before any wr
   assert.equal(JSON.stringify(result).includes(hmacKeysJson), false);
 });
 
+test("TEST signing-ring installer rejects an extra valid key ID before any write", () => {
+  const hmacKeysJson = JSON.stringify({
+    "test-v1": TEST_REPLACEMENT_KEY.toString("base64url"),
+    "test-v2": TEST_SECOND_REPLACEMENT_KEY.toString("base64url"),
+    "extra-valid-key": Buffer.alloc(32, 61).toString("base64url"),
+  });
+  const initial = testRelayInstallerProperties();
+  const harness = createHarness({
+    defaultConfig: false,
+    properties: initial,
+  });
+
+  const result = harness.api.installTestHmacKeys(hmacKeysJson);
+
+  assert.deepEqual({ ...result }, { ok: false, result: "installation_failed" });
+  assert.deepEqual(harness.state.properties.getProperties(), initial);
+  assert.deepEqual(harness.state.properties.setPropertyCalls, []);
+  assert.deepEqual(harness.state.properties.setPropertiesCalls, []);
+  assert.equal(JSON.stringify(result).includes(hmacKeysJson), false);
+});
+
 test("TEST signing-ring installer refuses missing or invalid relay configuration before any write", () => {
   const missingAcceptedKeyIds = testRelayInstallerProperties();
   delete missingAcceptedKeyIds.CEH_RELAY_ACCEPTED_KEY_IDS;
