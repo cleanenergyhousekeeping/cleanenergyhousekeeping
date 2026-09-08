@@ -136,7 +136,7 @@ it('distinguishes immutable payload failures using only fixed identifiers', asyn
     ['captured_at_canonical', { ...input, captured_at: '2026-02-30T17:42:00.000Z' }],
     ['note_type_type', { ...input, note_type: 123 }],
     ['note_type_value', { ...input, note_type: 'clock_out' }],
-    ['note_type', { ...input, note: 123 }],
+    ['note_value_type', { ...input, note: 123 }],
     ['note_blank', { ...input, note: ' \n\t' }],
     ['note_length', { ...input, note: 'x'.repeat(1001) }],
   ];
