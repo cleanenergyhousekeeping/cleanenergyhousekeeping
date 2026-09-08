@@ -9,8 +9,11 @@ import { digestSiriInput, hashSiriToken, siriContext, SIRI_SUBJECT_PATTERN, SIRI
 /* begin[siri_durable_intake] */
 const MESSAGES = { cleaning: 'Cleaning note saved', deep_clean: 'Deep clean note saved', property: 'Property note received' };
 
-function failure(error: string, status: number, headers?: HeadersInit): Response {
-  return jsonResponse({ ok: false, error, durable: status === 503 ? null : false, retryable: status === 503 }, status, headers);
+type InvalidRequestReason = 'content_type_or_length' | 'missing_body' | 'body_over_limit' | 'decode_or_json' | 'payload_validation';
+
+function failure(error: string, status: number, headers?: HeadersInit, reason?: InvalidRequestReason): Response {
+  return jsonResponse({ ok: false, error, durable: status === 503 ? null : false, retryable: status === 503,
+    ...(reason ? { reason } : {}) }, status, headers);
 }
 
 export async function acceptSiriRequest(request: Request, db: D1Database, config: RelayConfig,
@@ -22,17 +25,17 @@ export async function acceptSiriRequest(request: Request, db: D1Database, config
     const credential = await findSiriCredential(db, await hashSiriToken(token, config), nowMs);
     if (!credential || !SIRI_SUBJECT_PATTERN.test(credential.cleaner_subject)) return failure('authentication_failed', 401, headers);
     if (request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/json' ||
-        Number(request.headers.get('Content-Length') ?? 0) > 8192) return failure('invalid_request', 400, headers);
+        Number(request.headers.get('Content-Length') ?? 0) > 8192) return failure('invalid_request', 400, headers, 'content_type_or_length');
     // Bound actual bytes, including chunked requests, before parsing or allocating an unbounded body.
     const reader = request.body?.getReader();
-    if (!reader) return failure('invalid_request', 400, headers);
+    if (!reader) return failure('invalid_request', 400, headers, 'missing_body');
     const chunks: Uint8Array[] = [];
     let size = 0;
     while (true) {
       const chunk = await reader.read();
       if (chunk.done) break;
       size += chunk.value.byteLength;
-      if (size > 8192) { await reader.cancel(); return failure('invalid_request', 400, headers); }
+      if (size > 8192) { await reader.cancel(); return failure('invalid_request', 400, headers, 'body_over_limit'); }
       chunks.push(chunk.value);
     }
     const bytes = new Uint8Array(size);
@@ -40,8 +43,8 @@ export async function acceptSiriRequest(request: Request, db: D1Database, config
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
     let input;
     try { input = validateSiriInput(JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes))); }
-    catch (_) { return failure('invalid_request', 400, headers); }
-    if (!input) return failure('invalid_request', 400, headers);
+    catch (_) { return failure('invalid_request', 400, headers, 'decode_or_json'); }
+    if (!input) return failure('invalid_request', 400, headers, 'payload_validation');
     const digest = await digestSiriInput(input, credential.cleaner_subject, config);
     const key = config.payloadEncryptionKeys.get(config.payloadActiveKeyVersion);
     if (!key) return failure('temporarily_unavailable', 503, headers);
