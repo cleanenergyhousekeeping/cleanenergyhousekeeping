@@ -91,6 +91,38 @@ it('rejects invalid dates, note types, additional identity fields, blank notes, 
   expect(await getSiriRequest(env.DB, input.request_id)).toBeNull();
 });
 
+it('returns only fixed diagnostics for each invalid-request branch after authentication', async () => {
+  const f = await fixture();
+  const cases: { reason: string; body?: BodyInit; headers?: Record<string, string> }[] = [
+    { reason: 'content_type_or_length', body: JSON.stringify(input), headers: { 'Content-Type': 'text/plain' } },
+    { reason: 'content_type_or_length', body: JSON.stringify(input), headers: { 'Content-Length': '8193' } },
+    { reason: 'missing_body' },
+    { reason: 'body_over_limit', body: new ReadableStream<Uint8Array>({ start(controller) {
+      controller.enqueue(new Uint8Array(8193)); controller.close();
+    } }) },
+    { reason: 'decode_or_json', body: new Uint8Array([0xff]) },
+    { reason: 'decode_or_json', body: '{' },
+    { reason: 'payload_validation', body: JSON.stringify({ ...input, cleanerSubject: SUBJECT }) },
+  ];
+  for (const testCase of cases) {
+    const makeRequest = (token: string) => new Request('https://relay.test/v1/siri-notes', {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...testCase.headers },
+      body: testCase.body,
+    });
+    const unauthorized = await acceptSiriRequest(makeRequest(''), env.DB, f.config, undefined, NOW);
+    expect(unauthorized.status).toBe(401);
+    expect(await unauthorized.json()).toEqual({ ok: false, error: 'authentication_failed', durable: false, retryable: false });
+    const response = await acceptSiriRequest(makeRequest(f.token), env.DB, f.config, undefined, NOW);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ ok: false, error: 'invalid_request', durable: false, retryable: false, reason: testCase.reason });
+  }
+  expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM siri_requests').first('n')).toBe(0);
+  const production = await acceptSiriRequest(request(f.token, {}), env.DB,
+    { ...f.config, environment: 'production' }, undefined, NOW);
+  expect(production.status).toBe(404);
+  expect(await production.json()).toEqual({ ok: false, error: 'not_found', durable: false, retryable: false });
+});
+
 it('routes TEST-only POST and disables Siri intake and delivery in production', async () => {
   const f = await fixture();
   expect((await worker.fetch(request(f.token) as Parameters<typeof worker.fetch>[0], f.runtime)).status).toBe(202);

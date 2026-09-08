@@ -9,6 +9,10 @@
 	• Approved recovery wording: "Note queued. Please open the Clean Energy app now so any saved clock-in can sync."
 	• Remaining: Raven review, separately authorized TEST deployment/migration and physical validation, then TEST PWA recovery and real iPhone Shortcut. No Live rollout authorized.
 
+	TEST Siri intake diagnostic follow-up (2026-09-07):
+	• Direct POST accepted the supplied payload (202); physical Shortcut still returns 400. TEST tail confirmed POST/application-json and a small advertised body, but cannot expose the failing validation branch.
+	• Temporary fixed invalid_request reason identifiers are prepared for review; no request data or logging added. Pending Raven review, separately authorized TEST deployment, one physical retry, and removal/reassessment of diagnostics after the cause is established. No Live change.
+
 	Status / experiment results:
 	• Throwaway Shortcut "Raven Note Test" was physically tested on iPhone iOS 26.6.1 and Apple Watch watchOS 26.6 with active cellular. "Show on Apple Watch" enabled.
 	• Passed: Siri invocation on Apple Watch, dictated-text capture, HTTPS POST to httpbin, returned JSON display/parsing, extraction of returned request_id, spoken confirmation based on returned server data, readback of dictated note before send, and cancel preventing the POST branch from running.
