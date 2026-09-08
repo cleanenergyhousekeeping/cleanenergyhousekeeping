@@ -1,26 +1,42 @@
 	/**
 	
-	SIRI / APPLE WATCH NOTE CAPTURE — TEST ONLY (updated 2026-09-06)
+	SIRI / APPLE WATCH NOTE CAPTURE — TEST ONLY (updated 2026-09-07)
 	
-	Backend implementation status (2026-09-06):
-	• First TEST-only backend implementation is in review; NOT deployed. See relay/SIRI_TEST.md for the frozen v1 contract, operator setup, recovery semantics, and test commands.
-	• Approved revision: definite durable D1 acceptance counts as saved and permits Shortcut local-pending cleanup. Spreadsheet application may occur later.
-	• Approved revision: never pin an open shift. Resolve only exactly one completed interval containing original captured_at; ambiguous identity/property/intervals are held for review.
-	• Approved recovery wording: "Note queued. Please open the Clean Energy app now so any saved clock-in can sync."
-	• Remaining: Raven review, separately authorized TEST deployment/migration and physical validation, then TEST PWA recovery and real iPhone Shortcut. No Live rollout authorized.
+	Backend / physical validation status (2026-09-07):
+	• TEST-only Siri backend is merged, deployed, and physically validated for a real cleaning-note flow. PR #87 added the durable Siri backend; PR #88 added the TEST relay signing-ring installer. No Live rollout authorized.
+	• Kyle's dedicated TEST Siri credential is issued and working. It is note-only, revocable, cleaner-bound server-side, approximately 90-day pilot scope, and cannot clock in/out or read property information.
+	• Frozen v1 request contract remains exactly four client fields: request_id, captured_at, note_type, note. Shortcut does not send property, cleaner identity, PIN, session, or device identifiers.
+	• Definite durable D1 acceptance counts as saved and permits Shortcut local-pending cleanup. Spreadsheet application may occur later.
+	• Never pin an open shift. Resolve only exactly one completed interval containing original captured_at; ambiguous identity/property/intervals are held for review.
+	• Recovery wording remains: "Note queued. Please open the Clean Energy app now so any saved clock-in can sync."
 
-	TEST Siri intake diagnostic follow-up (2026-09-07):
-	• Direct POST accepted the supplied payload (202); physical Shortcut still returns 400. TEST tail confirmed POST/application-json and a small advertised body, but cannot expose the failing validation branch.
-	• After PR #90 TEST deployment, physical retry returned payload_validation. One final fixed field-level diagnostic is pending Raven review and separately authorized TEST deployment/physical retry; no request values or logging added. Remove/reassess temporary diagnostics after diagnosis. No Live change.
+	Physical TEST milestone (2026-09-07):
+	• Real iPhone Shortcut "CEH Cleaning Note TEST" reached the TEST Worker with the real credential and received ok:true, environment:"test", durable:true, state:"accepted", client_action:"clear_pending", message:"Cleaning note saved".
+	• After Kyle clocked out of the TEST shift, the accepted cleaning note reconciled to the correct completed TEST Time Tracker row and appeared in Clock Out Note exactly once.
+	• An earlier independently accepted direct diagnostic Siri request also reconciled after clock-out. This physically demonstrated that multiple durable Siri notes can wait while the shift is open and later apply after a unique completed capture-time interval exists.
+	• Initial physical Shortcut failures were caused by one leading space before "ceh-" in the Shortcut request-ID Text action. The Worker correctly rejected it as request_id_format. Removing the space fixed the client request; no backend contract relaxation was needed.
+	• Direct authenticated POST using the Shortcut credential also returned HTTP 202/durable:true with the same valid payload contract, confirming credential + Worker + payload behavior independently of Shortcuts.
+
+	Temporary TEST diagnostics (PRs #90 and #91):
+	• PR #90 added fixed, non-sensitive invalid_request reason identifiers; PR #91 refined payload validation to fixed field-level reasons. No request values, credentials, headers, note contents, or cleaner identity are logged or returned.
+	• Physical diagnostics narrowed the failing Shortcut request from payload_validation to request_id_format, which exposed the leading-space client bug.
+	• These diagnostics remain temporarily deployed in TEST. Remove/reassess them after the real Shortcut retry/cleanup behavior is finished and physically validated. No Live change.
+
+	Real Shortcut persistence / remaining client work:
+	• Real Shortcut now persists request_id, captured_at, note_type, and note before POST using four separate files under Shortcuts/CEH Siri Pending. Physical read-back proved the saved values are current and correct; stale Files-app previews were only display caching.
+	• Earlier disposable iPhone probe physically proved cross-run recovery of an unchanged request ID, original timestamp, note type, and note.
+	• Real CEH Shortcut still needs startup detection/reuse of an existing pending request after timeout/unknown outcome; it must retry the exact original request instead of generating a new ID/timestamp.
+	• Real CEH Shortcut still needs strict success validation before deleting pending state: HTTP success + ok:true + environment:"test" + matching request_id + durable:true + client_action:"clear_pending".
+	• Pending-state deletion and final cleaner-facing spoken success are not yet wired/physically proven in the real Shortcut.
+	• Four-file persistence is sequential. Before declaring retry-safe, use the smallest reliable commit/ready marker or equivalent guard so a crash during writes cannot make a later run treat mixed partial state as a complete pending request.
+	• Do not rerun the completed durable request as a new note merely to test UI. Next client work should focus on exact retry/cleanup semantics.
 
 	Status / experiment results:
 	• Throwaway Shortcut "Raven Note Test" was physically tested on iPhone iOS 26.6.1 and Apple Watch watchOS 26.6 with active cellular. "Show on Apple Watch" enabled.
 	• Passed: Siri invocation on Apple Watch, dictated-text capture, HTTPS POST to httpbin, returned JSON display/parsing, extraction of returned request_id, spoken confirmation based on returned server data, readback of dictated note before send, and cancel preventing the POST branch from running.
-	• httpbin echo proves request/header transport only. It does NOT prove durable backend saving, authentication enforcement, exactly-once behavior, or what happened if a response was lost.
 	• Full hands-free spoken Yes/No confirmation was not proven; the Watch displayed the send/cancel menu. This is good enough for the throwaway experiment and is not a blocker.
 	• Watch support is useful but secondary. iPhone is the primary target; basic Watch functionality is desirable, but do not spend significant time/credits on Watch-specific polish unless it comes naturally.
-	• iPhone cross-run persistence is now physically PROVEN. A disposable persistence probe saved request_id + captured_at + note_type + note to a fixed Shortcuts text file, ended, and a separate reader Shortcut recovered the exact same request ID, original timestamp, note type, and note unchanged in a later execution.
-	• This proves a later retry can preserve and resend the exact original request after an unknown-outcome/lost-response run. It does NOT yet prove the real CEH backend retry path, automatic success cleanup, or Watch compatibility with the persistence mechanism.
+	• iPhone cross-run persistence is physically proven in the disposable probe; the real Shortcut's exact retry and cleanup path remains unfinished as noted above.
 	
 	Agreed TEST-only architecture direction:
 	• Build Siri note intake as a specialized sibling to the existing TEST relay, reusing durability/security/delivery helpers where practical without joining the PWA enrollment/session lifecycle.
@@ -58,10 +74,12 @@
 	• Treat this as TEST-only companion behavior first. Prefer a small separate TEST PWA PR from the Siri backend PR unless implementation review proves they must be coupled for safe validation. Any frontend PR must bump the TEST service-worker/cache version.
 	
 	Next Triforce step:
-	• Blue Dude completed the current-source architecture investigation; durable acceptance first and completed-interval-only pinning are approved for the first TEST backend PR.
-	• TEST PWA recovery seams are identified. That separate frontend PR remains unimplemented and needs its own authorization.
-	• With iPhone persistence now proven, the main client persistence blocker is closed for an iPhone-first pilot. Do not spend another Astra session on the disposable probe. Astra remains useful later for constructing/polishing the real Shortcut after the backend contract is frozen.
-	• After Triforce review, authorize the smallest TEST-only Siri backend PR and, if still preferred, a separate small TEST PWA recovery/HUD PR. No Live changes until TEST is physically validated.
+	• Resume the real iPhone Shortcut from its now-working durable cleaning-note POST.
+	• Finish real pending-request semantics: detect/reuse existing pending state across runs, guard against partial four-file writes, validate the exact success contract, delete pending only after definite durable success, and preserve the exact original request on timeout/unknown outcome.
+	• Physically prove one exact retry of the same request ID/payload after an unknown-outcome simulation, then prove successful pending cleanup without creating a duplicate spreadsheet note.
+	• After client retry/cleanup is proven, remove/reassess the temporary TEST diagnostic reason fields in a small cleanup PR.
+	• Deep-clean and property-note physical paths still need separate validation after the cleaning-note client is complete.
+	• TEST PWA recovery seams are identified; the separate frontend PR remains unimplemented and should stay separate unless needed for the offline queued-shift scenario. No Live changes until TEST pilot validation is complete.
 	
 	
 	•	Formalize cleaning-note storage. Right now add_note appends into the existing Clock Out Note column as a compatibility move, which works, but it is still a transitional schema.
