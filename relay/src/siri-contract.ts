@@ -25,15 +25,26 @@ export const SIRI_TOKEN_PATTERN = /^siri_[A-Za-z0-9_-]{43}$/u;
 export const SIRI_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
 export const SIRI_WAIT_MESSAGE = 'Note queued. Please open the Clean Energy app now so any saved clock-in can sync.';
 
-export function validateSiriInput(value: unknown): SiriInput | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+export type SiriInputReason = 'object' | 'keys' | 'request_id_type' | 'request_id_format' |
+  'captured_at_type' | 'captured_at_format' | 'captured_at_parse' | 'captured_at_canonical' |
+  'note_type_type' | 'note_type_value' | 'note_type' | 'note_blank' | 'note_length';
+
+export function validateSiriInput(value: unknown, onInvalid?: (reason: SiriInputReason) => void): SiriInput | null {
+  const reject = (reason: SiriInputReason): null => { onInvalid?.(reason); return null; };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return reject('object');
   const v = value as Record<string, unknown>;
-  if (Object.keys(v).sort().join(',') !== 'captured_at,note,note_type,request_id' ||
-      typeof v.request_id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/u.test(v.request_id) ||
-      typeof v.captured_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(v.captured_at) ||
-      !Number.isFinite(Date.parse(v.captured_at)) || new Date(v.captured_at).toISOString() !== v.captured_at ||
-      typeof v.note_type !== 'string' || !SIRI_TYPES.includes(v.note_type as SiriNoteType) ||
-      typeof v.note !== 'string' || !v.note.trim() || Array.from(v.note).length > 1000) return null;
+  if (Object.keys(v).sort().join(',') !== 'captured_at,note,note_type,request_id') return reject('keys');
+  if (typeof v.request_id !== 'string') return reject('request_id_type');
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/u.test(v.request_id)) return reject('request_id_format');
+  if (typeof v.captured_at !== 'string') return reject('captured_at_type');
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(v.captured_at)) return reject('captured_at_format');
+  if (!Number.isFinite(Date.parse(v.captured_at))) return reject('captured_at_parse');
+  if (new Date(v.captured_at).toISOString() !== v.captured_at) return reject('captured_at_canonical');
+  if (typeof v.note_type !== 'string') return reject('note_type_type');
+  if (!SIRI_TYPES.includes(v.note_type as SiriNoteType)) return reject('note_type_value');
+  if (typeof v.note !== 'string') return reject('note_type');
+  if (!v.note.trim()) return reject('note_blank');
+  if (Array.from(v.note).length > 1000) return reject('note_length');
   return v as unknown as SiriInput;
 }
 
