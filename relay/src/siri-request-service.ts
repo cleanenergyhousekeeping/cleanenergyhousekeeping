@@ -4,12 +4,12 @@ import { encryptJson, stringsEqualConstantTime } from './crypto';
 import { jsonResponse } from './responses';
 import { findSiriCredential, insertSiriRequest } from './persistence/siri';
 import { digestSiriInput, hashSiriToken, siriContext, SIRI_SUBJECT_PATTERN, SIRI_TOKEN_PATTERN,
-  SIRI_WAIT_MESSAGE, validateSiriInput } from './siri-contract';
+  SIRI_WAIT_MESSAGE, validateSiriInput, type SiriInputReason } from './siri-contract';
 
 /* begin[siri_durable_intake] */
 const MESSAGES = { cleaning: 'Cleaning note saved', deep_clean: 'Deep clean note saved', property: 'Property note received' };
 
-type InvalidRequestReason = 'content_type_or_length' | 'missing_body' | 'body_over_limit' | 'decode_or_json' | 'payload_validation';
+type InvalidRequestReason = 'content_type_or_length' | 'missing_body' | 'body_over_limit' | 'decode_or_json' | 'payload_validation' | SiriInputReason;
 
 function failure(error: string, status: number, headers?: HeadersInit, reason?: InvalidRequestReason): Response {
   return jsonResponse({ ok: false, error, durable: status === 503 ? null : false, retryable: status === 503,
@@ -42,9 +42,10 @@ export async function acceptSiriRequest(request: Request, db: D1Database, config
     let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
     let input;
-    try { input = validateSiriInput(JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes))); }
+    let inputReason: InvalidRequestReason = 'payload_validation';
+    try { input = validateSiriInput(JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes)), reason => { inputReason = reason; }); }
     catch (_) { return failure('invalid_request', 400, headers, 'decode_or_json'); }
-    if (!input) return failure('invalid_request', 400, headers, 'payload_validation');
+    if (!input) return failure('invalid_request', 400, headers, inputReason);
     const digest = await digestSiriInput(input, credential.cleaner_subject, config);
     const key = config.payloadEncryptionKeys.get(config.payloadActiveKeyVersion);
     if (!key) return failure('temporarily_unavailable', 503, headers);

@@ -102,7 +102,7 @@ it('returns only fixed diagnostics for each invalid-request branch after authent
     } }) },
     { reason: 'decode_or_json', body: new Uint8Array([0xff]) },
     { reason: 'decode_or_json', body: '{' },
-    { reason: 'payload_validation', body: JSON.stringify({ ...input, cleanerSubject: SUBJECT }) },
+    { reason: 'keys', body: JSON.stringify({ ...input, cleanerSubject: SUBJECT }) },
   ];
   for (const testCase of cases) {
     const makeRequest = (token: string) => new Request('https://relay.test/v1/siri-notes', {
@@ -121,6 +121,38 @@ it('returns only fixed diagnostics for each invalid-request branch after authent
     { ...f.config, environment: 'production' }, undefined, NOW);
   expect(production.status).toBe(404);
   expect(await production.json()).toEqual({ ok: false, error: 'not_found', durable: false, retryable: false });
+});
+
+it('distinguishes immutable payload failures using only fixed identifiers', async () => {
+  const f = await fixture();
+  const cases: [string, unknown][] = [
+    ['object', null], ['object', []], ['object', 'text'],
+    ['keys', {}], ['keys', { ...input, extra: 'private' }],
+    ['request_id_type', { ...input, request_id: 123 }],
+    ['request_id_format', { ...input, request_id: 'short' }],
+    ['captured_at_type', { ...input, captured_at: 123 }],
+    ['captured_at_format', { ...input, captured_at: '2026-09-03T17:42:00Z' }],
+    ['captured_at_parse', { ...input, captured_at: '2026-13-03T17:42:00.000Z' }],
+    ['captured_at_canonical', { ...input, captured_at: '2026-02-30T17:42:00.000Z' }],
+    ['note_type_type', { ...input, note_type: 123 }],
+    ['note_type_value', { ...input, note_type: 'clock_out' }],
+    ['note_value_type', { ...input, note: 123 }],
+    ['note_blank', { ...input, note: ' \n\t' }],
+    ['note_length', { ...input, note: 'x'.repeat(1001) }],
+  ];
+  for (const [reason, payload] of cases) {
+    const response = await acceptSiriRequest(request(f.token, payload), env.DB, f.config, undefined, NOW);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ ok: false, error: 'invalid_request', durable: false, retryable: false, reason });
+  }
+  expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM siri_requests').first('n')).toBe(0);
+  // Code-point length and immutable whitespace are preserved at the accepted boundary.
+  const valid = { ...input, note: '😀'.repeat(998) + '  ' };
+  const accepted = await acceptSiriRequest(request(f.token, valid), env.DB, f.config, undefined, NOW);
+  expect(accepted.status).toBe(202);
+  const row = (await getSiriRequest(env.DB, input.request_id))!;
+  expect(await decryptJson({ ciphertext: row.payload_ciphertext, nonce: row.payload_nonce, keyVersion: row.encryption_key_version },
+    f.config.payloadEncryptionKeys, siriContext('payload', input.request_id))).toEqual(valid);
 });
 
 it('routes TEST-only POST and disables Siri intake and delivery in production', async () => {

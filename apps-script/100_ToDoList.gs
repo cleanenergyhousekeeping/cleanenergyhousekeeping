@@ -11,7 +11,7 @@
 
 	TEST Siri intake diagnostic follow-up (2026-09-07):
 	• Direct POST accepted the supplied payload (202); physical Shortcut still returns 400. TEST tail confirmed POST/application-json and a small advertised body, but cannot expose the failing validation branch.
-	• Temporary fixed invalid_request reason identifiers are prepared for review; no request data or logging added. Pending Raven review, separately authorized TEST deployment, one physical retry, and removal/reassessment of diagnostics after the cause is established. No Live change.
+	• After PR #90 TEST deployment, physical retry returned payload_validation. One final fixed field-level diagnostic is pending Raven review and separately authorized TEST deployment/physical retry; no request values or logging added. Remove/reassess temporary diagnostics after diagnosis. No Live change.
 
 	Status / experiment results:
 	• Throwaway Shortcut "Raven Note Test" was physically tested on iPhone iOS 26.6.1 and Apple Watch watchOS 26.6 with active cellular. "Show on Apple Watch" enabled.
