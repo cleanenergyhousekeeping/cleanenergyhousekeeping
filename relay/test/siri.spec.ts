@@ -1,3 +1,4 @@
+import { getSiriShiftStatus } from '../src/siri-status-service';
 import { env } from 'cloudflare:test';
 import { beforeEach, expect, it, vi } from 'vitest';
 import worker from '../src/index';
@@ -212,5 +213,78 @@ it('corrupted payloads never reach Apps and malformed success never completes', 
   await runSiriDeliveryBatch(env.DB, f.config, { now: () => NOW + 60_000, callApps });
   expect(callApps).not.toHaveBeenCalled();
   expect((await getSiriRequest(env.DB, input.request_id))!.state).toBe('needs_review');
+});
+it('preflight authenticates the existing credential and signs only its bound identity', async () => {
+  const f = await fixture();
+  for (const state of ['active_shift', 'no_active_shift']) {
+    const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
+      const envelope = JSON.parse(String(init?.body));
+      const signed = JSON.parse(atob(envelope.signedBody.replace(/-/g, '+').replace(/_/g, '/')));
+      expect(signed.operation).toBe('siri_shift_status');
+      expect(signed.environment).toBe('test');
+      expect(signed.payload).toEqual({ cleanerSubject: SUBJECT });
+      expect(envelope.signature).toBeTruthy();
+      return Response.json({ ok: true, operation: 'siri_shift_status', result: state, retryable: false,
+        data: { property: 'Secret property', cleanerName: 'Private cleaner', pin: '1234' } });
+    });
+    const response = await getSiriShiftStatus(request(f.token), env.DB, f.config, undefined, { nowMs: NOW, fetchImpl });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(await response.json()).toEqual({ state });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  }
+  expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM siri_requests').first('n')).toBe(0);
+});
+
+it('preflight rejects invalid, expired, revoked and PWA credentials before Apps calls', async () => {
+  const f = await fixture();
+  const fetchImpl = vi.fn<typeof fetch>();
+  for (const token of ['', 'siri_' + 'Z'.repeat(43), generateSecureId('relay', 32)]) {
+    expect((await getSiriShiftStatus(request(token), env.DB, f.config, undefined, { nowMs: NOW, fetchImpl })).status).toBe(401);
+  }
+  expect((await getSiriShiftStatus(request(f.token), env.DB, f.config, undefined,
+    { nowMs: NOW + SIRI_LIFETIME_MS, fetchImpl })).status).toBe(401);
+  await env.DB.prepare('UPDATE siri_credentials SET revoked_at_ms = ?').bind(NOW).run();
+  expect((await getSiriShiftStatus(request(f.token), env.DB, f.config, undefined, { nowMs: NOW, fetchImpl })).status).toBe(401);
+  expect(fetchImpl).not.toHaveBeenCalled();
+});
+
+it('preflight never manufactures active state on upstream or protocol failure', async () => {
+  const f = await fixture();
+  const replies = [
+    () => { throw new Error('Private infrastructure detail'); },
+    () => new Response('Unavailable', { status: 503 }),
+    () => new Response('not JSON'),
+    () => Response.json({ state: 'active_shift' }),
+    ...[
+      { ok: false }, { retryable: true }, { operation: 'reconcile_siri_note' }, { result: 'unknown' },
+    ].map(change => () => Response.json({ ok: true, retryable: false, operation: 'siri_shift_status', result: 'active_shift', ...change })),
+  ];
+  for (const reply of replies) {
+    const response = await getSiriShiftStatus(request(f.token), env.DB, f.config, undefined,
+      { nowMs: NOW, fetchImpl: async () => reply() });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'temporarily_unavailable' });
+  }
+});
+
+it('routes preflight as TEST-only GET with authenticated OPTIONS support', async () => {
+  const f = await fixture();
+  const req = (method = 'GET') => new Request('https://relay.test/v1/siri-shift-status', { method }) as Parameters<typeof worker.fetch>[0];
+  expect((await worker.fetch(req(), { ...f.runtime, CEH_RELAY_ENVIRONMENT: 'production' } as unknown as Env)).status).toBe(404);
+  const preflight = new Request('https://relay.test/v1/siri-shift-status', { method: 'OPTIONS',
+    headers: { Origin: 'https://www.cleanenergyhousekeeping.com', 'Access-Control-Request-Method': 'GET',
+      'Access-Control-Request-Headers': 'authorization' } }) as Parameters<typeof worker.fetch>[0];
+  expect((await worker.fetch(preflight, f.runtime)).status).toBe(204);
+  const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(
+    { ok: true, operation: 'siri_shift_status', result: 'active_shift', retryable: false }));
+  try {
+    const authenticated = new Request('https://relay.test/v1/siri-shift-status',
+      { headers: { Authorization: `Bearer ${f.token}` } }) as Parameters<typeof worker.fetch>[0];
+    expect(await (await worker.fetch(authenticated, f.runtime)).json()).toEqual({ state: 'active_shift' });
+  } finally { fetchSpy.mockRestore(); }
+  expect((await worker.fetch(req('POST'), f.runtime)).status).toBe(405);
+  expect((await worker.fetch(req(), f.runtime)).status).toBe(401);
+  expect((await getSiriShiftStatus(req(), env.DB, { ...f.config, environment: 'production' })).status).toBe(404);
 });
 /* end[siri_worker_tests] */

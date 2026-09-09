@@ -2,6 +2,10 @@
 function validateSiriOperation_(config, operation, payload) {
   if (!siriTestEnabled_(config) || !payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   const keys = Object.keys(payload).sort().join(",");
+  if (operation === "siri_shift_status") {
+    return keys === "cleanerSubject" && typeof payload.cleanerSubject === "string" &&
+      /^cehusr_v1_[A-Za-z0-9_-]{43}$/.test(payload.cleanerSubject) ? payload : null;
+  }
   if (operation === "resolve_siri_cleaner") {
     if (keys !== "cleanerName" || typeof payload.cleanerName !== "string" ||
         !payload.cleanerName.trim() || payload.cleanerName.length > 500) return null;
@@ -172,3 +176,33 @@ function processSiriNote_(config, operation, payload, nowMs) {
   return siriResult_(operation, record);
 }
 /* end[siri_test_service] */
+
+/* begin[siri_active_shift_preflight] */
+function processSiriShiftStatus_(config, operation, payload, nowMs) {
+  if (!siriTestEnabled_(config)) return buildRelayFailure_(operation, "invalid_event", false);
+  const cleaner = resolveSiriCleaner_(config, null, payload.cleanerSubject);
+  if (!cleaner) return buildRelayResult_(operation, true, "no_active_shift", false);
+  const table = readSiriTable_(config, TIME_SHEET_NAME, ["Name", "Property", "Clock In", "Clock Out"]);
+  const idx = table.indexes;
+  let openCount = 0;
+  let invalid = false;
+  table.rows.forEach(function (row) {
+    if (safeStr_(row[idx.Name]) !== cleaner.name) return;
+    const start = coerceToDate_(row[idx["Clock In"]]);
+    const rawEnd = row[idx["Clock Out"]];
+    const end = coerceToDate_(rawEnd);
+    // Malformed rows cannot hide a second open shift or prove a valid interval.
+    if (!start || !Number.isFinite(start.getTime()) ||
+        (rawEnd !== "" && rawEnd != null && !end) ||
+        (end && (!Number.isFinite(end.getTime()) || end.getTime() < start.getTime()))) {
+      invalid = true;
+      return;
+    }
+    if (end) return;
+    openCount++;
+    if (start.getTime() > nowMs || !safeStr_(row[idx.Property])) invalid = true;
+  });
+  return buildRelayResult_(operation, true,
+    !invalid && openCount === 1 ? "active_shift" : "no_active_shift", false);
+}
+/* end[siri_active_shift_preflight] */

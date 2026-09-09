@@ -329,7 +329,7 @@ function handleRelayWorkerRequest_(outerBody) {
     }
 
     const siriOperation = verified.request.operation === "resolve_siri_cleaner" ||
-      verified.request.operation === "reconcile_siri_note";
+      verified.request.operation === "reconcile_siri_note" || verified.request.operation === "siri_shift_status";
     const siriPayload = siriOperation ? validateSiriOperation_(config, verified.request.operation, verified.request.payload) : null;
     const validated = siriOperation
       ? (siriPayload ? { ok: true, payload: siriPayload } : buildRelayFailure_(verified.request.operation, "invalid_event", false))
@@ -359,6 +359,7 @@ function handleRelayWorkerRequest_(outerBody) {
         );
       }
 
+      if (operation === "siri_shift_status") return processSiriShiftStatus_(config, operation, validated.payload, nowMs);
       if (siriOperation) return processSiriNote_(config, operation, validated.payload, nowMs);
       if (operation === "validate_session") {
         return processRelaySessionValidation_(

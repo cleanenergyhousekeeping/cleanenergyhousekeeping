@@ -11,7 +11,7 @@ export const APPS_SCRIPT_TIMEOUT_MS = 45_000;
 const MAX_RESPONSE_BYTES = 16_384;
 const MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1_000;
 
-export type AppsOperation = "validate_session" | "submit_event" | "resolve_siri_cleaner" | "reconcile_siri_note";
+export type AppsOperation = "validate_session" | "submit_event" | "resolve_siri_cleaner" | "reconcile_siri_note" | "siri_shift_status";
 
 export interface AppsRelayResponse {
   ok: boolean;
