@@ -211,7 +211,7 @@ test('preflight counts exactly one valid synced open shift and returns no sensit
     [[['Cleaner One', '', START, '', '']], 'no_active_shift'],
     [[['Cleaner One', 'Property A', new Date('2099-01-01'), '', '']], 'no_active_shift'],
     [[open, ['Cleaner One', 'Property A', 'invalid', '', '']], 'no_active_shift'],
-    [[open, ['Cleaner One', 'Property A', START, 'invalid', '']], 'no_active_shift'],
+    [[open, ['Cleaner One', 'Property A', START, 'invalid', '']], 'active_shift'],
   ]) {
     const h = harness({ shifts });
     const before = JSON.stringify(h.tracker.rows);
@@ -219,6 +219,28 @@ test('preflight counts exactly one valid synced open shift and returns no sensit
       { ok: true, operation: 'siri_shift_status', result: expected, retryable: false });
     assert.equal(JSON.stringify(h.tracker.rows), before);
     assert.equal(h.sheets.has('Siri Note Ledger'), false);
+  }
+});
+
+test('preflight ignores malformed closed history but fails closed for malformed open rows', () => {
+  const open = ['Cleaner One', 'Property A', START, '', ''];
+  const closedRows = [
+    ['Cleaner One', '', 'invalid', END, ''],
+    ['Cleaner One', '', END, START, ''],
+    ['Cleaner One', '', 'invalid', 'invalid', ''],
+    ['Cleaner One', '', 'invalid', ' ', ''],
+  ];
+  for (const closed of closedRows) {
+    const h = harness({ shifts: [open, closed] });
+    assert.equal(h.send({ cleanerSubject: h.input.cleanerSubject }, 'siri_shift_status').result, 'active_shift');
+  }
+  for (const blankOut of ['', null, false, 0]) {
+    for (const [property, start] of [
+      ['Property A', 'invalid'], ['Property A', ''], ['Property A', new Date('2099-01-01')], ['', START],
+    ]) {
+      const h = harness({ shifts: [open, ['Cleaner One', property, start, blankOut, '']] });
+      assert.equal(h.send({ cleanerSubject: h.input.cleanerSubject }, 'siri_shift_status').result, 'no_active_shift');
+    }
   }
 });
 

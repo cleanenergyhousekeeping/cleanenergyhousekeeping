@@ -86,7 +86,7 @@
 	
 	TEST preflight implementation (2026-09-09; awaiting PR review/deployment):
 	• GET /v1/siri-shift-status reuses the cleaner-bound Siri credential and signed Apps Script boundary. Successful responses contain only state: active_shift / no_active_shift; authentication and infrastructure failures return fixed HTTP errors without an active state.
-	• Exactly one valid open Time Tracker row is required. Multiple, malformed, future-start, or property-less open rows fail closed. This is a point-in-time check; phone-only queued clock-ins remain invisible.
+	• Exactly one valid open Time Tracker row is required. Rows with a present Clock Out are excluded before validation, matching Time Tracker presence semantics; malformed closed history cannot block preflight. Multiple, malformed, future-start, or property-less open rows fail closed. This is a point-in-time check; phone-only queued clock-ins remain invisible.
 	• No deployment or physical Shortcut edits in this implementation task. Raven/Kyle still need actual-diff review, TEST deployment and both physical preflight outcomes before wrap-up; update 99_ProjectSummary.gs after those tests pass.
 
 	Next Triforce step (before Kyle field pilot):

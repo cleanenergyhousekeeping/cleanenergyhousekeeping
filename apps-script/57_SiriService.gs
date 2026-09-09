@@ -188,19 +188,15 @@ function processSiriShiftStatus_(config, operation, payload, nowMs) {
   let invalid = false;
   table.rows.forEach(function (row) {
     if (safeStr_(row[idx.Name]) !== cleaner.name) return;
+    // Match Time Tracker's raw Clock Out presence check before validating open rows.
+    if (row[idx["Clock Out"]]) return;
     const start = coerceToDate_(row[idx["Clock In"]]);
-    const rawEnd = row[idx["Clock Out"]];
-    const end = coerceToDate_(rawEnd);
-    // Malformed rows cannot hide a second open shift or prove a valid interval.
-    if (!start || !Number.isFinite(start.getTime()) ||
-        (rawEnd !== "" && rawEnd != null && !end) ||
-        (end && (!Number.isFinite(end.getTime()) || end.getTime() < start.getTime()))) {
+    if (!start || !Number.isFinite(start.getTime()) || start.getTime() > nowMs ||
+        !safeStr_(row[idx.Property])) {
       invalid = true;
       return;
     }
-    if (end) return;
     openCount++;
-    if (start.getTime() > nowMs || !safeStr_(row[idx.Property])) invalid = true;
   });
   return buildRelayResult_(operation, true,
     !invalid && openCount === 1 ? "active_shift" : "no_active_shift", false);
