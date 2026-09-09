@@ -2,77 +2,54 @@
 	
 	SIRI / APPLE WATCH NOTE CAPTURE — TEST ONLY (updated 2026-09-09)
 	
-	Backend / physical validation status (2026-09-07):
-	• TEST-only Siri backend is merged, deployed, and physically validated for a real cleaning-note flow. PR #87 added the durable Siri backend; PR #88 added the TEST relay signing-ring installer. No Live rollout authorized.
-	• Kyle's dedicated TEST Siri credential is issued and working. It is note-only, revocable, cleaner-bound server-side, approximately 90-day pilot scope, and cannot clock in/out or read property information.
-	• Frozen v1 request contract remains exactly four client fields: request_id, captured_at, note_type, note. Shortcut does not send property, cleaner identity, PIN, session, or device identifiers.
-	• Definite durable D1 acceptance counts as saved and permits Shortcut local-pending cleanup. Spreadsheet application may occur later.
-	• Never pin an open shift. Resolve only exactly one completed interval containing original captured_at; ambiguous identity/property/intervals are held for review.
-	• Recovery wording remains: "Note queued. Please open the Clean Energy app now so any saved clock-in can sync."
-
-	Physical TEST milestone (2026-09-07):
-	• Real iPhone Shortcut "CEH Cleaning Note TEST" reached the TEST Worker with the real credential and received ok:true, environment:"test", durable:true, state:"accepted", client_action:"clear_pending", message:"Cleaning note saved".
-	• After Kyle clocked out of the TEST shift, the accepted cleaning note reconciled to the correct completed TEST Time Tracker row and appeared in Clock Out Note exactly once.
-	• An earlier independently accepted direct diagnostic Siri request also reconciled after clock-out. This physically demonstrated that multiple durable Siri notes can wait while the shift is open and later apply after a unique completed capture-time interval exists.
-	• Initial physical Shortcut failures were caused by one leading space before "ceh-" in the Shortcut request-ID Text action. The Worker correctly rejected it as request_id_format. Removing the space fixed the client request; no backend contract relaxation was needed.
-	• Direct authenticated POST using the Shortcut credential also returned HTTP 202/durable:true with the same valid payload contract, confirming credential + Worker + payload behavior independently of Shortcuts.
-
-	Physical TEST milestone (2026-09-09):
-	• Full top-to-bottom screenshot reconstruction of the real iPhone Shortcut found the remaining client-side blockers without changing the Worker request contract.
-	• Environment extraction produced no Dictionary Value until the environment key was manually deleted and retyped. This was consistent with an invisible/extra-character or whitespace problem in the Shortcut text field; the exact hidden character was not independently proven.
-	• Cleanup actions had also been auto-wired to prior Text/File Magic Variables instead of the Shortcuts directory. All four Get File actions were corrected to read independently from Shortcuts/CEH Siri Pending/.
-	• iOS Shortcuts delete authorization was set to allow deleting without confirmation. A clean run now has no diagnostic Quick Looks, no delete prompts, no cleanup error, silently removes request_id.txt, captured_at.txt, note_type.txt, and note.txt, and ends with Siri saying "Cleaning note saved."
-	• The pending folder was physically confirmed empty after success. Fresh queued cleaning notes were also observed appearing in the correct TEST Time Tracker flow after clock-out, closing the end-to-end TEST loop again after cleanup changes.
-	• The current Shortcut still contains harmless temporary outer "go" scaffolding from Boolean/If debugging. Do not risk structural surgery during the Kyle-only pilot unless needed; the working validation/cleanup path is more important than cosmetic cleanup.
-	• Dictation can clip the first word if Kyle starts speaking immediately after Siri's prompt. Accepted pilot workaround: pause briefly before dictating. UX polish is deferred.
-	• Kyle pilot scope is now CLEANING NOTE ONLY. Do not duplicate/build the deep-clean or property-note Shortcuts before the field pilot. Their backend destinations already exist, but their real Shortcut paths remain physically untested.
-
-	Temporary TEST diagnostics (PRs #90 and #91):
-	• PR #90 added fixed, non-sensitive invalid_request reason identifiers; PR #91 refined payload validation to fixed field-level reasons. No request values, credentials, headers, note contents, or cleaner identity are logged or returned.
-	• Physical diagnostics narrowed the failing Shortcut request from payload_validation to request_id_format, which exposed the leading-space client bug.
-	• These diagnostics remain temporarily deployed in TEST. Reassess/remove them after the Kyle-only cleaning-note pilot and before any Live/crew rollout. No Live change.
-
-	Real Shortcut persistence / current pilot limits:
-	• Real Shortcut persists request_id, captured_at, note_type, and note before POST using four separate files under Shortcuts/CEH Siri Pending. Physical read-back proved the saved values are current and correct; stale Files-app previews were only display caching.
-	• Definite-success cleanup is now physically proven: the working validation chain reached cleanup on the expected TEST success response, deletes all four pending files, and speaks "Cleaning note saved." The current pilot does not depend on the earlier unreliable ok Boolean comparison.
-	• Earlier disposable iPhone probe physically proved cross-run recovery of an unchanged request ID, original timestamp, note type, and note, but the real Shortcut still does not automatically detect/reuse an existing pending request after timeout/unknown outcome.
-	• Full automatic exact-retry hardening and a commit/ready marker for the four sequential pending-file writes are deliberately deferred for the Kyle-only field pilot. Occasional duplicate notes are an accepted pilot risk because Kyle will manually review/edit notes and Siri notes are not yet the sole source of truth for critical information.
-	• Before any crew rollout, revisit exact retry of the identical request ID/payload after timeout/unknown outcome and guard against partial four-file state. Do not generate a new ID/timestamp merely to bypass an uncertain prior request.
-
-	Status / experiment results:
-	• Throwaway Shortcut "Raven Note Test" was physically tested on iPhone iOS 26.6.1 and Apple Watch watchOS 26.6 with active cellular. "Show on Apple Watch" enabled.
-	• Passed: Siri invocation on Apple Watch, dictated-text capture, HTTPS POST to httpbin, returned JSON display/parsing, extraction of returned request_id, spoken confirmation based on returned server data, readback of dictated note before send, and cancel preventing the POST branch from running.
-	• Full hands-free spoken Yes/No confirmation was not proven; the Watch displayed the send/cancel menu. This is good enough for the throwaway experiment and is not a blocker.
-	• Watch support is useful but secondary. iPhone is the primary target; basic Watch functionality is desirable, but do not spend significant time/credits on Watch-specific polish unless it comes naturally.
-	• iPhone cross-run persistence is physically proven in the disposable probe; real-Shortcut success validation and cleanup are now physically proven, while automatic exact-retry/partial-write hardening remains deliberately deferred for the Kyle-only pilot.
+	Current TEST pilot status:
+	• TEST-only Siri cleaning-note backend is merged, deployed, and physically validated. PR #87 added durable Siri note intake/reconciliation; PR #88 added the TEST relay signing-ring installer; PR #94 added the active-synced-shift preflight. No Live Siri rollout is authorized.
+	• TEST Apps Script was pushed from merged main and the TEST web-app deployment advanced to version 4 for the preflight work. The matching TEST Worker was deployed as ceh-relay-test against ceh-relay-test-db and verified with /health returning environment:test/storage:ok.
+	• Kyle's dedicated TEST Siri credential is working. It is note-only, revocable, cleaner-bound server-side, approximately 90-day pilot scope, and cannot clock in/out or read property information.
+	• Frozen note POST contract remains exactly four client fields: request_id, captured_at, note_type, note. Shortcut does not send property, cleaner identity, PIN, PWA session, or device identifiers.
+	• D1 durable acceptance counts as "saved" for Shortcut cleanup; spreadsheet reconciliation may occur later after a unique completed capture-time interval can be resolved.
+	• GET /v1/siri-shift-status is deployed TEST-only and uses the same cleaner-bound Siri credential plus the signed Apps Script boundary. Successful responses expose only active_shift / no_active_shift.
+	• Preflight allows dictation only when exactly one valid open synced Time Tracker row exists. Rows with a present Clock Out are excluded before validation; malformed closed history cannot block preflight. Multiple, malformed, future-start, or property-less open rows fail closed. Phone-only queued PWA clock-ins remain invisible until they sync.
 	
-	Agreed TEST-only architecture direction:
-	• Build Siri note intake as a specialized sibling to the existing TEST relay, reusing durability/security/delivery helpers where practical without joining the PWA enrollment/session lifecycle.
-	• Dedicated Siri credential: note-only authority, revocable, bound to cleaner identity server-side, approximately 90-day pilot expiry. Do not reuse cleaner PINs or PWA relay credentials. No property-information access and no clock-in/out authority.
-	• Shortcut should not send property details.
-	• Preferred architecture to validate before implementation: authenticate Siri → durably accept the note into TEST D1 immediately → preserve immutable request ID/original timestamp → resolve/pin/apply the correct completed authoritative shift/property during idempotent Apps Script reconciliation once a unique capture-time interval is available. Do not require property resolution before durable D1 acceptance unless current code proves that is safer/smaller.
-	• If an offline PWA clock-in/out still exists only on the phone, that event is inherently invisible to Worker/Apps Script. Do not invent global cross-lane ordering to hide this physical limitation. Keep the Siri note durable, wait/retry reconciliation, and guide the cleaner to open the CEH app so the phone can sync its queued shift event.
-	• Duplicate retry model: same request ID + same original payload returns the existing request/outcome; same request ID with changed content/time/type is a conflict. A timeout is an unknown outcome, not proof that the note failed.
-	• Preserve original note timestamp and cleaner identity. Keep request IDs/idempotency state in backend state, not visible spreadsheet/property cells.
+	Current Shortcut / physical validation:
+	• Working Shortcut is now named "Add a Clean Energy Note" for Siri invocation and remains CLEANING NOTE ONLY for the Kyle pilot.
+	• The Shortcut says "Checking your Clean Energy shift." before the network preflight so the user gets immediate feedback during the pause.
+	• Physical Test A passed: with no active synced TEST shift, Siri says "I can't find an active Clean Energy shift. Please open the Clean Energy app." and stops before dictation/submission.
+	• Physical Test B passed: with an active synced TEST shift, dictation/readback continued into the existing POST flow, backend durable success was validated, Siri said "Cleaning note saved", and all four pending files were deleted. After TEST clock-out, the note reconciled through the correct TEST Time Tracker flow.
+	• The prior Send/Cancel menu has been removed. After Siri reads the dictated note back, the pilot Shortcut sends automatically. A follow-up smoke test confirmed the menu is gone.
+	• During preflight integration, Shortcuts silently rebound downstream blue "Contents of URL" Magic Variables from the note POST to the new preflight GET. The affected post-submit response checks were relinked to POST /v1/siri-notes and the repaired flow then passed Test B. Treat duplicate/moved Get Contents of URL actions as a known Shortcuts-editor hazard.
+	• Prefer the Mac Shortcuts app / Blue Dude for future structural Shortcut edits. The iPhone editor is easy to reorder accidentally while scrolling and Magic Variable bindings are difficult to audit there.
+	• Existing harmless outer "go" scaffolding from earlier Boolean/If debugging may remain during the Kyle-only pilot; do not risk cosmetic structural surgery unless it becomes operationally necessary.
+	• Dictation can clip the first word if Kyle speaks immediately after Siri's prompt. Current workaround: pause briefly before dictating.
+	
+	Real Shortcut persistence / pilot limits:
+	• Real Shortcut persists request_id, captured_at, note_type, and note before POST using four files under Shortcuts/CEH Siri Pending/. Definite validated durable success deletes all four and speaks "Cleaning note saved."
+	• Earlier disposable testing proved cross-run persistence of an unchanged request ID/original timestamp/type/note, but the real Shortcut still does not automatically detect/reuse an existing pending request after timeout or unknown outcome.
+	• Full exact-retry hardening and a commit/ready marker for the four sequential pending-file writes remain deliberately deferred for the Kyle-only field pilot. Before any crew rollout, retry must preserve the identical request ID/payload after timeout/unknown outcome and safely handle partial four-file state.
+	• Temporary TEST diagnostics from PRs #90/#91 remain deployed. Reassess/remove them after the Kyle-only pilot and before any Live/crew rollout. They return only fixed non-sensitive validation reasons and must never expose credentials, note contents, cleaner identity, or property data.
+	• Offline caveat remains physical: a PWA clock-in saved only on the phone is invisible to the Siri preflight until the app syncs. Current fail-safe wording intentionally tells the cleaner to open the Clean Energy app.
+	
+	Kyle field pilot — next step:
+	• Use only "Add a Clean Energy Note" in the field for about one week. Reassess usefulness, duplicates, missed notes, dictation clipping, response latency, exact-retry priority, and whether the workflow is actually easier than opening the app.
+	• After the field test, decide whether the success speech should include the property name, e.g. "Cleaning note saved for [property]". This would reinforce that the note is tied to a real clean, but it is NOT merely a wording change: the current Siri credential has no property-read authority. Any implementation must explicitly review the smallest safe server-returned display value and preserve the no-broad-property-read boundary.
+	• Deep-clean and property-note backend destinations already exist, but do not build/duplicate their real Shortcuts until after the Kyle pilot. If the pilot is useful, build each as a separate small follow-up and physically validate it.
+	• Reassess the deferred TEST PWA pre-PIN queued-sync recovery after the pilot. If local queued PWA shift events exist and connectivity is available, syncing them before PIN entry may improve Siri/preflight reliability, but it remains a separate frontend task with its own TEST cache-version bump.
+	• No Live Siri promotion, crew rollout, or production credential work until the Kyle pilot is reviewed and explicitly approved.
+	
+	Post-Kyle-pilot crew onboarding investigation:
+	• If Siri proves useful, compare individual Siri credentials against a simplified shared note-only setup with first-run cleaner selection. Do not use/store cleaner PINs as Siri identity.
+	• A shared-credential design would reduce onboarding friction but weakens selective revocation and could let a credential holder submit bogus notes or claim another cleaner's User ID. Explicitly review this tradeoff before implementation.
+	• If a dynamic cleaner picker is pursued, expose only the minimum safe setup data needed and keep note-only authority unable to clock in/out or read property information.
+	
+	Siri architecture / security invariants to preserve:
+	• Dedicated Siri credential remains separate from PINs and PWA relay credentials; server resolves cleaner identity.
+	• Duplicate retry model remains same request ID + same original payload = existing request/outcome; same ID with changed content/time/type = conflict. Timeout is an unknown outcome, not proof of failure.
+	• Preserve original captured_at and cleaner identity. Keep request IDs/idempotency state server-side, not visible spreadsheet/property cells.
 	• Cleaning note → current clean's existing Time Tracker note path. Existing transitional cleaning-note schema still needs formalization separately.
-	• Deep-clean note → append to the property's Deep Clean Items while preserving existing entries. Visible entry format should include timestamp, cleaner, and note, e.g. [2026-09-03 5:42 PM] Kyle Wescott — Clean upper kitchen cabinet interiors. Future report parsing is desirable but out of scope for initial Siri implementation.
-	• Property note → durable review/email path to Kyle for manual curation. Never automatically edit House Notes. Be explicit that ambiguous email outcomes cannot be promised as exactly-once delivery.
-	
-	Post-Kyle-pilot Siri crew onboarding investigation:
-	• If Kyle's physical pilot proves Siri useful, investigate whether crew onboarding can be simplified to one shared note-only Siri credential plus a first-run dynamic cleaner picker.
-	• Preferred setup concept: shared Shortcut link → cleaner approves permissions → first run fetches current active cleaner names → cleaner selects their name once → Shortcut stores the corresponding stable User ID locally for later note/shift resolution.
-	• Do NOT use or store cleaner PINs as Siri identity. Keep PIN authentication separate from non-secret User ID selection.
-	• Evaluate the minimum safe read/setup endpoint needed for the dynamic cleaner list, whether the shared credential may authorize it, and whether exposing active cleaner names is acceptable.
-	• Evaluate accepted-risk tradeoffs before implementation: a holder of the shared note-only credential could submit bogus notes or claim another cleaner's User ID; one leaked/rotated shared credential would affect every installed crew Shortcut. Confirm that note-only authority remains unable to clock in/out or read property information.
-	• Compare this shared-credential approach against individual Siri credentials for onboarding effort, selective revocation, rotation/recovery, and long-term maintenance. No crew rollout or Live change until the Kyle-only TEST pilot is physically validated and this tradeoff is explicitly approved.
-	
-	Agreed cleaner-facing Siri wording / HUD behavior:
-	• Normal type-specific completion wording remains short: "Cleaning note saved", "Deep clean note saved", "Property note received". Request IDs stay invisible to cleaners.
-	• If Siri reaches Cloudflare but the cleaner's offline clock-in is still waiting on the phone, durably queue the note and say exactly: "Note queued. Please open the Clean Energy app now so any saved clock-in can sync."
-	• The Siri note should remain safely accepted while the cleaner opens the CEH app; the cleaner should not have to dictate the note again.
-	• Before the Kyle field pilot, add a small TEST-only active-synced-shift preflight for the cleaning-note Shortcut. If no active synced shift can be found, preferred truthful wording is: "I can't find an active Clean Energy shift. Please open the Clean Energy app." Then stop the Shortcut before dictation/submission.
-	• Preflight must return a simple non-sensitive STRING state such as active_shift / no_active_shift; avoid Boolean comparisons in Shortcuts. It must not expose property information, PINs, sessions, credentials, or broader read access.
-	• Offline caveat: a PWA clock-in still queued only on the phone is invisible to Worker/Apps Script, so preflight may report no active synced shift until the app syncs. This is expected and should fail safely.
+	• Deep-clean note → append timestamped cleaner/task entry to Deep Clean Items while preserving existing entries.
+	• Property note → durable review/email path to Kyle for manual curation; never auto-edit House Notes and never promise exactly-once email when outcome is ambiguous.
+	• Normal type-specific completion wording stays short unless later deliberately changed: "Cleaning note saved", "Deep clean note saved", "Property note received". Request IDs stay invisible.
+	• If Siri has already durably accepted a note but a phone-only queued shift is still waiting to sync, recovery wording remains: "Note queued. Please open the Clean Energy app now so any saved clock-in can sync."
 	
 	Agreed TEST PWA relay-recovery polish:
 	• When the app is opened/focused, inspect local relay state before PIN entry.
@@ -82,21 +59,7 @@
 	• Offline clock-in feedback should clearly distinguish clock-in from login/authentication. Preferred wording concept: "Clock-in saved. You're offline. It will sync when you reconnect."
 	• Terminology rule: log in = PIN authentication; clock in = begin shift; sync = deliver saved work. Avoid calling a queued clock-in a queued "login".
 	• The PWA does not need a Siri-specific "Siri note sent" HUD in v1. Keep the PWA recovery wording generic; after the phone's queued shift event syncs, the already-durable Siri note can reconcile independently.
-	• Treat this as TEST-only companion behavior first. Prefer a small separate TEST PWA PR from the Siri backend PR unless implementation review proves they must be coupled for safe validation. Any frontend PR must bump the TEST service-worker/cache version.
-	
-	TEST preflight implementation (2026-09-09; awaiting PR review/deployment):
-	• GET /v1/siri-shift-status reuses the cleaner-bound Siri credential and signed Apps Script boundary. Successful responses contain only state: active_shift / no_active_shift; authentication and infrastructure failures return fixed HTTP errors without an active state.
-	• Exactly one valid open Time Tracker row is required. Rows with a present Clock Out are excluded before validation, matching Time Tracker presence semantics; malformed closed history cannot block preflight. Multiple, malformed, future-start, or property-less open rows fail closed. This is a point-in-time check; phone-only queued clock-ins remain invisible.
-	• No deployment or physical Shortcut edits in this implementation task. Raven/Kyle still need actual-diff review, TEST deployment and both physical preflight outcomes before wrap-up; update 99_ProjectSummary.gs after those tests pass.
-
-	Next Triforce step (before Kyle field pilot):
-	• Read-only inspect current GitHub main to identify the smallest TEST Worker/Apps Script seam for a Siri-authenticated active-synced-shift preflight. Reuse the existing cleaner-bound Siri credential and return only a simple status string; no property read and no broad relay refactor.
-	• Implement/test that TEST-only preflight in a narrow PR. The initial Siri note intake contract remains frozen; do not weaken or overload POST /v1/siri-notes merely for preflight convenience.
-	• Add the small preflight block at the top of the working iPhone Shortcut: call status → extract string state → if no_active_shift, speak the cleaner-facing message and Stop This Shortcut → otherwise continue the already-proven cleaning-note flow unchanged.
-	• Rename the working Shortcut / invocation to "Add a Clean Energy Note" to distinguish it from Apple's generic Notes command. No deep-clean/property Shortcut duplication for the Kyle pilot.
-	• Physically test both preflight outcomes in TEST, then use only the main cleaning-note Shortcut in the field for about one week. Reassess usefulness, duplicates, missed notes, dictation clipping, retry hardening priority, alternate note types, and possible crew rollout afterward.
-	• Deep-clean/property Apps Script destinations and Worker note_type support already exist, but their real Shortcut paths remain untested and intentionally deferred until after the Kyle pilot.
-	• Full automatic exact-retry/commit-marker hardening, TEST PWA pre-PIN queued-sync recovery, and crew onboarding remain separate future work unless the pilot proves they are worth prioritizing. No Live Siri changes.
+	• Treat this as TEST-only companion behavior first. Prefer a small separate TEST PWA PR. Any frontend PR must bump the TEST service-worker/cache version.
 	
 	
 	•	Formalize cleaning-note storage. Right now add_note appends into the existing Clock Out Note column as a compatibility move, which works, but it is still a transitional schema.
@@ -217,7 +180,6 @@ This is not a small tweak — it’s a controlled upgrade:
 ⸻
 
 ✔️ Priority
-
 Low (for now)
 Revisit when:
 	•	more cleaners
