@@ -34,7 +34,7 @@
 
 	Real Shortcut persistence / current pilot limits:
 	• Real Shortcut persists request_id, captured_at, note_type, and note before POST using four separate files under Shortcuts/CEH Siri Pending. Physical read-back proved the saved values are current and correct; stale Files-app previews were only display caching.
-	• Definite-success cleanup is now physically proven: the working validation chain reaches cleanup only on the expected TEST success path, deletes all four pending files, and speaks "Cleaning note saved." The current pilot does not depend on the earlier unreliable ok Boolean comparison.
+	• Definite-success cleanup is now physically proven: the working validation chain reached cleanup on the expected TEST success response, deletes all four pending files, and speaks "Cleaning note saved." The current pilot does not depend on the earlier unreliable ok Boolean comparison.
 	• Earlier disposable iPhone probe physically proved cross-run recovery of an unchanged request ID, original timestamp, note type, and note, but the real Shortcut still does not automatically detect/reuse an existing pending request after timeout/unknown outcome.
 	• Full automatic exact-retry hardening and a commit/ready marker for the four sequential pending-file writes are deliberately deferred for the Kyle-only field pilot. Occasional duplicate notes are an accepted pilot risk because Kyle will manually review/edit notes and Siri notes are not yet the sole source of truth for critical information.
 	• Before any crew rollout, revisit exact retry of the identical request ID/payload after timeout/unknown outcome and guard against partial four-file state. Do not generate a new ID/timestamp merely to bypass an uncertain prior request.
@@ -226,7 +226,7 @@ My honest take
 This is a perfectly scoped version of offline:
 	•	not overengineered
 	•	not pretending to be enterprise
-	•	solves your real-world problem when you're ready
+	•	solves your real-world problem when you’re ready
 
 ⸻
 
