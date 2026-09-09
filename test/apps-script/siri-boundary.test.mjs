@@ -202,4 +202,70 @@ test('validly signed production Siri operations are disabled before any ledger m
   assert.equal(h.send(h.input, 'reconcile_siri_note', { environment: 'production', audience: 'ceh-relay:production:apps-script' }).result, 'invalid_event');
   assert.equal(h.sheets.has('Siri Note Ledger'), false);
 });
+test('preflight counts exactly one valid synced open shift and returns no sensitive data', () => {
+  const open = ['Cleaner One', 'Property A', START, '', 'Private note'];
+  for (const [shifts, expected] of [
+    [[], 'no_active_shift'], [[open], 'active_shift'], [[open, open], 'no_active_shift'],
+    [[['Cleaner One', 'Property A', START, END, '']], 'no_active_shift'],
+    [[open, ['Other cleaner', 'Property B', START, '', '']], 'active_shift'],
+    [[['Cleaner One', '', START, '', '']], 'no_active_shift'],
+    [[['Cleaner One', 'Property A', new Date('2099-01-01'), '', '']], 'no_active_shift'],
+    [[open, ['Cleaner One', 'Property A', 'invalid', '', '']], 'no_active_shift'],
+    [[open, ['Cleaner One', 'Property A', START, 'invalid', '']], 'active_shift'],
+  ]) {
+    const h = harness({ shifts });
+    const before = JSON.stringify(h.tracker.rows);
+    assert.deepEqual(h.send({ cleanerSubject: h.input.cleanerSubject }, 'siri_shift_status'),
+      { ok: true, operation: 'siri_shift_status', result: expected, retryable: false });
+    assert.equal(JSON.stringify(h.tracker.rows), before);
+    assert.equal(h.sheets.has('Siri Note Ledger'), false);
+  }
+});
+
+test('preflight ignores malformed closed history but fails closed for malformed open rows', () => {
+  const open = ['Cleaner One', 'Property A', START, '', ''];
+  const closedRows = [
+    ['Cleaner One', '', 'invalid', END, ''],
+    ['Cleaner One', '', END, START, ''],
+    ['Cleaner One', '', 'invalid', 'invalid', ''],
+    ['Cleaner One', '', 'invalid', ' ', ''],
+  ];
+  for (const closed of closedRows) {
+    const h = harness({ shifts: [open, closed] });
+    assert.equal(h.send({ cleanerSubject: h.input.cleanerSubject }, 'siri_shift_status').result, 'active_shift');
+  }
+  for (const blankOut of ['', null, false, 0]) {
+    for (const [property, start] of [
+      ['Property A', 'invalid'], ['Property A', ''], ['Property A', new Date('2099-01-01')], ['', START],
+    ]) {
+      const h = harness({ shifts: [open, ['Cleaner One', property, start, blankOut, '']] });
+      assert.equal(h.send({ cleanerSubject: h.input.cleanerSubject }, 'siri_shift_status').result, 'no_active_shift');
+    }
+  }
+});
+
+test('preflight rejects production, extra identity fields, unavailable tables and lock failure', () => {
+  const h = harness();
+  const payload = { cleanerSubject: h.input.cleanerSubject };
+  assert.equal(h.send({ ...payload, cleanerName: 'Cleaner One' }, 'siri_shift_status').result, 'invalid_event');
+  h.state.locked = true;
+  assert.equal(h.send(payload, 'siri_shift_status').result, 'lock_busy');
+  h.state.locked = false;
+  h.sheets.delete('Time Tracker');
+  assert.equal(h.send(payload, 'siri_shift_status').result, 'internal_error');
+  const production = harness({ environment: 'production', spreadsheetId: '1b1IVRl3GIxFWJM0x7J5RTGmHTl_yrzHqis0O7hdM-wc' });
+  assert.equal(production.send({ cleanerSubject: production.input.cleanerSubject }, 'siri_shift_status',
+    { environment: 'production', audience: 'ceh-relay:production:apps-script' }).ok, false);
+});
+
+test('preflight fails closed for inactive or ambiguous cleaner identities', () => {
+  for (const users of [
+    [['PIN', 'Name', 'Is Active', 'User ID'], ['1234', 'Cleaner One', false, USER_ID]],
+    [['PIN', 'Name', 'Is Active', 'User ID'], ['1234', 'Cleaner One', true, USER_ID],
+      ['5678', 'Cleaner One', true, '7b3f6e44-580d-4dc4-b15d-f1c8821daf38']],
+  ]) {
+    const h = harness({ users });
+    assert.equal(h.send({ cleanerSubject: h.input.cleanerSubject }, 'siri_shift_status').result, 'no_active_shift');
+  }
+});
 /* end[siri_apps_boundary_tests] */

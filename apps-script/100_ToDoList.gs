@@ -84,6 +84,11 @@
 	• The PWA does not need a Siri-specific "Siri note sent" HUD in v1. Keep the PWA recovery wording generic; after the phone's queued shift event syncs, the already-durable Siri note can reconcile independently.
 	• Treat this as TEST-only companion behavior first. Prefer a small separate TEST PWA PR from the Siri backend PR unless implementation review proves they must be coupled for safe validation. Any frontend PR must bump the TEST service-worker/cache version.
 	
+	TEST preflight implementation (2026-09-09; awaiting PR review/deployment):
+	• GET /v1/siri-shift-status reuses the cleaner-bound Siri credential and signed Apps Script boundary. Successful responses contain only state: active_shift / no_active_shift; authentication and infrastructure failures return fixed HTTP errors without an active state.
+	• Exactly one valid open Time Tracker row is required. Rows with a present Clock Out are excluded before validation, matching Time Tracker presence semantics; malformed closed history cannot block preflight. Multiple, malformed, future-start, or property-less open rows fail closed. This is a point-in-time check; phone-only queued clock-ins remain invisible.
+	• No deployment or physical Shortcut edits in this implementation task. Raven/Kyle still need actual-diff review, TEST deployment and both physical preflight outcomes before wrap-up; update 99_ProjectSummary.gs after those tests pass.
+
 	Next Triforce step (before Kyle field pilot):
 	• Read-only inspect current GitHub main to identify the smallest TEST Worker/Apps Script seam for a Siri-authenticated active-synced-shift preflight. Reuse the existing cleaner-bound Siri credential and return only a simple status string; no property read and no broad relay refactor.
 	• Implement/test that TEST-only preflight in a narrow PR. The initial Siri note intake contract remains frozen; do not weaken or overload POST /v1/siri-notes merely for preflight convenience.

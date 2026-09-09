@@ -1,3 +1,4 @@
+import { siriStatusResponse } from "./siri-status-service";
 import { siriRequestResponse } from "./siri-request-service";
 import { runSiriDeliveryBatch } from "./siri-delivery-service";
 import {
@@ -202,14 +203,16 @@ export default {
     const corsHeaders = createCorsHeaders(origin);
 
     const isSiri = url.pathname === "/v1/siri-notes" && env.CEH_RELAY_ENVIRONMENT === "test";
+    const isSiriStatus = url.pathname === "/v1/siri-shift-status" && env.CEH_RELAY_ENVIRONMENT === "test";
     const isHealth = url.pathname === HEALTH_PATH;
     const isSession = url.pathname === ENROLL_PATH || url.pathname === RENEW_PATH;
     const isEvent = url.pathname === EVENT_PATH;
-    if (!isHealth && !isSession && !isEvent && !isSiri) {
+    if (!isHealth && !isSession && !isEvent && !isSiri && !isSiriStatus) {
       return notFoundResponse(corsHeaders);
     }
 
     if (request.method === "OPTIONS") {
+      if (isSiriStatus) return preflightResponse(request, ["GET"], ["Authorization"]);
       return isHealth
         ? preflightResponse(request, ["GET"])
         : preflightResponse(
@@ -219,6 +222,11 @@ export default {
               ? ["Content-Type", "Authorization"]
               : ["Content-Type"],
           );
+    }
+
+    if (isSiriStatus) {
+      if (request.method !== "GET") return methodNotAllowedResponse(corsHeaders, ["GET"]);
+      return siriStatusResponse(request, env, corsHeaders);
     }
 
     if (isHealth) {
