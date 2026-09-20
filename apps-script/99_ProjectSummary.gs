@@ -2,10 +2,10 @@
  * Clean Energy Housekeeping System — Current Architecture Summary
  *
  * VERSION NAME:
- * "Operational System + Live and TEST Durable Relay"
+ * "Operational System + Live/TEST Durable Relay + TEST Siri Pilot"
  *
  * UPDATED:
- * 2026-09-05
+ * 2026-09-09
  *
  * This document describes the system that exists now. It is an architectural
  * summary, not the CEH backlog or a complete project history. The separate CEH
@@ -31,6 +31,11 @@
  * The welcome footer uses the first name, the completed phone-setup badge is
  * removed, and Get directions uses mobile map links with a web fallback.
  *
+ * TEST also has a Kyle-only Siri cleaning-note pilot. Its dedicated Shortcut,
+ * TEST Worker route, D1 storage, Apps Script reconciliation, and active-synced-
+ * shift preflight have been physically validated end to end. No Live Siri
+ * rollout is authorized.
+ *
  * =====================================================
  * 2. HIGH-LEVEL ARCHITECTURE
  * =====================================================
@@ -47,9 +52,15 @@
  *   → scheduled delivery → matching Apps Script relay service and relay ledger
  *   → matching Time Tracker
  *
+ * TEST Siri cleaning-note pilot
+ *   → dedicated Siri Shortcut and cleaner-bound note-only credential
+ *   → TEST Worker Siri endpoints → encrypted TEST D1 request storage
+ *   → signed TEST Apps Script Siri service → Time Tracker note reconciliation
+ *
  * The relay accepts events durably before Apps Script delivery. A temporarily
  * unavailable spreadsheet service therefore does not discard an accepted field
- * entry.
+ * entry. Siri note intake follows the same durability principle without joining
+ * the PWA session/lane lifecycle.
  *
  * =====================================================
  * 3. ENVIRONMENT SEPARATION AND DEPLOYMENT BOUNDARIES
@@ -66,6 +77,8 @@
  *   and decrypted relay payloads are not source-controlled or logged.
  * - Live relay is enabled for authenticated cleaners behind a global feature
  *   switch. TEST relay behavior and resources remain independently isolated.
+ * - Siri remains TEST-only. Its dedicated credential is not a PIN, PWA relay
+ *   token, or property-read credential and must not be reused for Live.
  *
  * =====================================================
  * 4. CLEANER CLOCK-IN SHELL
@@ -139,15 +152,38 @@
  * - Reinstalling the PWA or deleting browser storage can legitimately create a
  *   new installation ID and requires a new pairing.
  *
- * =====================================================
- * TEST Siri backend implementation (not yet deployed):
- * - Dedicated encrypted D1 requests and independent 90-day note-only credentials.
+ * TEST Siri cleaning-note pilot
+ * - The TEST Siri backend is deployed and physically validated. It uses
+ *   dedicated encrypted D1 requests and an independent cleaner-bound, note-only,
+ *   revocable credential with approximately 90-day pilot scope.
+ * - POST /v1/siri-notes keeps the frozen four-field client contract:
+ *   request_id, captured_at, note_type, and note. The Shortcut sends no
+ *   property, cleaner, PIN, PWA session, or device identifiers.
  * - D1 acceptance is the saved receipt. Completed capture-time intervals alone
- *   qualify for pinning; open shifts wait and ambiguous matches require review.
- * - A separate Siri ledger recovers note appends and stores property review/email
- *   outcomes. No PWA sessions, lanes, protected calculations, or Live rollout.
- * - Frozen contract and operator setup: relay/SIRI_TEST.md. TEST deployment,
- *   physical validation, PWA recovery, and the real Shortcut remain pending.
+ *   qualify for final pinning/reconciliation; open shifts wait and ambiguous
+ *   matches require review.
+ * - GET /v1/siri-shift-status is a separate TEST-only preflight. It reuses the
+ *   Siri credential, resolves cleaner identity server-side, calls the signed
+ *   Apps Script boundary, and returns only active_shift or no_active_shift.
+ * - Preflight permits dictation only when exactly one valid open synced Time
+ *   Tracker row exists. Multiple, malformed, future-start, or property-less
+ *   open rows fail closed. A phone-only queued PWA clock-in is intentionally
+ *   invisible until it syncs.
+ * - The current Shortcut is named "Add a Clean Energy Note". It first says
+ *   "Checking your Clean Energy shift." If no active synced shift is found, it
+ *   says "I can't find an active Clean Energy shift. Please open the Clean
+ *   Energy app." and stops before dictation.
+ * - With an active synced shift, Siri asks for the note, reads the dictated note
+ *   back, and sends automatically; the earlier Send/Cancel menu was removed for
+ *   the field pilot. Durable validated success deletes the four local pending
+ *   files and speaks "Cleaning note saved."
+ * - The cleaning-note path has been physically validated through TEST D1 and
+ *   reconciliation onto the correct TEST Time Tracker shift after clock-out.
+ * - Backend destinations for deep-clean and property note types exist, but their
+ *   real Shortcuts remain intentionally unbuilt/unvalidated for this pilot.
+ * - Frozen contract and operator details remain documented in relay/SIRI_TEST.md.
+ *   No PWA-session authority, property-read authority, or Live Siri rollout is
+ *   part of the current pilot.
  *
  * =====================================================
  * 6. AUTHENTICATION AND ACCESS CONTROL
@@ -165,6 +201,9 @@
  *   to LIMITED shell users.
  * - Backend shift rules remain authoritative. They protect against duplicate
  *   clock-ins, invalid clock-outs, wrong-property actions, and invalid notes.
+ * - Siri authorization is separate from cleaner PIN/PWA authentication. Its
+ *   current credential can submit notes and perform the narrow shift-status
+ *   preflight only; it cannot clock in/out or read property information.
  *
  * =====================================================
  * 7. TIME TRACKING, NOTES, AND WORK HISTORY
@@ -178,6 +217,9 @@
  * - Cleaning notes are supported mid-clean and reconcile through the existing
  *   Time Tracker workflow. The current schema still uses established
  *   clock-out-note handling for that workflow.
+ * - TEST Siri cleaning notes use the same operational note destination after
+ *   the server can identify exactly one completed shift interval containing the
+ *   original Siri capture timestamp.
  * - Work History is derived from completed Time Tracker shifts. Transit
  *   tracking captures between-job time for payroll/operational visibility and
  *   appears in cleaner weekly history when applicable.
@@ -250,6 +292,8 @@
  * - Keep TEST and Live deployment, data, configuration, and credentials apart.
  * - Never place PINs, secrets, tokens, sensitive IDs, or property data in this
  *   summary, Git history, Worker logs, or relay migrations.
+ * - Siri durable success means the request is safely accepted; it does not mean
+ *   spreadsheet reconciliation has already completed.
  *
  * =====================================================
  * 12. CURRENT KNOWN LIMITATIONS
@@ -261,15 +305,33 @@
  *   automatic foreground-resume updater polish is not a dependency.
  * - Cleaning-note storage follows the existing Time Tracker note workflow; a
  *   separate structured note schema is not represented as completed work.
+ * - The real Siri Shortcut does not yet automatically detect/reuse an existing
+ *   pending request after a timeout/unknown outcome, and the four-file local
+ *   persistence sequence has no commit/ready marker. Exact retry hardening is
+ *   deferred for the Kyle-only pilot and must be revisited before crew rollout.
+ * - Siri dictation can clip the first word if speech starts immediately after
+ *   the prompt; pausing briefly is the current pilot workaround.
+ * - The Siri success message does not currently speak the property name. Any
+ *   future property-name confirmation requires deliberate review because the
+ *   current credential has no property-read authority.
+ * - Deep-clean/property-note Shortcuts, TEST PWA pre-PIN queued-sync recovery,
+ *   crew Siri onboarding, and all Live Siri work remain deferred.
  *
  * =====================================================
  * 13. NEAR-TERM PRIORITIES
  * =====================================================
  *
+ * Run the Kyle-only TEST Siri cleaning-note field pilot for about one week.
+ * Reassess usefulness, duplicates/missed notes, dictation behavior, retry
+ * hardening priority, and whether deep-clean/property-note Shortcuts or crew
+ * onboarding are worth pursuing. After the pilot, also decide whether a narrow
+ * property-name confirmation is worth changing the current Siri privacy/read
+ * boundary. No Live Siri promotion is authorized by the TEST pilot.
+ *
  * Maintain and verify the operational Live and TEST relay paths, resolve
  * attention-required cases without compromising event ordering, and treat any
- * updater UX refinement as separately scoped work.
- * The CEH to-do list, rather than this summary, holds detailed priorities.
+ * updater UX refinement as separately scoped work. The CEH to-do list, rather
+ * than this summary, holds detailed priorities.
  *
  * =====================================================
  * 14. OVERALL ASSESSMENT
@@ -278,7 +340,9 @@
  * CEH has a functioning operational time, payroll, and invoicing system with a
  * field-focused cleaner shell. The Live and TEST relays add durable, ordered,
  * security-bounded offline delivery architecture without making Apps Script
- * availability a requirement for phone-side event acceptance. The central
- * discipline is to keep Time Tracker authoritative, relay events immutable and
- * ordered, and TEST/Live boundaries explicit.
+ * availability a requirement for phone-side event acceptance. TEST now also has
+ * a physically validated, security-bounded Siri cleaning-note pilot with a
+ * fail-closed active-shift preflight and durable note acceptance. The central
+ * discipline remains to keep Time Tracker authoritative, relay/Siri requests
+ * durable and identity-bounded, and TEST/Live boundaries explicit.
  */
