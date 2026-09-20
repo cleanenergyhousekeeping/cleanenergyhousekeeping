@@ -105,6 +105,7 @@
 	•	Admin access controls / quality-of-life tools: disable cleaner, rotate PIN, maybe later promote to trusted access without editing code.
 	
 	•   Finish invoice: footer, variables like Client, INV number etc should be lined up.  Verify cleaning notes display properly. 
+	•   Invoice Control — multi-client selection (planned): replace or augment the single Client Filter so users can select multiple clients for invoicing. Prefer a checklist populated with all client names, with all clients selected by default. Feature implementation is future work.
 	
 	• Roll out the payroll functionality.
 	• Total hours doesn't change when I tweak the times in the sheet. Create another column that calculates time and copy paste as value into live column?  Will the change in the sheet's total hours for the shift reflect in the running total of the subsequent emails and the payroll?
