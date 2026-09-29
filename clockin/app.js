@@ -4,7 +4,7 @@ const LIVE_APP_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
 
 const LIVE_APP_PREP_URL = LIVE_APP_URL + "?view=prepareShell";
-const LIVE_BUILD_VERSION = "v254";
+const LIVE_BUILD_VERSION = "v255";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbz9NS-QSV31FZRy1jWDPBEQQ8Ht4x7UIPegNYp01nwASfwgtZ6pGieYsOeYMcQf62G5/exec";
@@ -811,6 +811,58 @@ function clearOfflinePropertyResults_() {
   hideElement_(offlinePropertyResults);
 }
 
+/* begin[safe_house_notes_links] */
+function renderHouseNotesWithLinks_(element, value) {
+  if (!element) return;
+
+  const text = String(value == null ? "" : value);
+  element.innerHTML = "";
+
+  if (!text.trim()) {
+    element.textContent = "—";
+    return;
+  }
+
+  const urlPattern = /https:\/\/[^\s]+/gi;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = urlPattern.exec(text)) !== null) {
+    const rawUrl = match[0];
+    const trailingMatch = rawUrl.match(/[.,;:!?]+$/);
+    const trailing = trailingMatch ? trailingMatch[0] : "";
+    const url = trailing ? rawUrl.slice(0, -trailing.length) : rawUrl;
+
+    if (match.index > lastIndex) {
+      const plainText = document.createElement("span");
+      plainText.textContent = text.slice(lastIndex, match.index);
+      element.appendChild(plainText);
+    }
+
+    const link = document.createElement("a");
+    link.textContent = url;
+    link.setAttribute("href", url);
+    link.setAttribute("target", "_blank");
+    link.setAttribute("rel", "noopener noreferrer");
+    element.appendChild(link);
+
+    if (trailing) {
+      const trailingText = document.createElement("span");
+      trailingText.textContent = trailing;
+      element.appendChild(trailingText);
+    }
+
+    lastIndex = match.index + rawUrl.length;
+  }
+
+  if (lastIndex < text.length) {
+    const plainText = document.createElement("span");
+    plainText.textContent = text.slice(lastIndex);
+    element.appendChild(plainText);
+  }
+}
+/* end[safe_house_notes_links] */
+
 function fillOfflinePropertyInfo_(prop) {
   if (!prop || !offlinePropertyInfoPanel) return;
 
@@ -831,7 +883,7 @@ function fillOfflinePropertyInfo_(prop) {
   offlinePropertyInfoWifi.textContent = prop.wifiNetwork || "—";
   offlinePropertyInfoWifiPassword.textContent = prop.wifiPassword || "—";
   offlinePropertyInfoOwners.textContent = prop.ownerNames || "—";
-  offlinePropertyInfoNotes.textContent = prop.houseNotes || "—";
+  renderHouseNotesWithLinks_(offlinePropertyInfoNotes, prop.houseNotes);
 
   updateOfflineDirectionsButton_(prop);
   showElement_(offlinePropertyInfoPanel);
