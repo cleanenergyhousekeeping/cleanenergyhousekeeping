@@ -61,7 +61,8 @@ function makeElement() {
     focus() { this.focused = true; this.dispatch("focus"); },
     appendChild(child) { this.children.push(child); },
     children: [],
-    setAttribute() {},
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = String(value); },
     textContent: "",
     value: "",
     disabled: false,
@@ -157,6 +158,11 @@ function makeHarness({ storage, locks, randomUUID, enroll, relayEvent, enableRel
     directions: function (userAgent, destination) {
       navigator.userAgent = userAgent;
       return getOfflineDirectionsUrl_(destination);
+    },
+    renderHouseNotes: function (value) {
+      const element = document.getElementById("houseNotesTestTarget");
+      renderHouseNotesWithLinks_(element, value);
+      return element;
     }
   };`, context);
   return Object.assign(context.__relayIdentityTestApi, context.__propertySearchTestApi, {
@@ -220,8 +226,38 @@ test("TEST Wrangler settings remain unchanged", () => {
 test("Live build and service-worker cache versions agree", () => {
   const buildVersion = app.match(/const LIVE_BUILD_VERSION = "v(\d+)";/u)?.[1];
   const cacheVersion = serviceWorker.match(/const CACHE_NAME = "ce-clockin-shell-v(\d+)";/u)?.[1];
-  assert.equal(buildVersion, "254");
+  assert.equal(buildVersion, "255");
   assert.equal(cacheVersion, buildVersion);
+});
+
+test("Live House Notes renders HTTPS URLs as safe external links", () => {
+  const harness = makeHarness({ storage: makeStorage(), enableRelay: false });
+  const target = harness.renderHouseNotes(
+    'Read <b>carefully</b>: https://drive.google.com/file/d/example/view. Then continue.'
+  );
+
+  assert.equal(target.children.length, 4);
+  assert.equal(target.children[0].textContent, 'Read <b>carefully</b>: ');
+  assert.equal(target.children[1].textContent, 'https://drive.google.com/file/d/example/view');
+  assert.deepEqual(target.children[1].attributes, {
+    href: 'https://drive.google.com/file/d/example/view',
+    target: '_blank',
+    rel: 'noopener noreferrer',
+  });
+  assert.equal(target.children[2].textContent, '.');
+  assert.equal(target.children[3].textContent, ' Then continue.');
+  assert.equal(target.html, '');
+});
+
+test("Live House Notes leaves non-HTTPS content as text and preserves empty fallback", () => {
+  const harness = makeHarness({ storage: makeStorage(), enableRelay: false });
+
+  const plain = harness.renderHouseNotes('http://example.com <script>alert(1)</script>');
+  assert.equal(plain.children.length, 1);
+  assert.equal(plain.children[0].textContent, 'http://example.com <script>alert(1)</script>');
+
+  const empty = harness.renderHouseNotes('   ');
+  assert.equal(empty.textContent, '—');
 });
 
 test("the global Live relay switch can deliberately preserve the legacy path", async () => {
