@@ -829,9 +829,39 @@ function renderHouseNotesWithLinks_(element, value) {
 
   while ((match = urlPattern.exec(text)) !== null) {
     const rawUrl = match[0];
-    const trailingMatch = rawUrl.match(/[.,;:!?]+$/);
-    const trailing = trailingMatch ? trailingMatch[0] : "";
-    const url = trailing ? rawUrl.slice(0, -trailing.length) : rawUrl;
+    let url = rawUrl;
+    let trailing = "";
+
+    while (url) {
+      const lastChar = url.slice(-1);
+
+      if (/[.,;:!?]/.test(lastChar) || /["'”’]/.test(lastChar)) {
+        trailing = lastChar + trailing;
+        url = url.slice(0, -1);
+        continue;
+      }
+
+      const closingPairs = {
+        ")": "(",
+        "]": "[",
+        "}": "{",
+        ">": "<"
+      };
+      const openingChar = closingPairs[lastChar];
+
+      if (openingChar) {
+        const openingCount = url.split(openingChar).length - 1;
+        const closingCount = url.split(lastChar).length - 1;
+
+        if (closingCount > openingCount) {
+          trailing = lastChar + trailing;
+          url = url.slice(0, -1);
+          continue;
+        }
+      }
+
+      break;
+    }
 
     if (match.index > lastIndex) {
       const plainText = document.createElement("span");
