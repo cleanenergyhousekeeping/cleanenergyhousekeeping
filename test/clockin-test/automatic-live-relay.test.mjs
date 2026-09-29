@@ -233,20 +233,40 @@ test("Live build and service-worker cache versions agree", () => {
 test("Live House Notes renders HTTPS URLs as safe external links", () => {
   const harness = makeHarness({ storage: makeStorage(), enableRelay: false });
   const target = harness.renderHouseNotes(
-    'Read <b>carefully</b>: https://drive.google.com/file/d/example/view. Then continue.'
+    'See (https://drive.google.com/file/d/example/view). Backup: https://example.com/doc>.'
   );
 
-  assert.equal(target.children.length, 4);
-  assert.equal(target.children[0].textContent, 'Read <b>carefully</b>: ');
+  assert.equal(target.children.length, 6);
+  assert.equal(target.children[0].textContent, 'See (');
   assert.equal(target.children[1].textContent, 'https://drive.google.com/file/d/example/view');
   assert.deepEqual(target.children[1].attributes, {
     href: 'https://drive.google.com/file/d/example/view',
     target: '_blank',
     rel: 'noopener noreferrer',
   });
-  assert.equal(target.children[2].textContent, '.');
-  assert.equal(target.children[3].textContent, ' Then continue.');
+  assert.equal(target.children[2].textContent, ').');
+  assert.equal(target.children[3].textContent, ' Backup: ');
+  assert.equal(target.children[4].textContent, 'https://example.com/doc');
+  assert.deepEqual(target.children[4].attributes, {
+    href: 'https://example.com/doc',
+    target: '_blank',
+    rel: 'noopener noreferrer',
+  });
+  assert.equal(target.children[5].textContent, '>.');
   assert.equal(target.html, '');
+});
+
+test("Live House Notes preserves balanced URL delimiters", () => {
+  const harness = makeHarness({ storage: makeStorage(), enableRelay: false });
+  const target = harness.renderHouseNotes(
+    'Reference https://example.com/wiki/Function_(mathematics)'
+  );
+
+  assert.equal(target.children.length, 2);
+  assert.equal(
+    target.children[1].attributes.href,
+    'https://example.com/wiki/Function_(mathematics)'
+  );
 });
 
 test("Live House Notes leaves non-HTTPS content as text and preserves empty fallback", () => {
